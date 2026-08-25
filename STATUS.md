@@ -95,12 +95,15 @@ the three pillars used and unmodified.
    rung: the certificate gate (`--permission=LEDGER::ENTRIES`), which
    waits on TLS in cocolog's C client, and a Zeytun page — the read path
    is proven, the page is choreography not yet written.
-3. **Contracts.** A contract is a predicate; deployment is a signed
-   entry whose payload is clauses. Contract goals run against a
-   restricted goal vocabulary (no clock, no files, no torch) under
-   `max_steps` — gas — and a failed or over-budget call rolls back with
-   its turn. Long-lived contracts suspend as machines and thaw when
-   their condition arrives.
+3. **Contracts** (`contracts/`) — **DONE**. A contract is a predicate,
+   deployment is a block whose payload is its clauses, the fence is a
+   static check over every clause body, and gas is the engine's own
+   `--steps`. Twenty-seven checks, and mallory writes contracts too.
+   The story below says what holds, and corrects one thing this rung
+   claimed before it was built. Still ahead: a gas *price* and metering
+   per call (`--steps` is the mechanism; who pays is policy), and
+   contract-to-contract calls, which need a rule about whose state is
+   entered.
 4. **Training as settlement — proof of useful work.** A contract term
    names data, architecture and seed; workers train in `--local` and
    publish signed, hash-chained parameter rows; settlement is the
@@ -150,6 +153,80 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### Contracts: a predicate, a block, a fence, and gas
+
+**Deployment needed no mechanism.** A contract is deployed by sealing an
+ordinary ledger block whose payload is its clauses. The block hash
+already covers the payload, so the *source* is hash-committed and signed
+by an authority the moment it is deployed, gossiped like anything else,
+identical on every node. No bytecode, no ABI, no compiler, no deployment
+protocol — because a contract is already the same substance as
+everything else here. That is the thesis paying out rather than being
+restated.
+
+**The fence is a static check, and it is sound rather than decorative.**
+Every goal in every clause body must be in the vocabulary or defined by
+the same contract. What is absent is the design: no `assertz` (the only
+write path is the scoped `state_put/2`), no files, no `getenv` — a
+node's signing key lives there — no clock or random, because a contract
+that can read the time is a contract two nodes can disagree about.
+
+Three things are refused outright, and each is a hole a whitelist alone
+would leave open: `call/N` and `=..` both build goals at run time, so a
+static check cannot see what they will call, and a variable in goal
+position has nothing to check at all. The meta-predicates that do get
+through — `,` `;` `->` `\+` `findall/3` `forall/2` — are recursed into,
+because a fence that checked `findall(X, assertz(bad(X)), L)` by its
+outer functor would be no fence.
+
+**Isolation is structural, not polite.** `state_put/2` and `state_get/2`
+take no contract argument: the name comes from `contract_enter/1`, which
+the node calls and the contract cannot. A contract has no way to *say*
+which contract's state it means. And the door is guarded from outside
+too — `contract_call/2` refuses any goal whose functor the contract does
+not define, so `contract_call(escrow, assertz(anything))` is a caller
+trying to run `assertz` with a contract's name in front of it.
+
+**One thing this rung claimed, before it was built, was wrong.** The
+ladder said a failed call "rolls back with its turn". It does not:
+`assertz` is not undone by backtracking in any Prolog, so
+`(state_put(k,v), fail)` leaves the write behind — half a contract's
+effects, committed. The turn's transaction covers a different accident,
+a process that dies mid-turn. So contract writes are **staged**: pending
+until the goal succeeds, readable by the contract itself as it runs, and
+dropped on failure or exception. Nothing reaches the chain, so there is
+nothing to undo — which also keeps the state append-only, as rolling
+back by retracting would not.
+
+**Gas is the engine's own, and it was already there.** A contract that
+loops forever is *admitted* — nothing is wrong with its vocabulary and no
+static check can know it halts. `--steps` answers it: the goal runs as a
+machine, suspends at its budget, and the node is unharmed. That is the
+same mechanism a long-lived contract needs, read the other way — a
+contract waiting on a condition is a suspended machine, three hundred
+bytes in a table, thawable anywhere.
+
+**Mallory writes contracts too.** Seven refused: reading the node's
+signing key out of the environment, asserting a ledger block directly,
+reading another contract's state rows, `call/1` on a caller-supplied
+goal, building the goal with `=..` first, redefining `member/2` for
+everyone, and hiding `assertz` inside `findall`. The eighth loops
+forever and is admitted, because gas is its answer and not the fence's.
+
+**Two layers, two questions.** In the choreography *alice* — a real
+authority — deploys the thief. The ledger is content: she is entitled to
+seal and the block is valid. The fence refuses it. Who may deploy and
+what may run are different questions with different answers, and a system
+that conflated them would have to trust its authorities never to make a
+mistake. The other direction is shown too: mallory is not an authority,
+her deployment block never joins the chain, and her contract is never
+parsed, fenced or seen.
+
+**The escrow is a real one.** A deposit is held until the *buyer* signs a
+release over the escrow's own id — a secp256k1 signature the contract
+checks itself. The seller's signature is refused; the buyer's moves the
+status to released; the id cannot be opened twice.
 
 ### The PoA federation ledger, and mallory
 

@@ -68,6 +68,20 @@ else
   say ledger RED; sed 's/^/   /' "$HERE/ledger.out"; red=$((red + 1))
 fi
 
+# ---- contracts: rung 3 ------------------------------------------------
+# A contract is a predicate, deployment is a block, the fence is a static
+# check and gas is the engine's own --steps. mallory writes contracts
+# too: seven refused, one admitted because only gas can answer it.
+if sh "$HERE/contracts.sh" > "$HERE/contracts.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/contracts.out"; then
+    say contracts "$(head -1 "$HERE/contracts.out")"
+  else
+    say contracts GREEN
+  fi
+else
+  say contracts RED; sed 's/^/   /' "$HERE/contracts.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then

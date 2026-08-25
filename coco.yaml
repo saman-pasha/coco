@@ -84,6 +84,7 @@ libraries:
     - eth            # keccak + secp256k1: Ethereum addresses, who signed
     - btc            # sha256 + ripemd160 + base58 + bech32: Bitcoin
     - poa            # rung 2: proof of authority, as rules
+    - contract       # rung 3: the fence, scoped state, the call door
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -94,3 +95,4 @@ suite:
     - crypto         # the primitives, against published vectors
     - wire           # one process writes, a second reads it back
     - ledger         # rung 2: the PoA federation, and mallory attacking it
+    - contracts      # rung 3: a contract is a predicate; mallory writes them too

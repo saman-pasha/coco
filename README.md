@@ -129,13 +129,16 @@ modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
                   and the Prolog libraries beside them: bytes, base58,
-                  bech32, eth, btc, poa. A caller cannot tell which of its
+                  bech32, eth, btc, poa, contract. A caller cannot tell
+                  which of its
                   libraries are Prolog and which are compiled C, which
                   is the point -- btc.pl composes two of each
 coco.yaml         the one declaration -- pillars, paths, the knowledge
                   base, the module list, the suite. Read by every script
 ledger/           rung 2: the PoA federation ledger -- the federation,
                   a node, the choreography, and mallory the criminal node
+contracts/        rung 3: a contract is a predicate -- the sources
+                  (honest and criminal), the node, the choreography
 test/             the arrangements that hold it GREEN; config.sh reads
                   coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three
