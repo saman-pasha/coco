@@ -1,6 +1,7 @@
 #!/bin/sh
-# The chains' primitives: keccak256 and secp256k1, as loadable Cicili
-# modules, and library(eth) composing them.
+# The chains' primitives as loadable Cicili modules, the encodings as
+# Prolog libraries, and library(eth) and library(btc) composing both
+# kinds without a caller being able to tell them apart.
 #
 # WHAT IT IS CHECKING, and why each part is there:
 #
@@ -252,6 +253,104 @@ c702b6bf11d5fac00000000
 check "btc: the genesis coinbase transaction, 204 bytes" \
   "$(q "$BT, btc_txid('$GEN', T), write(T), nl" "$H2")" \
   "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"
+
+# ---- base58, and the address people paste ----------------------------
+# Base conversion over an arbitrarily long integer, done as long division
+# over a list, which is why it is Prolog. The alphabet is base64 without
+# 0, O, I and l -- the four a human copying a string gets wrong -- and it
+# is NOT in ASCII order, so taking it from ASCII gives a plausible string
+# that decodes to something else.
+#
+# The address is the end of the whole chain: private key 1 -> secp256k1 ->
+# sha256 -> ripemd160 -> base58check -> 1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH,
+# which anyone can look up and nothing here computed.
+B58="use_module(library(base58))"
+check "base58: 'hello world'" \
+  "$(q "$B58, base58_encode('68656c6c6f20776f726c64', A), write(A), nl" '^[1-9A-HJ-NP-Za-km-z]+$')" \
+  "StV1DL6CwTryKyV"
+check "base58: and back again" \
+  "$(q "$B58, base58_decode('StV1DL6CwTryKyV', H), write(H), nl" '^[0-9a-f]+$')" \
+  "68656c6c6f20776f726c64"
+check "base58: a leading zero byte is a leading 1" \
+  "$(q "$B58, base58_encode('00751e76e8199196d454941c45d1b3a323f1433bd6', A), write(A), nl" '^[1-9A-HJ-NP-Za-km-z]+$')" \
+  "12ddvLKZUnFosBYkLrzayChzQUNzq"
+check "base58check: the address of private key 1" \
+  "$(q "$B58, base58check_encode('00','751e76e8199196d454941c45d1b3a323f1433bd6',A), write(A), nl" '^1[1-9A-HJ-NP-Za-km-z]+$')" \
+  "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH"
+check "base58check: read back, version and payload" \
+  "$(q "$B58, base58check_decode('1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH',V,P), write(V-P), nl" '^[0-9a-f]{2}-[0-9a-f]{40}$')" \
+  "00-751e76e8199196d454941c45d1b3a323f1433bd6"
+check "base58check: one character wrong is refused" \
+  "$(q "$B58, (base58check_decode('1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMj',_,_) -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
+
+# ---- bech32 and bech32m ----------------------------------------------
+# A BCH code rather than a truncated hash: it GUARANTEES detection of up
+# to four wrong characters, where base58check's four bytes catch a typo
+# only on average. The five generator constants are the whole guarantee
+# and three of the five were transcribed wrong in the first draft of the
+# library -- every address it produced was well-formed, self-consistent
+# and worthless, which is exactly why these vectors are here.
+#
+# THE LAST CHECK IS A CONSENSUS RULE, not a formatting preference.
+# BIP-350 changed the final constant for witness version 1 and up, so a
+# taproot address built with the BIP-173 constant looks perfectly good
+# and no node will accept it. library(bech32) picks the constant from the
+# version, so a caller cannot make that mistake -- and the check proves
+# the wrong one is actually rejected rather than merely not produced.
+BC="use_module(library(bech32))"
+W1='(bc|tb)1[0-9a-z]+'
+H160=751e76e8199196d454941c45d1b3a323f1433bd6
+check "bech32: P2WPKH, the BIP-173 vector" \
+  "$(q "$BC, segwit_encode(bc, 0, '$H160', A), write(A), nl" "^$W1\$")" \
+  "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+check "bech32: the prefix is in the checksum" \
+  "$(q "$BC, segwit_encode(tb, 0, '$H160', A), write(A), nl" "^$W1\$")" \
+  "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+check "bech32: P2WSH, a 32-byte program" \
+  "$(q "$BC, segwit_encode(bc, 0, '1863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262', A), write(A), nl" "^$W1\$")" \
+  "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3"
+check "bech32m: taproot, version 1" \
+  "$(q "$BC, segwit_encode(bc, 1, '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', A), write(A), nl" "^$W1\$")" \
+  "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0"
+check "bech32m: version 16, a 2-byte program" \
+  "$(q "$BC, segwit_encode(bc, 16, '751e', A), write(A), nl" "^$W1\$")" \
+  "bc1sw50qgdz25j"
+check "bech32: decode answers version and program" \
+  "$(q "$BC, segwit_decode(bc,'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',V,P), write(V-P), nl" '^[0-9]+-[0-9a-f]+$')" \
+  "0-751e76e8199196d454941c45d1b3a323f1433bd6"
+check "bech32: all upper case is legal too" \
+  "$(q "$BC, (segwit_decode(bc,'BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4',V,_), V =:= 0 -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "yes"
+check "bech32: mixed case is not" \
+  "$(q "$BC, (segwit_decode(bc,'Bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',_,_) -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
+check "bech32: one character wrong is refused" \
+  "$(q "$BC, (segwit_decode(bc,'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5',_,_) -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
+check "bech32m: taproot under the OLD constant is refused" \
+  "$(q "$BC, (segwit_decode(bc,'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqxsg440',_,_) -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
+
+# ---- one key, two spellings ------------------------------------------
+# The same public key through the same hash160, spelled base58check and
+# spelled bech32. library(btc) composes FOUR libraries to do it -- two
+# compiled Cicili modules and two Prolog ones -- and nothing in its text
+# says which is which.
+check "btc: the 1... address of private key 1" \
+  "$(q "$BT, btc_address('$GXY', A), write(A), nl" '^1[1-9A-HJ-NP-Za-km-z]+$')" \
+  "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH"
+check "btc: and the bc1... address of the same key" \
+  "$(q "$BT, btc_segwit('$GXY', A), write(A), nl" "^$W1\$")" \
+  "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+
+# ---- every Prolog library loads --------------------------------------
+# Named in coco.yaml. A clause with a syntax error in a predicate nothing
+# above happens to call is invisible until the day something calls it.
+for lib in $COCO_LIBRARIES_PROLOG; do
+  check "library($lib) loads" \
+    "$(q "use_module(library($lib)), write(loaded), nl" '^loaded$')" "loaded"
+done
 
 echo
 if [ "$failures" -eq 0 ]; then

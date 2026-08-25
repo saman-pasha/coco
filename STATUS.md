@@ -1,9 +1,10 @@
 # Status
 
 Where this stands, what is proven, and what is not. Written to be picked
-up again rather than to look finished. Nothing is proven HERE yet beyond
-the assembly (`test/run.sh`, local and wire, `red: 0`); everything else
-on this page is aimed. The missions below moved here from cocolog's
+up again rather than to look finished. What is proven HERE is the
+assembly and the first rung: `test/run.sh` GREEN with a server up, and
+sixty-two crypto checks against numbers published by other people.
+Everything from rung 2 down is aimed, not built. The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
 
@@ -54,9 +55,9 @@ Each of these is a tested story in cocolog's STATUS.md, not a hope:
 ## The missions, as a ladder
 
 Each rung is a working arrangement that ends in a GREEN line, built of
-this repository's three materials only — Prolog modules, The Coco's own
-Parsi objects, choreography — with the three pillars used and
-unmodified.
+this repository's four materials only — Prolog libraries, Cicili modules
+against cocolog's SDK, The Coco's own Parsi objects, choreography — with
+the three pillars used and unmodified.
 
 1. **Crypto — the chains' primitives, in-process.** The hashes and
    curves the aggregator needs to read foreign chains, as loadable
@@ -70,17 +71,20 @@ unmodified.
    Solana, Cardano, TON, Near, Stellar and the Ed25519 halves of Cosmos,
    Sui and Aptos; Bitcoin's `hash160` and its transaction ids; and the
    Blake2b that Sui object ids, Aptos addresses, Polkadot, Cardano and
-   Zcash are built from. Thirty-seven checks, every one against a
-   number published by somebody else. The stories below say what they
-   cost and what they prove.
+   Zcash are built from. The stories below say what they cost and what
+   they prove.
 
-   Still ahead on this rung: **base58 and bech32**, which are encodings
-   rather than primitives and belong in Prolog, where cocolog's DCG
-   engine is waiting for them — `btc_hash160` already reaches the
-   payload of a `1…` address, and base58check is the last step to the
-   string people paste. Polkadot's sr25519 is deliberately out of the
-   first wave — Ristretto plus a transcript protocol is a different
-   animal, and saying so is cheaper than pretending otherwise.
+   **The encodings are done too**, and in Prolog where they belong:
+   `library(base58)`, `library(bech32)` and `library(bytes)`. One public
+   key now reaches both of its published addresses —
+   `1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH` and
+   `bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4` — through four
+   libraries, two compiled and two Prolog, and nothing in the calling
+   text says which is which. **Rung 1 is finished** at sixty-two checks.
+
+   Polkadot's sr25519 was deliberately out of the first wave and stays
+   out: Ristretto plus a transcript protocol is a different animal, and
+   saying so is cheaper than pretending otherwise.
 
 2. **The PoA federation ledger** (`ledger/`): a federation CA issues
    per-node certificates with append grants
@@ -143,6 +147,55 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### base58 and bech32: the last step to an address
+
+`library(base58)`, `library(bech32)` and `library(bytes)` — all three
+Prolog, all three on the same library path as the compiled modules, and
+`library(btc)` composing four of them into `btc_address/2` and
+`btc_segwit/2`.
+
+**This is the argument for the seam, made concrete.** Every hash and
+every curve here is a compiled Cicili module, because a permutation over
+a byte buffer is what C is for. An encoding is not that. base58 is a
+change of base over an arbitrarily long integer and the whole of it is
+long division over a list; bech32 is a BCH checksum over 5-bit values and
+a change of grouping. Prolog holds a list better than C does, and the
+code reads as the algorithm rather than as an implementation of it. A
+caller cannot tell the two kinds apart — `btc_address` and `btc_segwit`
+sit side by side, one reaching two compiled modules and two Prolog ones,
+the other reaching three, and both read the same.
+
+**One key, two spellings.** Private key 1 → secp256k1 → sha256 →
+ripemd160 → base58check gives
+`1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH`; the same hash160 through bech32
+gives `bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4`. Both are published
+constants and The Coco computed neither.
+
+**Where the checks earn their place.** bech32's checksum is a BCH code,
+not a truncated hash: it *guarantees* detection of up to four wrong
+characters, where base58check's four bytes catch a typo only on average.
+That guarantee lives entirely in five generator constants — and three of
+the five were transcribed wrong in the first draft of the library. Every
+address it produced was well-formed, self-consistent, internally
+verifiable, and worthless. Only a published address caught it. The
+constants are written in hex now, as BIP-173 writes them.
+
+**And one check is a consensus rule.** BIP-350 changed the final
+constant for witness version 1 and up, so a taproot address built with
+the BIP-173 constant looks perfectly good and no node will accept it.
+`segwit_encode/4` picks the constant from the witness version rather
+than taking it as an argument — the caller cannot get it wrong because
+the caller is not asked — and the suite proves the wrong one is
+*rejected*, not merely not produced.
+
+The cocolog side of this: `/\`, `\/`, `xor`, `\` and `msb` did not
+exist. bech32's polymod needs them, and `X is 12 /\ 10` did not fail —
+it succeeded, binding X to 12, because `/\` is a symbolic token whether
+or not it is an operator, so the reader stopped early and left the rest
+of the term unread. Diagnosed and fixed in cocolog, with the operator
+table changed to hold each name as the text the reader sees. Nothing was
+worked around here.
 
 ### Bitcoin's hashes, and a transaction from 2009
 

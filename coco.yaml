@@ -66,6 +66,24 @@ modules:
     - ripemd160      # the other half
     - blake2b        # Sui, Aptos, Polkadot, Cardano, Zcash
 
+# ---- the Prolog libraries --------------------------------------------
+# The other half of the library path: clauses, no build step, loaded by
+# the same `use_module(library(Name))' as the compiled modules above. A
+# caller cannot tell the two apart, which is the point of the seam --
+# library(btc) composes two compiled modules and two Prolog ones and
+# reads the same either way.
+#
+# Listed here so the suite can prove every one of them LOADS. A .pl with
+# a syntax error in a clause nothing calls is invisible until the day
+# something calls it.
+libraries:
+  prolog:
+    - bytes          # hex text to byte lists and back
+    - base58         # base58 and base58check
+    - bech32         # bech32, bech32m, segwit addresses
+    - eth            # keccak + secp256k1: Ethereum addresses, who signed
+    - btc            # sha256 + ripemd160 + base58 + bech32: Bitcoin
+
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
 # Read the per-case lines. (cocolog's CLAUDE.md, inherited.)

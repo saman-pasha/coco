@@ -128,9 +128,10 @@ modules/          the Prolog: what The Coco is made of
 modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
-                  and eth.pl and btc.pl -- Prolog libraries that compose
-                  them, which is the point: a caller cannot tell which
-                  of its libraries are Prolog and which are compiled C
+                  and the Prolog libraries beside them: bytes, base58,
+                  bech32, eth, btc. A caller cannot tell which of its
+                  libraries are Prolog and which are compiled C, which
+                  is the point -- btc.pl composes two of each
 coco.yaml         the one declaration -- pillars, paths, the knowledge
                   base, the module list, the suite. Read by every script
 test/             the arrangements that hold it GREEN; config.sh reads
