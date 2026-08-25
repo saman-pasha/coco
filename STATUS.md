@@ -2,11 +2,13 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and the first four rungs: `test/run.sh` GREEN with a server up
-— local, crypto, ledger, contracts, training, wire — which is sixty-two
-crypto checks against numbers published by other people, plus a
-federation ledger, contracts under a fence, and settlement that measures
-rather than believes. Everything from rung 5 down is aimed, not built.
+assembly and the first five rungs: `test/run.sh` GREEN with a server up
+— local, crypto, ledger, contracts, training, spine, wire — which is
+sixty-two crypto checks against numbers published by other people, plus a
+federation ledger, contracts under a fence, settlement that measures
+rather than believes, and a proof-of-history spine held to constants
+computed outside this project. Everything from rung 6 down is aimed, not
+built.
 The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
@@ -115,9 +117,14 @@ the three pillars used and unmodified.
    a criminal worker now. Still ahead: nobody is PAID — turning a
    verdict into a reward is a policy question this rung takes no
    position on.
-5. **A PoH spine.** An iterated sha256 chain as a clock nobody can
-   backdate — produced sequentially, verified in parallel by splitting
-   the range balancer-style across coworkers.
+5. **A PoH spine** (`spine/`) — **DONE**. An iterated sha256 chain as a
+   clock nobody can backdate: produced sequentially in one process,
+   verified in parallel by splitting the range across four. Sixteen
+   checks, three implementations agreeing, and mallory attacks the
+   order five ways — four refused, and the fork succeeds because that
+   is what a clock is. Still ahead: a spine is a lower bound on *work*,
+   not a reading of a wall clock, and choosing between two honest forks
+   is the ledger's question, not this rung's.
 6. **PoS and BFT votes, where the trust model wants them.** Stake is a
    query over the ledger's own entries; the leader draw is a
    deterministic function of chain state (hash-seeded — grindable, an
@@ -157,6 +164,65 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### The PoH spine: a clock nobody can wind backwards
+
+**`h(n+1) = sha256(h(n))`, and that is the whole mechanism.** To know
+`h(n)` you must have computed the `n−1` hashes before it. An event is
+timestamped by being mixed in — `h(n+1) = sha256(h(n) ‖ event)` — so
+everything after that tick depends on the event having existed by then.
+
+**The asymmetry is the point, and it was measured rather than asserted.**
+At 32,000,000 ticks: produce in one process 9.3 s, verify in one process
+10.0 s, verify in four processes 3.5 s — **2.8× on four cores**. The work
+is paid once, in order, by one party, and audited by everybody at once.
+
+**The speedup is 2.8× and not 4×, and the reason is in the README.** Every
+verifier pays about 0.4 s of process start-up, so the ratio depends on
+how much work it is amortised over: the same script reads 1.8× at 12M
+ticks and 2.8× at 32M. **The dilution is the harness, not the
+mechanism** — the tight loop alone runs at 2.57M ticks/s with start-up
+subtracted. Publishing 2.8× alone would have been true and misleading;
+the trend is what makes it a measurement.
+
+**A tick through the module seam costs about 600 µs** — a goal, an atom
+intern and a 64-character atom — against a hash over 32 bytes in C. That
+ratio is why the loop is Cicili and not clauses, and it is the clearest
+case yet for the second of The Coco's four materials.
+
+**Three implementations, and two of them exist to disagree.**
+`library(spine)` keeps the Prolog loop as `poh_slow_run/3`, roughly four
+thousand times slower and never used for anything, purely so the suite
+can require the same hash from both. The third check comes from outside
+the project entirely: `sha256` of 32 and of 64 zero bytes are published
+constants, and the first tick and the event fold are pinned to them. An
+implementation checked only against itself proves that it is consistent,
+which is not the claim.
+
+**Segments verifying is not the spine verifying.** A set of perfectly
+good pieces that were never one sequence passes a segment-by-segment
+check. `spine_sound/0` checks the joins too, and mallory's splice — a
+genuine segment lifted from another spine — is exactly what happens when
+nobody does.
+
+**Mallory attacks order, because order is the only thing a spine sells.**
+There are no signatures in a spine, so there is nothing to forge. She
+claims a tick count without doing the ticks, does fewer ticks than
+claimed, backdates a block to an earlier tick, splices in a foreign
+segment: all four refused. **The fifth succeeds and must.** Two spines
+from the same genesis, differing only in what was mixed in, both verify
+— both are real work, and nothing inside a hash chain prefers one
+sequence over another. That is not a hole; it is what a clock *is*. A
+spine orders what is **on** it; which spine is the chain's is the
+**ledger's** question, and `poh_anchor/3` is the seam between the two.
+
+**What is honestly not here:** a spine is not a proof of wall-clock time.
+A faster machine ticks faster, so "a million ticks apart" is a lower
+bound on work, not a reading of the time of day — anyone quoting a spine
+in seconds is quoting the producer's CPU. And it does not prove *who*:
+`anchor_block/1` folds in a block hash whose contents are signed one rung
+down, and the spine only says when that appeared relative to everything
+else.
 
 ### Training as settlement: the chain pays for a model that works
 

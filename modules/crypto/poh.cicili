@@ -1,0 +1,159 @@
+;;;; The Coco -- crypto: the proof-of-history spine.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili.
+;;;;
+;;;;   poh_run(+StartHex, +N, -EndHex)
+;;;;   poh_mix(+PrevHex, +EventHex, -NextHex)
+;;;;   poh_verify(+StartHex, +N, +EndHex)
+;;;;   poh_checkpoints(+StartHex, +N, +Every, -HexList)
+;;;;
+;;;; WHAT A SPINE IS. h(n+1) = sha256(h(n)), over the raw 32 bytes. To
+;;;; know h(1000000) you must have computed the 999999 before it: there
+;;;; is no shortcut through a hash chain, and that is the entire
+;;;; mechanism. The sequence is a CLOCK nobody can wind backwards,
+;;;; because winding it backwards means finding a preimage.
+;;;;
+;;;; AN EVENT IS TIMESTAMPED BY BEING MIXED IN. `poh_mix/3' folds an
+;;;; event's hash into the sequence, so everything after that tick
+;;;; depends on the event having existed by then. That is what makes the
+;;;; spine useful rather than merely expensive: it orders events, and the
+;;;; order is checkable by anyone.
+;;;;
+;;;; WHY THE LOOP IS HERE AND NOT IN PROLOG. A tick through the module
+;;;; seam costs a goal, an atom intern and a 64-character atom -- about
+;;;; 600 microseconds, measured. In C it is a hash over 32 bytes. The
+;;;; difference is what makes a spine of any length possible at all, and
+;;;; `library(poh)' keeps the Prolog loop anyway as an ORACLE: the two
+;;;; must agree, and the suite checks that they do.
+
+(DEFPARAMETER *poh-predicates*
+  '(("poh_run"         3 ph_p_run)
+    ("poh_mix"         3 ph_p_mix)
+    ("poh_verify"      3 ph_p_verify)
+    ("poh_checkpoints" 4 ph_p_ckpt)))
+
+(source "poh.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+  (import "./lib-hex.cicili")
+  (hex-core)
+  (import "./lib-sha256.cicili")
+  (sha256-core)
+
+  ;;; N ticks from IN into OUT, both 32 raw bytes. The whole rung is
+  ;;; this loop: sequential by construction, and there is no version of
+  ;;; it that is not.
+  (static) (func ph_iterate ((const u8 * in) (i64 n) (u8 * out)) (out void)
+        (let ((u8 a [32]) (u8 b [32]))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i a) (nth i in)))
+          (for ((i64 k . 0)) (< k n) ((++ k))
+            (s2_hash (cast (const u8 *) a) 32 b)
+            (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i a) (nth i b))))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i out) (nth i a)))))
+
+  ;;; ---- the predicates -------------------------------------------------
+
+  (static) (func ph_in32 ((coco_engine * e) (size_t t) (u8 * out)) (out int)
+        (let ((char buf [200]) (u8 raw [64]))
+          (if (not (coco_m_text e t buf 200)) (return 0))
+          (let ((i64 n . #'(hx_bytes buf raw 64)))
+            (if (!= n 32) (return 0))
+            (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i out) (nth i raw)))
+            (return 1))))
+
+  (func ph_p_run ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((sin 0) (nin 1) (out 2))
+          (let ((u8 start [32]) (u8 end [32]) (i64 n . 0) (char hex [70]))
+            (if (not (ph_in32 e sin start))
+                (return (coco_m_domain_error e "a 32-byte hex hash" sin)))
+            (if (not (coco_m_int e nin (aof n)))
+                (return (coco_m_type_error e "integer" nin)))
+            (if (< n 0) (return (coco_m_domain_error e "a tick count" nin)))
+            (ph_iterate (cast (const u8 *) start) n end)
+            (hx_out end 32 hex)
+            (return (coco_m_unify_atom e out hex)))))
+
+  ;;; The event fold: sha256(prev || event), 64 bytes in. Everything
+  ;;; after this tick depends on the event, which is what "timestamped"
+  ;;; means here.
+  (func ph_p_mix ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((pin 0) (ein 1) (out 2))
+          (let ((u8 prev [32]) (u8 ev [32]) (u8 both [64]) (u8 next [32])
+                (char hex [70]))
+            (if (not (ph_in32 e pin prev))
+                (return (coco_m_domain_error e "a 32-byte hex hash" pin)))
+            (if (not (ph_in32 e ein ev))
+                (return (coco_m_domain_error e "a 32-byte hex hash" ein)))
+            (for ((int i . 0)) (< i 32) ((++ i))
+              (set (nth i both) (nth i prev))
+              (set (nth (+ 32 i) both) (nth i ev)))
+            (s2_hash (cast (const u8 *) both) 64 next)
+            (hx_out next 32 hex)
+            (return (coco_m_unify_atom e out hex)))))
+
+  ;;; Succeeds when the segment really does run from START to END in N
+  ;;; ticks, and FAILS -- quietly -- when it does not. A wrong segment is
+  ;;; an ordinary answer to an ordinary question.
+  (func ph_p_verify ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((sin 0) (nin 1) (ein 2))
+          (let ((u8 start [32]) (u8 want [32]) (u8 got [32]) (i64 n . 0))
+            (if (not (ph_in32 e sin start))
+                (return (coco_m_domain_error e "a 32-byte hex hash" sin)))
+            (if (not (coco_m_int e nin (aof n)))
+                (return (coco_m_type_error e "integer" nin)))
+            (if (not (ph_in32 e ein want)) (return 0))
+            (if (< n 0) (return 0))
+            (ph_iterate (cast (const u8 *) start) n got)
+            (for ((int i . 0)) (< i 32) ((++ i))
+              (if (!= (nth i got) (nth i want)) (return 0)))
+            (return 1))))
+
+  ;;; THE CHECKPOINTS ARE WHAT MAKE VERIFICATION PARALLEL. Producing the
+  ;;; spine is sequential and cannot be otherwise; checking it is
+  ;;; embarrassingly parallel, but only if you know where the segments
+  ;;; begin. A producer publishes every EVERY-th hash, and then any
+  ;;; number of verifiers can each take one segment and re-run it with no
+  ;;; reference to the others.
+  ;;;
+  ;;; That asymmetry is the whole reason a spine is worth having: the
+  ;;; work is paid once, sequentially, and audited by everyone at once.
+  (func ph_p_ckpt ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((sin 0) (nin 1) (evin 2) (out 3))
+          (let ((u8 a [32]) (u8 b [32]) (i64 n . 0) (i64 every . 0))
+            (if (not (ph_in32 e sin a))
+                (return (coco_m_domain_error e "a 32-byte hex hash" sin)))
+            (if (not (coco_m_int e nin (aof n)))
+                (return (coco_m_type_error e "integer" nin)))
+            (if (not (coco_m_int e evin (aof every)))
+                (return (coco_m_type_error e "integer" evin)))
+            (if (or (<= every 0) (< n 0))
+                (return (coco_m_domain_error e "a positive stride" evin)))
+            (let ((i64 count . #'(/ n every)) (char ** v) (size_t k . 0))
+              (if (> count 4096)
+                  (return (coco_m_domain_error e "at most 4096 checkpoints" evin)))
+              (set v (cast (char **) (malloc (* (cast size_t (+ count 1))
+                                                (sizeof (char *))))))
+              (if (== v nil) (return 0))
+              ;; the start is checkpoint zero, so a verifier needs nothing
+              ;; but this list to cover the whole range
+              (set (nth 0 v) (cast (char *) (malloc 70)))
+              (hx_out a 32 (nth 0 v))
+              (set k 1)
+              (for ((i64 c . 0)) (< c count) ((++ c))
+                (ph_iterate (cast (const u8 *) a) every b)
+                (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i a) (nth i b)))
+                (set (nth k v) (cast (char *) (malloc 70)))
+                (hx_out a 32 (nth k v))
+                (set k (+ k 1)))
+              (let ((size_t lst . #'(coco_m_atom_list e v k)) (int ok . 0))
+                (for ((size_t i . 0)) (< i k) ((++ i)) (free (nth i v)))
+                (free v)
+                (set ok (coco_m_unify e out lst))
+                (return ok))))))
+
+  (static) (coco-emit-module-dispatch ph_dispatch *poh-predicates*)
+  (coco-deflibrary "poh" ph_dispatch nil)
+
+  ) ; source

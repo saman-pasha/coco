@@ -96,6 +96,21 @@ else
   say training RED; sed 's/^/   /' "$HERE/training.out"; red=$((red + 1))
 fi
 
+# ---- spine: rung 5 ----------------------------------------------------
+# The PoH spine. Production is sequential and cannot be split; checking
+# is parallel. The suite checks the checkable half and pins the spine to
+# constants computed outside this project; the measured speedup lives in
+# spine/run.sh, because a timing is not a pass or a fail.
+if sh "$HERE/spine.sh" > "$HERE/spine.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/spine.out"; then
+    say spine "$(head -1 "$HERE/spine.out")"
+  else
+    say spine GREEN
+  fi
+else
+  say spine RED; sed 's/^/   /' "$HERE/spine.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
