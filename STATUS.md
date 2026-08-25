@@ -62,15 +62,23 @@ unmodified.
    curves the aggregator needs to read foreign chains, as loadable
    Cicili modules on `$COCOLOG_LIBRARY` (and, where the work belongs on
    the server, Parsi procedures over Zigurat's `Cryptography/`).
-   **`library(keccak)`, `library(secp256k1)`, `library(sha512)` and
-   `library(ed25519)` are done** — between them the signature schemes
-   of Bitcoin, the whole EVM family, Solana, Cardano, TON, Near,
-   Stellar, and the Ed25519 halves of Cosmos, Sui and Aptos. The story
-   below says what they cost and what they prove. Still ahead on this
-   rung: Blake2b and RIPEMD-160, which are hashes rather than curves
-   and open Sui and Aptos addresses and Bitcoin's; and base58/bech32,
-   which are encodings and belong in Prolog, where cocolog's DCG engine
-   is waiting for them. Polkadot's sr25519 is deliberately out of the
+   **Seven modules are done** — `library(keccak)`, `library(secp256k1)`,
+   `library(sha512)`, `library(ed25519)`, `library(sha256)`,
+   `library(ripemd160)` and `library(blake2b)` — and two Prolog
+   libraries compose them, `library(eth)` and `library(btc)`. Between
+   them: the signature schemes of Bitcoin, the whole EVM family,
+   Solana, Cardano, TON, Near, Stellar and the Ed25519 halves of Cosmos,
+   Sui and Aptos; Bitcoin's `hash160` and its transaction ids; and the
+   Blake2b that Sui object ids, Aptos addresses, Polkadot, Cardano and
+   Zcash are built from. Thirty-seven checks, every one against a
+   number published by somebody else. The stories below say what they
+   cost and what they prove.
+
+   Still ahead on this rung: **base58 and bech32**, which are encodings
+   rather than primitives and belong in Prolog, where cocolog's DCG
+   engine is waiting for them — `btc_hash160` already reaches the
+   payload of a `1…` address, and base58check is the last step to the
+   string people paste. Polkadot's sr25519 is deliberately out of the
    first wave — Ristretto plus a transcript protocol is a different
    animal, and saying so is cheaper than pretending otherwise.
 
@@ -110,10 +118,10 @@ unmodified.
    Bridges are suspended-machine escrows that thaw on a rule-verified
    finality proof; an anchor chain checkpoints member heads
    accumulator-style; unification is the translation layer, so
-   cross-chain provenance is a join. (Aggregating foreign ecosystems —
-   Bitcoin, Ethereum — would need secp256k1 and keccak, which
-   `Cryptography/` does not carry; new primitives, not new
-   architecture.)
+   cross-chain provenance is a join. (Aggregating foreign ecosystems
+   needed primitives `Cryptography/` does not carry — secp256k1,
+   keccak, RIPEMD-160. Rung 1 built them, so what remains here is
+   architecture rather than arithmetic.)
 8. **The TPS harness, from day one.** Two lanes on one engine: a
    speculative lane at READ_UNCOMMITTED — peers read a block while its
    turn is still open, pipelining verification ahead of finality, dirty
@@ -135,6 +143,59 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### Bitcoin's hashes, and a transaction from 2009
+
+`library(blake2b)`, `library(ripemd160)` and `library(sha256)`, and
+`library(btc)` composing the last two.
+
+SHA-256 came in beside RIPEMD-160 rather than on its own account.
+Almost nothing hashes with RIPEMD-160 alone: its one job in the chain
+world is `hash160` — RIPEMD-160 over SHA-256 — so RIPEMD-160 without
+SHA-256 is a hash with nothing to hash. BLAKE2b is here because it is
+what Sui, Aptos, Polkadot, Cardano and Zcash reach for, at 256 bits
+(Sui's object ids, Aptos's addresses) and at 512, which are the same
+function differing in one constant.
+
+RIPEMD-160 is two parallel lines of eighty rounds over the same message
+words in different orders, with different constants and rotations,
+folded together at the end in a rotation that is easy to write down
+wrong. The eight tables — word orders, shift amounts, two sets of round
+constants — are three hundred and twenty numbers, and one wrong entry
+anywhere in them changes every digest. They were **checked in Python
+against the three published vectors before a line of the module was
+written**, which is the only way to trust three hundred and twenty
+numbers. All eight vectors then matched on the first pass.
+
+The end-to-end proof is a key and a transaction, and The Coco computed
+neither constant. `btc_hash160` of private key 1's compressed public
+key is `751e76e8199196d454941c45d1b3a323f1433bd6`, which is the payload
+of `1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH` — an address anyone can look
+up. And **the Bitcoin genesis coinbase transaction**, 204 bytes, 3
+January 2009, hashes to
+`4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b`:
+SHA-256 twice over and then read *backwards*, because Bitcoin displays
+hashes in the reverse of the byte order it hashes them in, which is the
+single most common way to get a txid wrong.
+
+That transaction is also what found a bug in a pillar. 204 bytes is 408
+hex characters, and cocolog's reader had truncated every atom at 255
+characters since the project began — silently, because the reader's own
+buffer grows and the atom table stores by length, and the 256 bytes
+were between the two. The module was handed 255 digits, an odd count,
+and correctly refused it as not hexadecimal: an error that was true of
+what it received and false of what was written. Two independently
+written hex decoders failing identically on the same atom is what said
+the fault was upstream of both.
+
+**The freeze held, and the freeze is what made this the right outcome.**
+The Coco could have chunked the input, or read the transaction from a
+file, and the genesis txid would have printed today with the truncation
+still in place for everyone else. Instead the diagnosis went to cocolog
+and the fix went in there, on its own merits, with its own regression
+test at three lengths in the three places the copy happened. The Coco
+changed nothing. cocolog's STATUS has the paragraph; `git status` in
+all three pillars is empty.
 
 ### Ed25519, held to RFC 8032 byte for byte
 

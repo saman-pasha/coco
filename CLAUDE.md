@@ -42,6 +42,18 @@ a pillar.
 
 ## Environment and running
 
+**`coco.yaml` is the one declaration** — where the pillars are, which
+knowledge base the wire cases speak to, which Cicili modules exist,
+which suite cases exist. Every script reads it by sourcing
+`test/config.sh`; none of them carries its own copy of any of it. Add a
+crypto module by adding a line under `modules.crypto`, and both
+`build.sh` and `crypto.sh` pick it up. **A fact that appears in two
+places will disagree with itself eventually**, and the disagreement is
+always silent.
+
+The environment still wins over the file, so nothing below is required
+when the four checkouts are siblings:
+
 ```sh
 export CICILI=/home/user/cicili                  # for building the pillars
 export ZIGURATIP=/home/user/ZiguratIP            # a BUILT ZiguratIP
@@ -49,6 +61,12 @@ export ZIGURATIP_HOME=/home/user/ZiguratIP/home
 export COCOLOG=/home/user/cocolog                # a BUILT cocolog checkout
 sh test/run.sh                                   # the suite
 ```
+
+config.sh's parser is a small awk over a deliberately small subset:
+`key: value` two levels deep, `- item` lists, `#` comments after
+whitespace. It is not YAML and does not pretend to be. If a
+configuration needs more than that, the configuration is wrong — the
+four materials do not include a schema language.
 
 The server, which the wire cases need — start it detached; a plain
 `nohup ... &` from a tool call does not survive the turn:

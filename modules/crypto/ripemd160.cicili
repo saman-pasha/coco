@@ -1,0 +1,168 @@
+;;;; The Coco -- crypto: RIPEMD-160, the second half of Bitcoin's
+;;;; hash160.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili.
+;;;;
+;;;;   ripemd160(+Text, -Hex)      ripemd160_hex(+HexIn, -Hex)
+;;;;
+;;;; WHY IT EXISTS HERE. Almost nothing hashes with RIPEMD-160 alone:
+;;;; its one job in the chain world is `hash160' -- RIPEMD-160 over
+;;;; SHA-256 -- which is what a Bitcoin address, a P2PKH script and a
+;;;; witness program are all built from. `library(btc)' composes the
+;;;; two, the way `library(eth)' composes keccak and secp256k1.
+;;;;
+;;;; THE SHAPE IS TWO PARALLEL LINES. Eighty rounds run twice over the
+;;;; same message words in different orders with different constants and
+;;;; rotations, and the two results are folded together at the end in a
+;;;; rotation that is easy to write down wrong. The eight tables below
+;;;; -- the word orders, the shift amounts, the two sets of round
+;;;; constants -- are the whole algorithm, and a single wrong entry
+;;;; anywhere in them changes every digest. They were checked against
+;;;; the three published vectors ("", "abc", "message digest") before a
+;;;; line of this was written, which is the only way to trust
+;;;; three hundred and twenty numbers.
+;;;;
+;;;; Little-endian words and a little-endian length, like MD5 and unlike
+;;;; SHA-2.
+
+(DEFPARAMETER *ripemd-predicates*
+  '(("ripemd160"     2 rm_p_text)
+    ("ripemd160_hex" 2 rm_p_hex)))
+
+(source "ripemd160.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+  (import "./lib-hex.cicili")
+  (hex-core)
+
+  ;;; the message word each round reads, left line and right
+  (static) (var u8 RM_RL []
+    . '{  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+          7  4 13  1 10  6 15  3 12  0  9  5  2 14 11  8
+          3 10 14  4  9 15  8  1  2  7  0  6 13 11  5 12
+          1  9 11 10  0  8 12  4 13  3  7 15 14  5  6  2
+          4  0  5  9  7 12  2 10 14  1  3  8 11  6 15 13 })
+  (static) (var u8 RM_RR []
+    . '{  5 14  7  0  9  2 11  4 13  6 15  8  1 10  3 12
+          6 11  3  7  0 13  5 10 14 15  8 12  4  9  1  2
+         15  5  1  3  7 14  6  9 11  8 12  2 10  0  4 13
+          8  6  4  1  3 11 15  0  5 12  2 13  9  7 10 14
+         12 15 10  4  1  5  8  7  6  2 13 14  0  3  9 11 })
+  ;;; and how far it rotates
+  (static) (var u8 RM_SL []
+    . '{ 11 14 15 12  5  8  7  9 11 13 14 15  6  7  9  8
+          7  6  8 13 11  9  7 15  7 12 15  9 11  7 13 12
+         11 13  6  7 14  9 13 15 14  8 13  6  5 12  7  5
+         11 12 14 15 14 15  9  8  9 14  5  6  8  6  5 12
+          9 15  5 11  6  8 13 12  5 12 13 14 11  8  5  6 })
+  (static) (var u8 RM_SR []
+    . '{  8  9  9 11 13 15 15  5  7  7  8 11 14 14 12  6
+          9 13 15  7 12  8  9 11  7  7 12  7  6 15 13 11
+          9  7 15 11  8  6  6 14 12 13  5 14 13 13  7  5
+         15  5  8 11 14 14  6 14  6  9 12  9 12  5 15  8
+          8  5 12  9 12  5 14  6  8 13  6  5 15 13 11 11 })
+  (static) (var u32 RM_KL [] . '{ 0x00000000 0x5a827999 0x6ed9eba1 0x8f1bbcdc 0xa953fd4e })
+  (static) (var u32 RM_KR [] . '{ 0x50a28be6 0x5c4dd124 0x6d703ef3 0x7a6d76e9 0x00000000 })
+
+  (static) (func rm_rol ((u32 x) (int n)) (out u32)
+        (if (== (% n 32) 0) (return x))
+        (return (bitor (<< x n) (>> x (- 32 n)))))
+
+  ;;; The five nonlinear functions, by round group.
+  (static) (func rm_f ((int j) (u32 x) (u32 y) (u32 z)) (out u32)
+        (if (< j 16) (return (xor x (xor y z))))
+        (if (< j 32) (return (bitor (bitand x y) (bitand (xor x 0xffffffff) z))))
+        (if (< j 48) (return (xor (bitor x (xor y 0xffffffff)) z)))
+        (if (< j 64) (return (bitor (bitand x z) (bitand y (xor z 0xffffffff)))))
+        (return (xor x (bitor y (xor z 0xffffffff)))))
+
+  (static) (func rm_block ((u32 * h) (const u8 * blk)) (out void)
+        (let ((u32 x [16])
+              (u32 a . 0) (u32 b . 0) (u32 c . 0) (u32 d . 0) (u32 ee . 0)
+              (u32 A . 0) (u32 B . 0) (u32 C . 0) (u32 D . 0) (u32 E . 0))
+          (for ((int i . 0)) (< i 16) ((++ i))
+            (set (nth i x)
+                 (bitor (cast u32 (nth (* i 4) blk))
+                        (bitor (<< (cast u32 (nth (+ (* i 4) 1) blk)) 8)
+                               (bitor (<< (cast u32 (nth (+ (* i 4) 2) blk)) 16)
+                                      (<< (cast u32 (nth (+ (* i 4) 3) blk)) 24))))))
+          (set a (nth 0 h)) (set b (nth 1 h)) (set c (nth 2 h))
+          (set d (nth 3 h)) (set ee (nth 4 h))
+          (set A (nth 0 h)) (set B (nth 1 h)) (set C (nth 2 h))
+          (set D (nth 3 h)) (set E (nth 4 h))
+          (for ((int j . 0)) (< j 80) ((++ j))
+            (let ((u32 t . 0))
+              ;; the left line
+              (set t (+ (rm_rol (+ (+ a (rm_f j b c d))
+                                   (+ (nth (nth j RM_RL) x) (nth (/ j 16) RM_KL)))
+                                (cast int (nth j RM_SL)))
+                        ee))
+              (set a ee) (set ee d) (set d (rm_rol c 10)) (set c b) (set b t)
+              ;; and the right, which runs the functions backwards
+              (set t (+ (rm_rol (+ (+ A (rm_f (- 79 j) B C D))
+                                   (+ (nth (nth j RM_RR) x) (nth (/ j 16) RM_KR)))
+                                (cast int (nth j RM_SR)))
+                        E))
+              (set A E) (set E D) (set D (rm_rol C 10)) (set C B) (set B t)))
+          ;; the fold: each state word takes one word from each line, and
+          ;; the whole thing rotates by one -- the step everybody writes
+          ;; down wrong once
+          (let ((u32 t . #'(+ (nth 1 h) (+ c D))))
+            (set (nth 1 h) (+ (nth 2 h) (+ d E)))
+            (set (nth 2 h) (+ (nth 3 h) (+ ee A)))
+            (set (nth 3 h) (+ (nth 4 h) (+ a B)))
+            (set (nth 4 h) (+ (nth 0 h) (+ b C)))
+            (set (nth 0 h) t))))
+
+  (static) (func rm_hash ((const u8 * in) (size_t len) (u8 * out)) (out void)
+        (let ((u32 h [5]) (u8 tail [128]) (size_t done . 0) (size_t rest . 0)
+              (size_t tl . 0))
+          (set (nth 0 h) 0x67452301) (set (nth 1 h) 0xefcdab89)
+          (set (nth 2 h) 0x98badcfe) (set (nth 3 h) 0x10325476)
+          (set (nth 4 h) 0xc3d2e1f0)
+          (while (>= (- len done) 64)
+            (rm_block h (aof (nth done in)))
+            (set done (+ done 64)))
+          (set rest (- len done))
+          (for ((int i . 0)) (< i 128) ((++ i)) (set (nth i tail) 0))
+          (for ((size_t i . 0)) (< i rest) ((++ i))
+            (set (nth i tail) (nth (+ done i) in)))
+          (set (nth rest tail) 0x80)
+          (set tl (? (< rest 56) 64 128))
+          (let ((u64 bits . #'(* (cast u64 len) 8)))
+            (for ((int j . 0)) (< j 8) ((++ j))
+              (set (nth (+ (- tl 8) j) tail)
+                   (cast u8 (bitand (>> bits (* 8 j)) 255)))))
+          (rm_block h tail)
+          (if (== tl 128) (rm_block h (aof (nth 64 tail))))
+          (for ((int i . 0)) (< i 5) ((++ i))
+            (for ((int j . 0)) (< j 4) ((++ j))
+              (set (nth (+ (* i 4) j) out)
+                   (cast u8 (bitand (>> (nth i h) (* 8 j)) 255)))))))
+
+  (func rm_p_text ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 dg [20]) (char hex [50]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "text or a code list" in)))
+            (rm_hash (cast (const u8 *) buf) (strlen buf) dg)
+            (hx_out dg 20 hex)
+            (return (coco_m_unify_atom e out hex)))))
+
+  (func rm_p_hex ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 raw [32768]) (u8 dg [20]) (char hex [50]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "a hex atom" in)))
+            (let ((i64 n . #'(hx_bytes buf raw 32768)))
+              (if (< n 0) (return (coco_m_domain_error e "hexadecimal" in)))
+              (rm_hash (cast (const u8 *) raw) (cast size_t n) dg)
+              (hx_out dg 20 hex)
+              (return (coco_m_unify_atom e out hex))))))
+
+  (static) (coco-emit-module-dispatch rm_dispatch *ripemd-predicates*)
+  (coco-deflibrary "ripemd160" rm_dispatch nil)
+
+  ) ; source

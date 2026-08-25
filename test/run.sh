@@ -11,14 +11,15 @@
 #           repository. SKIPs without a server, because "no server
 #           here" and "the hub is wrong" are different findings.
 #
-# Needs a BUILT cocolog: $COCOLOG points at its checkout (default: a
-# sibling directory named cocolog).
+# Everything this needs to know -- where the pillars are, which knowledge
+# base the wire cases speak to, which cases exist -- is in coco.yaml, read
+# by config.sh. The environment still wins over the file.
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/.." && pwd)
-C="${COCOLOG:-$ROOT/../cocolog}/cocolog"
-HOST=${ZIGURAT_HOST:-127.0.0.1}
-PORT=${ZIGURAT_PORT:-2160}
+. "$HERE/config.sh"
+C="$COCOLOG_BIN"
+HOST=$ZIGURAT_HOST
+PORT=$ZIGURAT_PORT
 
 red=0
 say() { printf '%-10s %s\n' "$1" "$2"; }
@@ -53,7 +54,7 @@ else
 fi
 
 # ---- wire -----------------------------------------------------------
-W="--host $HOST --port $PORT --timeout 15 --kb coco_hello"
+W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
   timeout 60 "$C" $W forget >/dev/null 2>&1
   timeout 60 "$C" $W consult "$ROOT/modules/hello.pl" >/dev/null 2>&1

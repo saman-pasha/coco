@@ -1,0 +1,157 @@
+;;;; The Coco -- crypto: BLAKE2b, the hash Sui, Aptos, Polkadot,
+;;;; Cardano and Zcash reach for.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili.
+;;;;
+;;;;   blake2b256(+Text, -Hex)      blake2b512(+Text, -Hex)
+;;;;   blake2b256_hex(+HexIn, -Hex) blake2b512_hex(+HexIn, -Hex)
+;;;;
+;;;; 256 bits is what a chain almost always wants -- Sui's object ids
+;;;; and Aptos's addresses are blake2b-256 -- and 512 is the natural
+;;;; width, so both are here rather than a length parameter nobody
+;;;; would pass anything else to.
+;;;;
+;;;; BLAKE2b IS LITTLE-ENDIAN, in and out, which is the opposite of
+;;;; SHA-2 and the first thing to check when a digest comes out
+;;;; plausible but wrong. Its initial state is SHA-512's -- the
+;;;; fractional parts of the square roots of the first eight primes --
+;;;; with the FIRST WORD XORed by a parameter block that carries the
+;;;; digest length: `blake2b-256' and `blake2b-512' are the same
+;;;; function differing in one constant, which is also why the two
+;;;; predicates below share every line of code beneath them.
+;;;;
+;;;; There is no length block at the end, unlike SHA-2: the byte
+;;;; counter goes INTO the compression, and the last block is marked
+;;;; final rather than padded with a length. An empty message is
+;;;; therefore one all-zero block with the counter at zero -- the case
+;;;; that catches an implementation which skips the loop entirely.
+
+(DEFPARAMETER *blake2b-predicates*
+  '(("blake2b256"     2 bl_p_256)
+    ("blake2b256_hex" 2 bl_p_256h)
+    ("blake2b512"     2 bl_p_512)
+    ("blake2b512_hex" 2 bl_p_512h)))
+
+(source "blake2b.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+  (import "./lib-hex.cicili")
+  (hex-core)
+
+  (static) (var u64 BL_IV []
+    . '{ 0x6a09e667f3bcc908 0xbb67ae8584caa73b 0x3c6ef372fe94f82b 0xa54ff53a5f1d36f1
+         0x510e527fade682d1 0x9b05688c2b3e6c1f 0x1f83d9abfb41bd6b 0x5be0cd19137e2179 })
+
+  ;;; Ten permutations of sixteen; rounds ten and eleven reuse the first
+  ;;; two rows, which is what the `% 10' in the round loop is doing.
+  (static) (var u8 BL_SIGMA []
+    . '{  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+         14 10  4  8  9 15 13  6  1 12  0  2 11  7  5  3
+         11  8 12  0  5  2 15 13 10 14  3  6  7  1  9  4
+          7  9  3  1 13 12 11 14  2  6  5 10  4  0 15  8
+          9  0  5  7  2  4 10 15 14  1 11 12  6  8  3 13
+          2 12  6 10  0 11  8  3  4 13  7  5 15 14  1  9
+         12  5  1 15 14 13  4 10  0  7  6  3  9  2  8 11
+         13 11  7 14 12  1  3  9  5  0 15  4  8  6  2 10
+          6 15 14  9 11  3  0  8 12  2 13  7  1  4 10  5
+         10  2  8  4  7  6  1  5 15 11  9 14  3 12 13  0 })
+
+  (static) (func bl_rotr ((u64 x) (int n)) (out u64)
+        (if (== (% n 64) 0) (return x))
+        (return (bitor (>> x n) (<< x (- 64 n)))))
+
+  ;;; The mixing function, on four of the sixteen working words.
+  (static) (func bl_g ((u64 * v) (int a) (int b) (int c) (int d) (u64 x) (u64 y))
+        (out void)
+        (set (nth a v) (+ (+ (nth a v) (nth b v)) x))
+        (set (nth d v) (bl_rotr (xor (nth d v) (nth a v)) 32))
+        (set (nth c v) (+ (nth c v) (nth d v)))
+        (set (nth b v) (bl_rotr (xor (nth b v) (nth c v)) 24))
+        (set (nth a v) (+ (+ (nth a v) (nth b v)) y))
+        (set (nth d v) (bl_rotr (xor (nth d v) (nth a v)) 16))
+        (set (nth c v) (+ (nth c v) (nth d v)))
+        (set (nth b v) (bl_rotr (xor (nth b v) (nth c v)) 63)))
+
+  ;;; One 128-byte block. T is the byte count so far INCLUDING this
+  ;;; block; FINAL marks the last one.
+  (static) (func bl_block ((u64 * h) (const u8 * blk) (u64 t) (int final)) (out void)
+        (let ((u64 v [16]) (u64 m [16]))
+          (for ((int i . 0)) (< i 16) ((++ i))
+            (let ((u64 w . 0))
+              ;; little-endian, unlike every SHA
+              (for ((int j . 7)) (>= j 0) ((-- j))
+                (set w (bitor (<< w 8) (cast u64 (nth (+ (* i 8) j) blk)))))
+              (set (nth i m) w)))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set (nth i v) (nth i h))
+            (set (nth (+ i 8) v) (nth i BL_IV)))
+          (set (nth 12 v) (xor (nth 12 v) t))
+          ;; the high half of the counter stays zero: this module hashes
+          ;; what fits in memory, and 2^64 bytes does not
+          (if final (set (nth 14 v) (xor (nth 14 v) 0xffffffffffffffff)))
+          (for ((int r . 0)) (< r 12) ((++ r))
+            (let ((int s . #'(* (% r 10) 16)))
+              (bl_g v 0 4  8 12 (nth (nth (+ s  0) BL_SIGMA) m) (nth (nth (+ s  1) BL_SIGMA) m))
+              (bl_g v 1 5  9 13 (nth (nth (+ s  2) BL_SIGMA) m) (nth (nth (+ s  3) BL_SIGMA) m))
+              (bl_g v 2 6 10 14 (nth (nth (+ s  4) BL_SIGMA) m) (nth (nth (+ s  5) BL_SIGMA) m))
+              (bl_g v 3 7 11 15 (nth (nth (+ s  6) BL_SIGMA) m) (nth (nth (+ s  7) BL_SIGMA) m))
+              (bl_g v 0 5 10 15 (nth (nth (+ s  8) BL_SIGMA) m) (nth (nth (+ s  9) BL_SIGMA) m))
+              (bl_g v 1 6 11 12 (nth (nth (+ s 10) BL_SIGMA) m) (nth (nth (+ s 11) BL_SIGMA) m))
+              (bl_g v 2 7  8 13 (nth (nth (+ s 12) BL_SIGMA) m) (nth (nth (+ s 13) BL_SIGMA) m))
+              (bl_g v 3 4  9 14 (nth (nth (+ s 14) BL_SIGMA) m) (nth (nth (+ s 15) BL_SIGMA) m))))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set (nth i h) (xor (nth i h) (xor (nth i v) (nth (+ i 8) v)))))))
+
+  ;;; LEN bytes at IN, OUTLEN bytes of digest at OUT (32 or 64 here).
+  (static) (func bl_hash ((const u8 * in) (size_t len) (u8 * out) (size_t outlen))
+        (out void)
+        (let ((u64 h [8]) (u8 tail [128]) (size_t done . 0))
+          (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i h) (nth i BL_IV)))
+          ;; the parameter block: digest length, no key, fanout and depth 1
+          (set (nth 0 h) (xor (nth 0 h) (bitor 0x01010000 (cast u64 outlen))))
+          ;; every block but the last, whole and not final
+          (while (> (- len done) 128)
+            (bl_block h (aof (nth done in)) (cast u64 (+ done 128)) 0)
+            (set done (+ done 128)))
+          ;; the last block: zero-padded, final, counter at the true length
+          (for ((int i . 0)) (< i 128) ((++ i)) (set (nth i tail) 0))
+          (for ((size_t i . done)) (< i len) ((++ i))
+            (set (nth (- i done) tail) (nth i in)))
+          (bl_block h tail (cast u64 len) 1)
+          (for ((size_t i . 0)) (< i outlen) ((++ i))
+            (set (nth i out)
+                 (cast u8 (bitand (>> (nth (>> i 3) h) (* 8 (cast int (bitand i 7)))) 255))))))
+
+  ;;; ---- the predicates -------------------------------------------------
+
+  (static) (func bl_text ((coco_engine * e) (size_t g) (size_t outlen)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 dg [64]) (char hex [140]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "text or a code list" in)))
+            (bl_hash (cast (const u8 *) buf) (strlen buf) dg outlen)
+            (hx_out dg outlen hex)
+            (return (coco_m_unify_atom e out hex)))))
+
+  (static) (func bl_hexin ((coco_engine * e) (size_t g) (size_t outlen)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 raw [32768]) (u8 dg [64]) (char hex [140]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "a hex atom" in)))
+            (let ((i64 n . #'(hx_bytes buf raw 32768)))
+              (if (< n 0) (return (coco_m_domain_error e "hexadecimal" in)))
+              (bl_hash (cast (const u8 *) raw) (cast size_t n) dg outlen)
+              (hx_out dg outlen hex)
+              (return (coco_m_unify_atom e out hex))))))
+
+  (func bl_p_256 ((coco_engine * e) (size_t g)) (out int) (return (bl_text e g 32)))
+  (func bl_p_256h ((coco_engine * e) (size_t g)) (out int) (return (bl_hexin e g 32)))
+  (func bl_p_512 ((coco_engine * e) (size_t g)) (out int) (return (bl_text e g 64)))
+  (func bl_p_512h ((coco_engine * e) (size_t g)) (out int) (return (bl_hexin e g 64)))
+
+  (static) (coco-emit-module-dispatch bl_dispatch *blake2b-predicates*)
+  (coco-deflibrary "blake2b" bl_dispatch nil)
+
+  ) ; source

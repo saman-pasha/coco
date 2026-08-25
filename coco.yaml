@@ -1,0 +1,76 @@
+# The Coco -- one declaration of what the hub is made of.
+#
+# WHY THIS FILE EXISTS. The Coco is assembled out of three frozen
+# pillars and its own four materials, and until now every script knew
+# some of that on its own: build.sh carried the module list, run.sh
+# carried the case list, crypto.sh worked out the library path a second
+# time, and CLAUDE.md wrote the environment down a third. Four copies of
+# one fact drift, and the drift is silent. This is the one copy. The
+# scripts read it through `test/config.sh'; nothing here is decoration.
+#
+# THE ENVIRONMENT STILL WINS. Every value below is a DEFAULT. If CICILI,
+# ZIGURATIP, ZIGURATIP_HOME, COCOLOG, COCOLOG_LIBRARY, ZIGURAT_HOST or
+# ZIGURAT_PORT is already set when a script runs, that is what is used --
+# so a checkout somewhere unusual needs no edit here, and CI can point
+# the whole hub at a scratch tree with a line of exports.
+#
+# THE SUBSET IS SMALL, deliberately: `key: value' two levels deep, and
+# `- item' lists. There is no YAML parser in this repository and there
+# will not be one -- config.sh is thirty lines of awk, and a config file
+# that needs more than that is a config file doing something it should
+# not. Values are expanded by the shell, so ${ZIGURATIP} below means what
+# it says.
+
+# ---- the three pillars ----------------------------------------------
+# Inputs, all of them. The Coco uses these and modifies none; see
+# CLAUDE.md. Paths are checkouts, not installs.
+#
+# The defaults are SIBLINGS OF THIS REPOSITORY rather than anything under
+# ${HOME}: the four checkouts sit side by side in every place the family
+# is worked on, and a home directory is not the same in a container as it
+# is on a laptop. config.sh normalises these, so `..' does not survive
+# into anything a script prints.
+pillars:
+  cicili: ${ROOT}/../cicili                # the language, for sbcl at build time
+  zigurat: ${ROOT}/../ZiguratIP            # a BUILT ZiguratIP
+  zigurat_home: ${ROOT}/../ZiguratIP/home  # and its home: ld/, data/, bin/
+  cocolog: ${ROOT}/../cocolog              # a BUILT cocolog checkout
+
+# ---- where a library is looked up -----------------------------------
+# `use_module(library(Name))' searches COCOLOG_LIBRARY, then ./library.
+# The Coco's own .pl libraries and compiled .so modules both land here,
+# which is what lets library(eth) be Prolog and library(keccak) be C
+# without a caller knowing the difference.
+paths:
+  library: ${ROOT}/library
+
+# ---- the knowledge base the wire cases speak to ----------------------
+arrangement:
+  host: 127.0.0.1
+  port: 2160
+  timeout: 15
+  kb: coco_hello
+
+# ---- the Cicili modules, in build order ------------------------------
+# Order matters only in that a module is built before anything that
+# loads it; these are independent, so the order is the order they were
+# written. Each is modules/crypto/<name>.cicili and becomes
+# <library>/<name>.so.
+modules:
+  crypto:
+    - keccak         # Ethereum's, with the 0x01 pad -- not NIST SHA3
+    - secp256k1      # the curve: derive, verify, recover
+    - sha512         # what Ed25519 hashes with
+    - ed25519        # RFC 8032, deterministic, byte for byte
+    - sha256         # Bitcoin's, and half of hash160
+    - ripemd160      # the other half
+    - blake2b        # Sui, Aptos, Polkadot, Cardano, Zcash
+
+# ---- the suite -------------------------------------------------------
+# `red: 0' does not mean the suite passed: wire SKIPs without a server.
+# Read the per-case lines. (cocolog's CLAUDE.md, inherited.)
+suite:
+  cases:
+    - local          # the binary consults a .pl and answers
+    - crypto         # the primitives, against published vectors
+    - wire           # one process writes, a second reads it back

@@ -40,9 +40,8 @@
 # SKIPs when the modules cannot be built (no sbcl, or no CICILI).
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/.." && pwd)
-C="${COCOLOG:-$ROOT/../cocolog}/cocolog"
-export COCOLOG_LIBRARY="$ROOT/library"
+. "$HERE/config.sh"
+C="$COCOLOG_BIN"
 
 failures=0
 check() {
@@ -56,11 +55,15 @@ check() {
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 
-if [ ! -f "$ROOT/library/secp256k1.so" ] || [ ! -f "$ROOT/library/keccak.so" ]; then
-  ( cd "$ROOT" && CICILI="${CICILI:-$HOME/cicili}" COCOLOG="${COCOLOG:-$ROOT/../cocolog}" \
-      sh modules/crypto/build.sh ) > "$HERE/crypto-build.log" 2>&1 || true
-fi
-if [ ! -f "$ROOT/library/secp256k1.so" ]; then
+# Build anything coco.yaml names that is not on the library path yet, so
+# that adding a module to the file is the whole of adding a module.
+for m in $COCO_MODULES_CRYPTO; do
+  if [ ! -f "$COCOLOG_LIBRARY/$m.so" ]; then
+    sh "$ROOT/modules/crypto/build.sh" > "$HERE/crypto-build.log" 2>&1 || true
+    break
+  fi
+done
+if [ ! -f "$COCOLOG_LIBRARY/secp256k1.so" ]; then
   echo "SKIP (the crypto modules would not build -- no sbcl or CICILI checkout)"
   exit 0
 fi
@@ -170,6 +173,85 @@ check "eth: an address from the 04 spelling too" \
 check "eth: who signed this -- recover to an address" \
   "$(q "$E, eth_signer('$Z', '$SIG', 0, A), write(A), nl" "$A")" \
   "19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+
+# ---- blake2b ---------------------------------------------------------
+# The RFC 7693 appendix gives "abc"; the empty string is the case that
+# catches an implementation which skips the block loop rather than
+# compressing one all-zero block, and the 200-byte input crosses the
+# 128-byte block so the counter has to be right twice.
+B2="use_module(library(blake2b))"
+H2='[0-9a-f]{64}'
+H4='[0-9a-f]{128}'
+check "blake2b-256: abc" \
+  "$(q "$B2, blake2b256(abc, H), write(H), nl" "$H2")" \
+  "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319"
+check "blake2b-256: the empty string" \
+  "$(q "$B2, blake2b256_hex('0x', H), write(H), nl" "$H2")" \
+  "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8"
+check "blake2b-512: abc, the RFC 7693 vector" \
+  "$(q "$B2, blake2b512(abc, H), write(H), nl" "$H4")" \
+  "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"
+check "blake2b-512: the empty string" \
+  "$(q "$B2, blake2b512_hex('0x', H), write(H), nl" "$H4")" \
+  "786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce"
+check "blake2b-256: 200 bytes, a second block" \
+  "$(q "$B2, findall(0'a, between(1,200,_), L), blake2b256(L, H), write(H), nl" "$H2")" \
+  "6b6e59aaf00eb730cf93de53560846722184bbd92f8368c21ffa95380c2f9fe6"
+
+# ---- ripemd160 and sha256 -------------------------------------------
+# The three RIPEMD-160 vectors from the original paper, and SHA-256's
+# two. "message digest" is the one that crosses no boundary and still
+# catches a wrong round constant, because every round runs.
+RM="use_module(library(ripemd160))"
+SH="use_module(library(sha256))"
+A20='[0-9a-f]{40}'
+check "ripemd160: the empty string" \
+  "$(q "$RM, ripemd160_hex('0x', H), write(H), nl" "$A20")" \
+  "9c1185a5c5e9fc54612808977ee8f548b2258d31"
+check "ripemd160: abc" \
+  "$(q "$RM, ripemd160(abc, H), write(H), nl" "$A20")" \
+  "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc"
+check "ripemd160: message digest" \
+  "$(q "$RM, ripemd160('message digest', H), write(H), nl" "$A20")" \
+  "5d0689ef49d2fae572b881b123a85ffa21595f36"
+check "sha256: the empty string" \
+  "$(q "$SH, sha256_hex('0x', H), write(H), nl" "$H2")" \
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+check "sha256: abc" \
+  "$(q "$SH, sha256(abc, H), write(H), nl" "$H2")" \
+  "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+check "sha256: 200 bytes, a second block" \
+  "$(q "$SH, findall(0'a, between(1,200,_), L), sha256(L, H), write(H), nl" "$H2")" \
+  "c2a908d98f5df987ade41b5fce213067efbcc21ef2240212a41e54b5e7c28ae5"
+
+# ---- library(btc): the second Prolog library over compiled modules ---
+# hash160 is RIPEMD-160 over SHA-256, and the hash160 of private key 1's
+# COMPRESSED public key is 751e76e8199196d454941c45d1b3a323f1433bd6 --
+# which is the payload of 1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH, an address
+# anyone can look up. Nothing here computed that constant.
+#
+# And then the transaction that starts the chain: the Bitcoin genesis
+# coinbase, 204 bytes, 3 January 2009. Its txid is
+# 4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b --
+# SHA-256 twice and READ BACKWARDS, which is the step everybody gets
+# wrong once. It is also 408 hex characters of input, and until cocolog's
+# reader stopped truncating names at 255 it could not be asked at all.
+BT="use_module(library(btc))"
+check "btc: hash160 of the compressed key for secret 1" \
+  "$(q "$BT, btc_hash160('$GXY', H), write(H), nl" "$A20")" \
+  "751e76e8199196d454941c45d1b3a323f1433bd6"
+check "btc: the compressed form picks its prefix from y" \
+  "$(q "$BT, btc_compress('$GXY', C), write(C), nl" '[0-9a-f]{66}')" \
+  "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+GEN=0100000001000000000000000000000000000000000000000000000000000000000000000\
+0ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616\
+e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f72206\
+2616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a\
+828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4\
+c702b6bf11d5fac00000000
+check "btc: the genesis coinbase transaction, 204 bytes" \
+  "$(q "$BT, btc_txid('$GEN', T), write(T), nl" "$H2")" \
+  "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"
 
 echo
 if [ "$failures" -eq 0 ]; then

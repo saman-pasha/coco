@@ -16,7 +16,7 @@ also train.
 
 ## What lives here, and what does not
 
-Everything in this repository is one of three things:
+Everything in this repository is one of four things:
 
 * **Prolog** — `.pl` files consulted by the one `cocolog` binary. A
   consensus rule, a contract, a validity predicate, a fork choice: all
@@ -44,6 +44,13 @@ only inside ZiguratIP is there a choice between C++ and Cicili. When a
 rung genuinely needs a new engine capability (TLS in cocolog's C
 client, say), that capability is built in ITS repository on its own
 merits, and The Coco uses it once it exists.
+
+That rule has already paid once. Reading the Bitcoin genesis
+transaction meant handing cocolog a 408-character atom, and cocolog had
+been truncating atoms at 255 characters since the day it was written.
+The Coco could have worked around it in an afternoon and nobody would
+have known. The diagnosis went to cocolog instead, the fix landed there
+with its own regression test, and the workaround was never written.
 
 ## The thesis
 
@@ -88,6 +95,12 @@ git clone https://github.com/saman-pasha/cocolog
 git clone https://github.com/saman-pasha/coco Coco
 ```
 
+Cloned side by side like that, **nothing needs to be exported at all**:
+`coco.yaml` names the pillars as siblings of this repository, and every
+script reads it through `test/config.sh`. Checkouts somewhere else are a
+line of exports rather than an edit to a tracked file, because the
+environment always wins over the file:
+
 ```sh
 export CICILI="$HOME/Projects/GitHub/cicili"        # for building the pillars
 export ZIGURATIP="$HOME/Projects/GitHub/ZiguratIP"  # a BUILT ZiguratIP
@@ -103,6 +116,11 @@ cd Coco
 sh test/run.sh        # every case; the wire cases SKIP without a server
 ```
 
+`coco.yaml` is also where the crypto module list lives, so adding a
+module is a line there and nothing else — `build.sh` and `crypto.sh`
+both read it rather than carrying their own copy. Four copies of one
+fact drift; one does not.
+
 ## Layout
 
 ```
@@ -110,8 +128,13 @@ modules/          the Prolog: what The Coco is made of
 modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
-                  and eth.pl -- a Prolog library over two of them
-test/             the arrangements that hold it GREEN
+                  and eth.pl and btc.pl -- Prolog libraries that compose
+                  them, which is the point: a caller cannot tell which
+                  of its libraries are Prolog and which are compiled C
+coco.yaml         the one declaration -- pillars, paths, the knowledge
+                  base, the module list, the suite. Read by every script
+test/             the arrangements that hold it GREEN; config.sh reads
+                  coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three
 ```
 
