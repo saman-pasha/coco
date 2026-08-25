@@ -32,13 +32,13 @@
 %% WHAT MAKES IT ACCOUNTABLE. Two valid certificates for different blocks
 %% at one height cannot exist unless more than a third of the stake voted
 %% for both -- that is `culprits/3', and its arithmetic is in
-%% library(stake). Byzantine fault tolerance here is not "the bad case
+%% library(pos). Byzantine fault tolerance here is not "the bad case
 %% cannot happen"; it is "the bad case names the validators who caused
 %% it", and a name is what a slashing rule needs.
 
 :- use_module(library(sha256)).
 :- use_module(library(secp256k1)).
-:- use_module(library(stake)).
+:- use_module(library(pos)).
 :- use_module(library(poa)).      % for `authority/2': whose key is whose
 :- use_module(library(lists)).
 

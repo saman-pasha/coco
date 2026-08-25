@@ -1,4 +1,10 @@
-%% library(stake) -- proof of stake: who may vote, and how much they weigh.
+%% library(pos) -- proof of stake: who may vote, and how much they weigh.
+%%
+%% Named for the family, the way library(poa) and library(poh) are. It
+%% holds the whole of proof of stake -- the weights, the thresholds and
+%% the draw -- exactly as library(poa) holds the whole of proof of
+%% authority, and it pairs with library(bft) the way the rung's own name
+%% does.
 %%
 %%   stake_of(?Who, -Amount)       what one validator weighs
 %%   stake_table(-Pairs)           Who-Amount, sorted by name

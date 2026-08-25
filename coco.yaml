@@ -88,7 +88,7 @@ libraries:
     - contract       # rung 3: the fence, scoped state, the call door
     - settle         # rung 4: the acceptance predicate over held-out data
     - poh            # rung 5: segments, parallel verification, the ledger seam
-    - stake          # rung 6: weight as a query, and the leader draw
+    - pos            # rung 6: weight as a query, and the leader draw
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
 
 # ---- the suite -------------------------------------------------------

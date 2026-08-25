@@ -45,7 +45,7 @@ BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 60"
 FED="$HERE/federation.pl"
 LEDGER="$ROOT/ledger/node.pl"
 NODE="$HERE/node.pl"
-K="use_module(library(poa)), use_module(library(stake)), use_module(library(bft))"
+K="use_module(library(poa)), use_module(library(pos)), use_module(library(bft))"
 WHO="alice bob carol mallory"
 
 ALICE=1111111111111111111111111111111111111111111111111111111111111111

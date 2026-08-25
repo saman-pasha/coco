@@ -23,7 +23,7 @@
 %% another validator has voted is a row it can read, which is why a
 %% quorum certificate can be assembled by anyone at all.
 
-:- use_module(library(stake)).
+:- use_module(library(pos)).
 :- use_module(library(bft)).
 :- use_module(library(poa)).
 :- use_module(library(lists)).

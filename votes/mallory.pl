@@ -21,7 +21,7 @@
 %% federation.pl's comments; nothing here is a secret and nothing here
 %% needs to be.
 
-:- use_module(library(stake)).
+:- use_module(library(pos)).
 :- use_module(library(bft)).
 :- use_module(library(poa)).
 :- use_module(library(sha256)).
@@ -204,7 +204,7 @@ double_qc_culprits(Names, Heavy) :-
 %% removed, biasing your own turn is a cost worth paying for a draw with
 %% no beacon, no committee and no extra round of messages. Outside one it
 %% is not, and it would want a VRF or an unbiasable beacon. The trade is
-%% stated where it is made, in library(stake), and it is in the suite as
+%% stated where it is made, in library(pos), and it is in the suite as
 %% a SUCCESS because pretending otherwise would be the easy lie here.
 attack_grind(V) :-
     demo_stake,

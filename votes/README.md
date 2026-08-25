@@ -10,7 +10,7 @@ sh test/votes.sh         # the same rules, checked: 37 checks
 
 | file | what |
 |---|---|
-| `../library/stake.pl` | stake as a query, the thresholds, the weighted draw |
+| `../library/pos.pl` | stake as a query, the thresholds, the weighted draw |
 | `../library/bft.pl` | votes, quorum certificates, the lock, the evidence |
 | `federation.pl` | whose key is whose — and nothing about weight |
 | `node.pl` | a validator: read stake, draw, vote, lock, finalise |
@@ -144,7 +144,7 @@ party who had to be admitted and can be removed — biasing your own turn
 is a cost worth paying for a draw with no beacon, no committee and no
 extra round of messages. Outside one it is not, and it would want a VRF
 or an unbiasable beacon. The trade is stated where it is made, in
-`library(stake)`.
+`library(pos)`.
 
 ## What is not here
 

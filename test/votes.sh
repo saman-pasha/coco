@@ -33,7 +33,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/config.sh"
 C="$COCOLOG_BIN"
 F="$ROOT/votes/federation.pl $ROOT/ledger/node.pl $ROOT/votes/node.pl $ROOT/votes/mallory.pl"
-K="use_module(library(stake)), use_module(library(bft))"
+K="use_module(library(pos)), use_module(library(bft))"
 
 failures=0
 check() {

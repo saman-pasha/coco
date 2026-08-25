@@ -129,7 +129,7 @@ modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
                   and the Prolog libraries beside them: bytes, base58,
-                  bech32, eth, btc, poa, contract, settle, poh, stake,
+                  bech32, eth, btc, poa, contract, settle, poh, pos,
                   bft. A caller cannot tell which of its libraries are
                   Prolog and which are compiled C, which is the point --
                   btc.pl composes two of each, and poh.pl is the layer
