@@ -29,13 +29,21 @@ Everything in this repository is one of three things:
   SHA-1..512 with HMAC, RSA with both signature schemes, AES and X509
   with its own `ca` tool. Hashing and signing are the warrior's job,
   reached over the wire, no repository touched.
+* **Cicili modules** — when The Coco needs a predicate Prolog cannot
+  reach, it writes the C half in Cicili against cocolog's
+  `lib/sdk.cicili`, compiles it to a shared object, and
+  `use_module(library(Name))` loads it at run time. cocolog is not
+  modified; the module is The Coco's, and MODULES.md over there is the
+  developer guide to both ways of writing one.
 * **Choreography** — `run.sh` arrangements in the mold of cocolog's
   coworker tasks: processes, knowledge bases, and the order between them.
 
-What does NOT live here: C, C++, Cicili, or any change to the three
-pillars. When a rung genuinely needs a new engine capability (TLS in
-cocolog's C client, say), that capability is built in ITS repository on
-its own merits, and The Coco uses it once it exists.
+What does NOT live here: raw C or C++, or any change to the three
+pillars. C-shaped work is written in Cicili and its macros, always --
+only inside ZiguratIP is there a choice between C++ and Cicili. When a
+rung genuinely needs a new engine capability (TLS in cocolog's C
+client, say), that capability is built in ITS repository on its own
+merits, and The Coco uses it once it exists.
 
 ## The thesis
 

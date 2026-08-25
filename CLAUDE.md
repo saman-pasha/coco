@@ -19,18 +19,26 @@ stays empty. Verify that it does.
 
 ## What The Coco is made of
 
-Three materials, and only three:
+Four materials, and only four:
 
 * `.pl` files, consulted by the one `cocolog` binary — consensus rules,
-  contracts, validity predicates are clauses.
+  contracts, validity predicates are clauses; a clauses-only library
+  goes on `$COCOLOG_LIBRARY` and `use_module(library(Name))` loads it.
+* Cicili modules against cocolog's `lib/sdk.cicili`: the C half of a
+  predicate Prolog cannot reach, compiled to a shared object and loaded
+  at run time by `use_module` — cocolog unmodified, the module ours.
+  cocolog's MODULES.md is the developer guide to both ways.
 * Parsi objects of The Coco's own, compiled into the server home. A
-  Parsi procedure's backticks reach Zigurat's C++ directly — this is how
-  The Coco gets sha256, HMAC, signatures and certificates without a line
-  of C anywhere in this repository: `Cryptography/` already has them.
+  Parsi procedure's backticks reach Zigurat's C++ directly — the other
+  road to `Cryptography/`'s sha256, HMAC, signatures and certificates,
+  when the work belongs on the server rather than in the process.
 * `run.sh` choreography, in the mold of cocolog's coworker tasks.
 
-If a piece of work seems to need C, C++ or Cicili in THIS repository,
-the design is wrong or the capability belongs in a pillar.
+C-shaped work in this repository is written in CICILI AND ITS MACROS,
+always — never raw C or C++; only inside ZiguratIP is there a choice
+between C++ and Cicili. If a piece of work seems to need more than
+these four materials, the design is wrong or the capability belongs in
+a pillar.
 
 ## Environment and running
 
