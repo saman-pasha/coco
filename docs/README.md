@@ -5,9 +5,10 @@ Diagrams and explainers that are worth keeping but are not code.
 | file | what |
 |---|---|
 | `seal-to-settlement.html` | the whole arc, rungs 2&ndash;4: one payload traced from a node's hands to a settled verdict, with every PoA function, gossip hop, fork-choice key and settlement gate in the order it is reached |
+| `tick-to-settlement.html` | rung 5: a spine traced from thirty-two zero bytes to a settled verdict, with every PoH function, the choreography invocation by invocation, and the measured sequential/parallel asymmetry |
 
-Open it from a checkout &mdash; it is a standalone document with no build step and
-no local assets. The only thing it fetches is the webfont; without a network it
+Open either from a checkout &mdash; they are standalone documents with no build step
+and no local assets. The only thing they fetch is the webfont; without a network it
 falls back and still reads.
 
 ## Keeping it honest
@@ -24,17 +25,23 @@ there is no test that reads an SVG. The names it uses live in:
     library/settle.pl     settle/4  holdout_matches/3  arch_fits/3  measure/6
     training/worker.pl    train_and_export/1  submit_ready/2  judge/4
                           settle_submissions/0  provenance/1
+    modules/.../poh.cicili poh_run/3  poh_mix/3  poh_verify/3
+                          poh_checkpoints/4
+    library/spine.pl      poh_genesis/1  poh_segments/4  poh_anchor/3
+                          poh_verify_segments/1  poh_slow_run/3
+    spine/node.pl         spine_produce/2  verify_one/1  spine_sound/0
+                          anchor_block/1  anchor_order/1  anchor_genuine/1
 
-## The published copy
+## The published copies
 
-The same page is published as an artifact. That copy is this file with the
+Each page is also published as an artifact. That copy is the file here with the
 `<!doctype>`, `<html>`, `<head>` and `<body>` wrapper removed &mdash; the artifact
 host supplies its own:
 
 ```sh
 python3 - <<'EOF'
 import re
-s = open('docs/seal-to-settlement.html').read()
+s = open('docs/seal-to-settlement.html').read()   # or tick-to-settlement.html
 body = s.split('<head>', 1)[1].replace('</head>', '').replace('<body>', '')
 body = body.rsplit('</body>', 1)[0]
 body = re.sub(r'<meta[^>]*>\s*', '', body)   # the host sets charset and viewport
@@ -45,5 +52,5 @@ EOF
 That reproduces the artifact source; the only difference is the blank
 lines where the wrapper was, which HTML does not care about.
 
-This file is the source; the artifact is derived from it. If they ever disagree,
-this one is right.
+The files here are the source; the artifacts are derived from them. If they ever
+disagree, these are right.

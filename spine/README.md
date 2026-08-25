@@ -15,6 +15,9 @@ sh test/spine.sh         # the same thing, checked: 16 checks
 | `mallory.pl` | five attacks on a clock |
 | `run.sh` | the choreography |
 
+`../docs/tick-to-settlement.html` is the flowchart: the same arc as a diagram,
+stage by stage, with the choreography written out invocation by invocation.
+
 ## What it is
 
 `h(n+1) = sha256(h(n))`, over the raw 32 bytes. To know `h(n)` you must

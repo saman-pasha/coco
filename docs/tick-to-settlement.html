@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tick to Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+/* The same tokens as docs/seal-to-settlement.html -- this is volume two of
+   one series and shares its system. One pair is new: --work, the lane that
+   cannot be parallelised. It is the only warm colour on the page, and it is
+   spent on the one thing this rung is about. */
+:root{
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F1;
+  --ink:#0F1D1C; --ink-2:#3A4A48; --muted:#6B7C7A; --rule:#D9E3E1;
+  --accent:#0D6B65; --accent-soft:#D5E7E5;
+  --pass:#2A7551; --pass-soft:#DBEBE1;
+  --fail:#A8412A; --fail-soft:#F3E1DB;
+  --work:#96540F; --work-soft:#F4E6D3;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+    --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+    --accent:#4EBDB1; --accent-soft:#10302D;
+    --pass:#5FC08E; --pass-soft:#0F2A1F;
+    --fail:#E08466; --fail-soft:#301810;
+    --work:#D89C56; --work-soft:#2C1F0F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+  --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+  --accent:#4EBDB1; --accent-soft:#10302D;
+  --pass:#5FC08E; --pass-soft:#0F2A1F;
+  --fail:#E08466; --fail-soft:#301810;
+  --work:#D89C56; --work-soft:#2C1F0F;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink-2);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:56px 28px 96px}
+
+header.top{border-bottom:1px solid var(--rule); padding-bottom:28px; margin-bottom:44px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 14px
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(30px,5vw,46px);
+  line-height:1.1; color:var(--ink); margin:0 0 14px; text-wrap:balance;
+}
+.standfirst{font-size:17px; max-width:62ch; margin:0}
+.standfirst strong{color:var(--ink); font-weight:600}
+
+h2{
+  font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.2;
+  color:var(--ink); margin:0 0 6px; text-wrap:balance;
+}
+h3{
+  font-family:var(--sans); font-weight:600; font-size:15px; color:var(--ink);
+  margin:22px 0 8px;
+}
+p{margin:0 0 14px; max-width:66ch}
+a{color:var(--accent)}
+
+section.act{margin:0 0 60px; padding-top:34px; border-top:1px solid var(--rule)}
+section.act:first-of-type{border-top:none; padding-top:0}
+.act-head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.act-no{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:3px; padding:3px 8px;
+  letter-spacing:.06em; flex:none;
+}
+.act-sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0}
+
+figure{margin:26px 0 22px; padding:0}
+.figbox{
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:22px 20px; overflow-x:auto;
+}
+svg{display:block; max-width:100%; height:auto; margin:0 auto; color:var(--ink)}
+figcaption{
+  font-size:13.5px; color:var(--muted); margin-top:12px; max-width:70ch;
+}
+figcaption code{font-size:12.5px}
+
+code{font-family:var(--mono); font-size:13.5px; color:var(--ink);
+  background:var(--surface-2); padding:1px 5px; border-radius:3px}
+
+table{border-collapse:collapse; width:100%; margin:20px 0; font-size:14px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--ink-2);
+}
+td code{background:none; padding:0; font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px;
+  background:var(--surface); padding:2px 14px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:13px}
+.v-pass{color:var(--pass); font-weight:600; font-family:var(--mono); font-size:12.5px}
+.v-fail{color:var(--fail); font-weight:600; font-family:var(--mono); font-size:12.5px}
+
+.note{
+  border-left:2px solid var(--accent); background:var(--surface);
+  padding:14px 18px; margin:20px 0; border-radius:0 4px 4px 0;
+}
+.note p{margin:0; font-size:15px}
+.note p + p{margin-top:10px}
+.note strong{color:var(--ink)}
+.note.warm{border-left-color:var(--work)}
+
+.steps{list-style:none; margin:18px 0 0; padding:0; display:grid; gap:2px}
+.steps li{
+  display:grid; grid-template-columns:26px 1fr; gap:12px;
+  padding:10px 0; border-bottom:1px solid var(--rule); align-items:start;
+}
+.steps li:last-child{border-bottom:none}
+.steps .n{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  padding-top:3px; font-variant-numeric:tabular-nums;
+}
+.steps .body{font-size:14.5px}
+.steps .body b{color:var(--ink); font-weight:600}
+.steps .body .pred{
+  display:block; font-family:var(--mono); font-size:12.5px; color:var(--accent);
+  margin-top:2px;
+}
+
+/* the handoff strip: the spine's answer entering the ledger's arc */
+.chain{
+  display:flex; flex-wrap:nowrap; align-items:stretch; gap:0;
+  margin:22px 0 8px; overflow-x:auto;
+}
+.chain .link{
+  flex:1 1 150px; min-width:150px; background:var(--surface);
+  border:1px solid var(--rule); border-radius:5px; padding:12px 14px;
+}
+.chain .link.spine{border-color:var(--accent); background:var(--accent-soft)}
+.chain .link.done{border-color:var(--pass); background:var(--pass-soft)}
+.chain .link .who{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px;
+}
+.chain .link .what{font-size:13.5px; color:var(--ink); font-weight:600; display:block}
+.chain .link .pred{
+  font-family:var(--mono); font-size:11.5px; color:var(--accent);
+  display:block; margin-top:5px;
+}
+.chain .arrow{
+  flex:0 0 30px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-family:var(--mono); font-size:15px;
+}
+
+footer{border-top:1px solid var(--rule); margin-top:20px; padding-top:22px;
+  font-size:13.5px; color:var(--muted)}
+footer p{max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">The Coco &middot; rung 5</p>
+  <h1>Tick to Settlement</h1>
+  <p class="standfirst">A proof-of-history spine, traced from thirty-two zero bytes to a settled
+  verdict &mdash; every function it passes through, in the order it passes through them, and which
+  process runs which goal. <strong>Production is one core in a straight line; checking is everybody
+  at once</strong>, and that asymmetry is the only reason a spine is worth having.</p>
+</header>
+
+<figure>
+  <div class="figbox">
+  <svg viewBox="0 0 720 640" role="img" aria-label="Nine stages from genesis to settlement: genesis, produce, publish, verify, join, anchor, order, fork choice, settle. Each stage names the data it leaves behind and the predicates that ran.">
+    <line x1="46" y1="44" x2="46" y2="572" stroke="var(--rule)" stroke-width="2"/>
+
+    <!-- 1 genesis -->
+    <circle cx="46" cy="44" r="9" fill="var(--work)"/>
+    <text x="46" y="48" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">1</text>
+    <rect x="86" y="19" width="330" height="50" rx="4" fill="var(--work-soft)" stroke="var(--work)"/>
+    <text x="100" y="40" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">GENESIS</text>
+    <text x="100" y="57" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">32 zero bytes &mdash; a start that is hash-shaped</text>
+    <text x="432" y="38" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">poh_genesis/1</text>
+    <text x="432" y="54" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">one clause, no work yet</text>
+
+    <!-- 2 produce -->
+    <circle cx="46" cy="110" r="9" fill="var(--work)"/>
+    <text x="46" y="114" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">2</text>
+    <rect x="86" y="85" width="330" height="50" rx="4" fill="var(--work-soft)" stroke="var(--work)"/>
+    <text x="100" y="106" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PRODUCE &mdash; one process, in order</text>
+    <text x="100" y="123" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">N ticks, and no way to hurry them</text>
+    <text x="432" y="104" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">spine_produce/2 &rarr; poh_segments/4</text>
+    <text x="432" y="120" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">poh_checkpoints/4 &rarr; ph_iterate (C)</text>
+
+    <!-- 3 publish -->
+    <circle cx="46" cy="176" r="9" fill="var(--accent)"/>
+    <text x="46" y="180" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">3</text>
+    <rect x="86" y="151" width="330" height="50" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="172" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PUBLISH &mdash; checkpoints become rows</text>
+    <text x="100" y="189" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">K segments, each independently checkable</text>
+    <text x="432" y="170" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">assertz spine_seg/4 &times;K</text>
+    <text x="432" y="186" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz spine_head/2</text>
+
+    <!-- 4 verify -->
+    <circle cx="46" cy="242" r="9" fill="var(--accent)"/>
+    <text x="46" y="246" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">4</text>
+    <rect x="86" y="217" width="330" height="50" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="238" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">VERIFY &mdash; K processes at once</text>
+    <text x="100" y="255" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">no coordinator, no messages, K disjoint rows</text>
+    <text x="432" y="236" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">verify_one/1 &rarr; poh_verify/3</text>
+    <text x="432" y="252" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz spine_ok/2 &middot; spine_report/0</text>
+
+    <!-- 5 join -->
+    <circle cx="46" cy="308" r="9" fill="var(--accent)"/>
+    <text x="46" y="312" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">5</text>
+    <rect x="86" y="283" width="330" height="50" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="304" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">JOIN &mdash; and the pieces were one sequence</text>
+    <text x="100" y="321" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">segment i's end IS segment i+1's start</text>
+    <text x="432" y="302" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">spine_sound/0 &rarr; chains/1</text>
+    <text x="432" y="318" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">without this, a splice passes</text>
+
+    <!-- 6 anchor -->
+    <circle cx="46" cy="374" r="9" fill="var(--accent)"/>
+    <text x="46" y="378" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">6</text>
+    <rect x="86" y="349" width="330" height="50" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="370" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">ANCHOR &mdash; a sealed block folded in</text>
+    <text x="100" y="387" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">every later tick depends on that block</text>
+    <text x="432" y="368" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">anchor_block/1 &rarr; poh_anchor/3</text>
+    <text x="432" y="384" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">poh_mix/3 &middot; assertz spine_anchor/3</text>
+
+    <!-- 7 order -->
+    <circle cx="46" cy="440" r="9" fill="var(--accent)"/>
+    <text x="46" y="444" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">7</text>
+    <rect x="86" y="415" width="330" height="50" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="436" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">ORDER &mdash; read off the spine alone</text>
+    <text x="100" y="453" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">nobody was asked when they saw what</text>
+    <text x="432" y="434" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">anchor_order/1 &middot; anchor_genuine/1</text>
+    <text x="432" y="450" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">a backdated anchor fails here</text>
+
+    <!-- 8 fork choice -->
+    <circle cx="46" cy="506" r="9" fill="var(--muted)"/>
+    <text x="46" y="510" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">8</text>
+    <rect x="86" y="481" width="330" height="50" rx="4" fill="var(--surface-2)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+    <text x="100" y="502" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">FORK CHOICE &mdash; not the clock's question</text>
+    <text x="100" y="519" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">two honest spines both verify; the chain picks</text>
+    <text x="432" y="500" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">ledger_head/1 &rarr; better_head/2</text>
+    <text x="432" y="516" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">rung 2, one rung down</text>
+
+    <!-- 9 settle -->
+    <circle cx="46" cy="572" r="9" fill="var(--pass)"/>
+    <text x="46" y="576" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">9</text>
+    <rect x="86" y="547" width="330" height="50" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+    <text x="100" y="568" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">SETTLE &mdash; measured, not believed</text>
+    <text x="100" y="585" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">accepted(A) / rejected(Why), on an ordered chain</text>
+    <text x="432" y="566" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">settle_submissions/0 &rarr; judge/4</text>
+    <text x="432" y="582" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">settle/4 &middot; measure/6 &middot; provenance/1</text>
+  </svg>
+  </div>
+  <figcaption>The whole arc. Left of the rail is what exists after each stage; right of it is what
+  produced it. <b>Amber is the sequential lane</b> &mdash; the only part nobody can speed up. Teal is
+  everything that can be done by everybody at once. Stage 8 is dashed because the spine does not
+  answer it: it hands the question down to the ledger.</figcaption>
+</figure>
+
+<div class="note">
+  <p><strong>The one rule that shapes all of it:</strong> <code>h(n+1) = sha256(h(n))</code>, over the
+  raw 32 bytes. To know <code>h(n)</code> you must have computed the <code>n&minus;1</code> hashes
+  before it. There is no shortcut through a hash chain &mdash; and winding one backwards means
+  finding a preimage. Everything below is that sentence, arranged.</p>
+</div>
+
+<!-- ============ ACT 1 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">01</span>
+    <div>
+      <h2>The tick, and the fold</h2>
+      <p class="act-sub">poh_run/3 &middot; poh_mix/3 &mdash; modules/crypto/poh.cicili</p>
+    </div>
+  </div>
+
+  <p>A spine has exactly two operations. <b>Tick</b>: hash the last hash. <b>Mix</b>: hash the last
+  hash concatenated with an event. Both are 32 bytes in, 32 bytes out, and both live in C because a
+  tick through the module seam &mdash; a goal, an atom intern and a 64-character atom &mdash; costs
+  about <b>600&nbsp;&micro;s</b>, against a hash over 32 bytes when it is a loop.</p>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 185" role="img" aria-label="A chain of hashes: h0 to h1 to h2, then a fold where an event is mixed in, then onward to h(n). Each arrow is one sha256.">
+      <text x="0" y="16" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">there is no shortcut: h(n) costs n hashes to make, and n hashes to check</text>
+
+      <!-- boxes -->
+      <rect x="30" y="100" width="64" height="34" rx="4" fill="var(--work-soft)" stroke="var(--work)"/>
+      <text x="62" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="currentColor">h0</text>
+      <text x="62" y="152" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">genesis</text>
+
+      <rect x="150" y="100" width="64" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="182" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="currentColor">h1</text>
+
+      <rect x="270" y="100" width="64" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="302" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="currentColor">h2</text>
+
+      <rect x="452" y="100" width="64" height="34" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="484" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="currentColor">h3</text>
+
+      <rect x="602" y="100" width="64" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="634" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="currentColor">h(n)</text>
+      <text x="634" y="152" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">n hashes deep</text>
+
+      <!-- arrows -->
+      <line x1="94" y1="117" x2="142" y2="117" stroke="var(--muted)" stroke-width="1.5"/>
+      <path d="M142,113 L150,117 L142,121 z" fill="var(--muted)"/>
+      <text x="118" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">sha256</text>
+
+      <line x1="214" y1="117" x2="262" y2="117" stroke="var(--muted)" stroke-width="1.5"/>
+      <path d="M262,113 L270,117 L262,121 z" fill="var(--muted)"/>
+      <text x="238" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">sha256</text>
+
+      <line x1="334" y1="117" x2="444" y2="117" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M444,113 L452,117 L444,121 z" fill="var(--accent)"/>
+      <text x="389" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">sha256(h2 &#8214; event)</text>
+
+      <line x1="516" y1="117" x2="594" y2="117" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M594,113 L602,117 L594,121 z" fill="var(--muted)"/>
+      <text x="555" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">&times; (n&minus;3)</text>
+
+      <!-- the event coming in -->
+      <rect x="326" y="34" width="126" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="389" y="51" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">a sealed block's hash</text>
+      <line x1="389" y1="60" x2="389" y2="107" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M385,107 L389,115 L393,107 z" fill="var(--accent)"/>
+
+      <text x="484" y="170" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">&mdash; and every hash from here on depends on that block having existed &mdash;</text>
+    </svg>
+    </div>
+    <figcaption>One tick is one <code>sha256</code>, not two: the suite pins <code>h1</code> from
+    genesis to <code>66687aad&hellip;</code>, which is the published <code>sha256</code> of 32 zero
+    bytes, and pins the fold at genesis to <code>f5a5fd42&hellip;</code>, the published
+    <code>sha256</code> of 64 zero bytes. Neither constant was produced by this project.</figcaption>
+  </figure>
+
+  <div class="note warm">
+    <p><strong>Mixing is what makes a spine useful rather than merely expensive.</strong> A sequence
+    of hashes nobody put anything into proves that somebody hashed a lot. A sequence with an event
+    folded in at tick <i>n</i> proves that the event existed by tick <i>n</i>, and that is a claim
+    anyone can check by re-running the spine.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">02</span>
+    <div>
+      <h2>Producing, and publishing the checkpoints</h2>
+      <p class="act-sub">spine_produce/2 &rarr; poh_segments/4 &rarr; poh_checkpoints/4</p>
+    </div>
+  </div>
+
+  <p>The producer runs the loop once, start to finish, and while it runs it keeps every
+  <code>Every</code>-th hash. Those checkpoints are the entire difference between a spine that only
+  its author can check and a spine the whole federation can check at once &mdash; without them, the
+  only way to verify <i>N</i> ticks is to redo all <i>N</i> in order.</p>
+
+  <ol class="steps">
+    <li><span class="n">1</span><span class="body"><b>Start from genesis.</b> Thirty-two zero bytes,
+      the same shape as the ledger's genesis parent.
+      <span class="pred">poh_genesis(G)</span></span></li>
+    <li><span class="n">2</span><span class="body"><b>Split the range before running it.</b>
+      <code>Every is N // K</code>, and the module walks the whole range emitting a hash every
+      <code>Every</code> ticks &mdash; the start counts as checkpoint zero, so <i>K</i> segments
+      come back from <i>K</i>+1 points.
+      <span class="pred">poh_segments(G, N, K, Segs) &rarr; poh_checkpoints(G, N, Every, Points)</span></span></li>
+    <li><span class="n">3</span><span class="body"><b>Each segment is self-contained.</b>
+      <code>seg(Index, Start, Ticks, End)</code> &mdash; everything a verifier needs and nothing
+      about any other segment. That independence is the design, not a convenience.
+      <span class="pred">build_segs/4</span></span></li>
+    <li><span class="n">4</span><span class="body"><b>Write them down.</b> The segments become
+      clauses, and the head is a clause too. A node holds no memory between invocations, so
+      anything not written is gone.
+      <span class="pred">assertz(spine_seg(I,A,T,B)) &middot; assertz(spine_head(N,End))</span></span></li>
+  </ol>
+
+  <div class="note warm">
+    <p><strong>This stage cannot be split, and no amount of hardware changes that.</strong> Tick
+    <i>k</i>+1 needs tick <i>k</i>&rsquo;s output as its input; a second core has nothing to do
+    until the first has finished. The producer&rsquo;s cost is paid once, in order, by one party.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">03</span>
+    <div>
+      <h2>What exists after each stage</h2>
+      <p class="act-sub">the data flow, as rows</p>
+    </div>
+  </div>
+
+  <p>Every stage&rsquo;s output is a clause in a knowledge base. There is no daemon, no shared
+  memory and no message passing anywhere in this rung: a verifier is an ordinary
+  <code>cocolog</code> invocation that reads one row, does arithmetic, and writes a verdict.</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>after</th><th>what exists</th><th>shape</th><th>who can read it</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>produce</td><td>the checkpoints</td><td><code>spine_seg(I, Start, Ticks, End)</code> &times;K</td><td>anyone with the kb</td></tr>
+      <tr><td>produce</td><td>the tip</td><td><code>spine_head(N, Hash)</code></td><td>anyone with the kb</td></tr>
+      <tr><td>verify</td><td>one verdict per segment</td><td><code>spine_ok(I, ok)</code> / <code>spine_ok(I, broken)</code></td><td>anyone; written by K processes</td></tr>
+      <tr><td>anchor</td><td>a block&rsquo;s position</td><td><code>spine_anchor(Tick, BlockHash, Next)</code></td><td>anyone</td></tr>
+      <tr><td>anchor</td><td>the advanced tip</td><td><code>spine_head(Tick, Next)</code></td><td>anyone</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Because the <i>K</i> verifiers touch <i>K</i> disjoint rows, they never need to hear about each
+  other &mdash; which is what lets them run on <i>K</i> machines exactly as easily as in <i>K</i>
+  processes on one.</p>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">04</span>
+    <div>
+      <h2>The asymmetry, measured</h2>
+      <p class="act-sub">spine/run.sh &mdash; 32,000,000 ticks, 4 segments</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 310" role="img" aria-label="A timeline comparing three runs at 32 million ticks: producing takes 9.3 seconds in one process; verifying takes 10.0 seconds in one process; verifying in four processes takes 3.5 seconds, a 2.8 times speedup.">
+      <!-- produce -->
+      <text x="82" y="64" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">PRODUCE &times;1</text>
+      <rect x="90" y="48" width="505" height="24" rx="3" fill="var(--work-soft)" stroke="var(--work)"/>
+      <text x="102" y="65" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">32,000,000 ticks &mdash; sequential, and only sequential</text>
+      <text x="605" y="65" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--work)">9.3 s</text>
+
+      <!-- verify x1 -->
+      <text x="82" y="108" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">VERIFY &times;1</text>
+      <rect x="90" y="92" width="543" height="24" rx="3" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="102" y="109" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">four segments, one after another</text>
+      <text x="643" y="109" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink-2)">10.0 s</text>
+
+      <!-- verify x4 -->
+      <text x="82" y="182" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">VERIFY &times;4</text>
+      <rect x="90" y="136" width="190" height="18" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="100" y="149" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">seg 0 &mdash; 8M ticks</text>
+      <rect x="90" y="158" width="190" height="18" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="100" y="171" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">seg 1 &mdash; 8M ticks</text>
+      <rect x="90" y="180" width="190" height="18" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="100" y="193" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">seg 2 &mdash; 8M ticks</text>
+      <rect x="90" y="202" width="190" height="18" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="100" y="215" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">seg 3 &mdash; 8M ticks</text>
+      <text x="292" y="172" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--accent)">3.5 s</text>
+      <text x="292" y="190" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">2.8&times; on 4 cores</text>
+
+      <!-- axis -->
+      <line x1="90" y1="240" x2="660" y2="240" stroke="var(--rule)" stroke-width="1"/>
+      <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)" text-anchor="middle">
+        <line x1="90" y1="240" x2="90" y2="245" stroke="var(--rule)"/><text x="90" y="257">0</text>
+        <line x1="199" y1="240" x2="199" y2="245" stroke="var(--rule)"/><text x="199" y="257">2 s</text>
+        <line x1="307" y1="240" x2="307" y2="245" stroke="var(--rule)"/><text x="307" y="257">4 s</text>
+        <line x1="416" y1="240" x2="416" y2="245" stroke="var(--rule)"/><text x="416" y="257">6 s</text>
+        <line x1="524" y1="240" x2="524" y2="245" stroke="var(--rule)"/><text x="524" y="257">8 s</text>
+        <line x1="633" y1="240" x2="633" y2="245" stroke="var(--rule)"/><text x="633" y="257">10 s</text>
+      </g>
+      <text x="90" y="284" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">short of 4&times; because every verifier pays ~0.4 s of process start-up:</text>
+      <text x="90" y="298" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">the same script reads 1.8&times; at 12M ticks and 2.8&times; at 32M. The dilution is the harness.</text>
+    </svg>
+    </div>
+    <figcaption>Wall-clock, including process start-up and the database turn &mdash; which is why the
+    honest headline is 2.8&times; and not 4&times;. The tight loop alone runs at <b>2.57M ticks/s</b>
+    with start-up subtracted.</figcaption>
+  </figure>
+
+  <p>Reporting 2.8&times; without the trend would have been true and misleading. The number moves
+  with the ratio of work to overhead, so the trend is the measurement: at 12M ticks the same script
+  reads 1.8&times;, at 32M it reads 2.8&times;, and the gap to 4&times; is four processes starting up,
+  not four cores failing to divide the work.</p>
+
+  <h3>The choreography, invocation by invocation</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>step</th><th>arrangement</th><th>goal</th><th>writes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>produce</td><td><code>--kb spine_demo</code>, one process</td><td><code>spine_produce(32000000, 4)</code></td><td>4 segments + head</td></tr>
+      <tr><td>verify &times;1</td><td>one process, one turn</td><td><code>forall(between(0,3,I), (spine_seg(I,A,T,B), poh_verify(A,T,B)))</code></td><td>nothing</td></tr>
+      <tr><td>verify &times;4</td><td>four processes, shell <code>&amp;</code> then <code>wait</code></td><td><code>spine_seg(I,A,T,B), poh_verify(A,T,B)</code> &mdash; one <i>I</i> each</td><td>nothing, or <code>spine_ok/2</code> via <code>verify_one/1</code></td></tr>
+      <tr><td>anchor</td><td>one process per block</td><td><code>sha256(B, H), anchor_block(H)</code></td><td><code>spine_anchor/3</code> + new head</td></tr>
+      <tr><td>read order</td><td>one process, consulted nothing new</td><td><code>anchor_order(Pairs)</code></td><td>nothing</td></tr>
+      <tr><td>attacks</td><td><code>run</code>, no database at all</td><td><code>attack_skip(V)</code> &hellip; <code>attack_fork(V)</code></td><td>nothing</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The verifiers write nothing the others read, which is why the shell can simply background four
+  invocations and <code>wait</code>. There is no barrier, no leader and no protocol: the
+  parallelism is a consequence of the data shape, not a feature that had to be built.</p>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">05</span>
+    <div>
+      <h2>Segments verifying is not the spine verifying</h2>
+      <p class="act-sub">spine_sound/0 &rarr; chains/1</p>
+    </div>
+  </div>
+
+  <p>Four perfectly good segments that were never one sequence pass a segment-by-segment check.
+  Each one really does run from its start to its end in its stated number of ticks &mdash; that is
+  real work, honestly done, on four unrelated spines.</p>
+
+  <p><code>spine_sound/0</code> sorts the segments by index, verifies every one, and then checks the
+  joins: segment <i>i</i>&rsquo;s end must <b>be</b> segment <i>i</i>+1&rsquo;s start, compared with
+  <code>==</code>. The splice attack is precisely what happens when nobody does that.</p>
+</section>
+
+<!-- ============ ACT 6 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">06</span>
+    <div>
+      <h2>Anchoring, and why a backdate cannot be hidden</h2>
+      <p class="act-sub">anchor_block/1 &rarr; poh_anchor/3 &rarr; poh_mix/3</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 235" role="img" aria-label="The same block folded into the spine at tick 500 gives one hash; folded at tick 10 it gives a different one, so the backdated claim is refused.">
+      <rect x="300" y="12" width="150" height="26" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="375" y="29" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">one block, one hash</text>
+
+      <!-- row 1: the truth -->
+      <text x="0" y="66" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">as it happened</text>
+      <line x1="70" y1="86" x2="500" y2="86" stroke="var(--accent)" stroke-width="2"/>
+      <text x="70" y="76" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">genesis</text>
+      <circle cx="412" cy="86" r="6" fill="var(--accent)"/>
+      <text x="412" y="108" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">tick 500</text>
+      <line x1="390" y1="40" x2="409" y2="78" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M405,74 L411,82 L412,72 z" fill="var(--accent)"/>
+      <line x1="500" y1="86" x2="536" y2="86" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M536,82 L544,86 L536,90 z" fill="var(--accent)"/>
+      <text x="552" y="83" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--accent)">0658a381&hellip;</text>
+      <text x="552" y="98" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">on the record</text>
+
+      <!-- row 2: the lie -->
+      <text x="0" y="146" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">as she claims</text>
+      <line x1="70" y1="166" x2="500" y2="166" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/>
+      <circle cx="130" cy="166" r="6" fill="var(--fail)"/>
+      <text x="130" y="188" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">tick 10</text>
+      <line x1="360" y1="40" x2="136" y2="158" stroke="var(--fail)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <path d="M141,153 L129,162 L140,163 z" fill="var(--fail)"/>
+      <line x1="500" y1="166" x2="536" y2="166" stroke="var(--muted)" stroke-width="1.5"/>
+      <path d="M536,162 L544,166 L536,170 z" fill="var(--muted)"/>
+      <text x="552" y="163" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--fail)">2fc6d4b0&hellip;</text>
+      <text x="552" y="178" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">a different number</text>
+
+      <rect x="70" y="202" width="590" height="28" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+      <text x="84" y="220" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">anchor_genuine/1 refolds the block at the claimed tick &mdash; and gets 0658a381 &#8800; 2fc6d4b0</text>
+    </svg>
+    </div>
+    <figcaption>The anchor&rsquo;s own hash is the evidence. Nobody has to remember when the block
+    arrived, and nobody has to be believed about it: folding that block at that point either
+    reproduces the number on the record or it does not.</figcaption>
+  </figure>
+
+  <p><code>anchor_block/1</code> reads the current head with <code>current_head/2</code>, folds the
+  block hash in with <code>poh_anchor/3</code>, and asserts both the anchor and the advanced head.
+  From that tick on, every hash in the spine depends on that block having existed &mdash;
+  which is what &ldquo;timestamped&rdquo; means here, and it is a statement about
+  <b>order</b>, not about the time of day.</p>
+</section>
+
+<!-- ============ ACT 7 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">07</span>
+    <div>
+      <h2>mallory attacks the clock</h2>
+      <p class="act-sub">spine/mallory.pl &mdash; four refused, one accepted</p>
+    </div>
+  </div>
+
+  <p>There are no signatures in a spine, so there is nothing for her to forge. Everything she can
+  try is an attack on <b>order</b>, because order is the only thing a spine sells: be paid for work
+  she did not do, or claim an event happened earlier than it did.</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>attack</th><th>what she tries</th><th>what answers it</th><th>outcome</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>attack_skip</code></td><td>claim a million ticks with a hash she invented</td><td><code>poh_verify/3</code> &mdash; there is no shortcut</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_shorten</code></td><td>do 900 ticks, claim 1000</td><td>the count is checked, not labelled</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_backdate</code></td><td>fold at 500, claim tick 10</td><td>the fold&rsquo;s own hash; <code>anchor_genuine/1</code> checks it</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_splice</code></td><td>paste a genuine segment from another spine</td><td><code>chains/1</code> &mdash; the join is the lie</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_fork</code></td><td>two spines from one genesis</td><td>nothing here, and nothing can</td><td><span class="v-fail">ACCEPTED</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><strong>The fork succeeds and is supposed to.</strong> Two spines from the same genesis,
+    differing only in what was mixed in, both verify. Both are real work, and no amount of hashing
+    will make a hash chain prefer one sequence over another.</p>
+    <p>That is not a hole in the implementation; it is what a clock <i>is</i>. A spine orders what is
+    <b>on</b> it. Which spine is the chain&rsquo;s is the <b>ledger&rsquo;s</b> question, and
+    <code>poh_anchor/3</code> is the seam where it gets handed over.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 8 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">08</span>
+    <div>
+      <h2>Till settlement complete</h2>
+      <p class="act-sub">where rung 5 hands back to rungs 2&ndash;4</p>
+    </div>
+  </div>
+
+  <p>The spine does not settle anything by itself. It takes a hash the ledger already produced,
+  gives it a position nobody can move, and hands the sequence back. From there the arc is the one
+  traced in <i>Seal to Settlement</i>.</p>
+
+  <div class="chain">
+    <div class="link"><span class="who">rung 2 &middot; ledger</span><span class="what">a block is sealed</span><span class="pred">ledger_seal/1 &rarr; block_hash/5</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link spine"><span class="who">rung 5 &middot; spine</span><span class="what">folded into the sequence</span><span class="pred">anchor_block/1 &rarr; poh_mix/3</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link spine"><span class="who">rung 5 &middot; spine</span><span class="what">an order anyone can recheck</span><span class="pred">anchor_order/1</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link"><span class="who">rung 2 &middot; ledger</span><span class="what">one head is chosen</span><span class="pred">ledger_head/1 &rarr; better_head/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 4 &middot; settlement</span><span class="what">measured, and settled</span><span class="pred">settle_submissions/0 &rarr; judge/4</span></div>
+  </div>
+
+  <p>The payload under all of it never changed shape: a contract&rsquo;s source, or a training
+  submission whose weights travel as chunked rows and whose digest is the join. Settlement asks the
+  same question it always did &mdash; <b>does it work</b> &mdash; and answers it by re-measuring on
+  the committed holdout, never by believing a worker&rsquo;s claim.</p>
+
+  <h3>What the spine adds, and what it does not</h3>
+  <p>It adds a <b>total order that costs work to produce and is cheap to audit</b>, so &ldquo;this
+  submission was on the chain before that one&rdquo; stops being a matter of whose clock you trust.
+  Three things it does not add:</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>not this</th><th>why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>a proof of wall-clock time</td><td>a faster machine ticks faster. &ldquo;A million ticks apart&rdquo; is a lower bound on <b>work</b>, not a reading of the time of day &mdash; anyone quoting a spine in seconds is quoting the producer&rsquo;s CPU.</td></tr>
+      <tr><td>a proof of who</td><td>there is no identity in a spine. The signature is in the block, one rung down; the spine only says when that block appeared relative to everything else.</td></tr>
+      <tr><td>a fork choice</td><td>two honest spines both verify. Choosing between them is <code>better_head/2</code>&rsquo;s job, and it always was.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><strong>One seam is built and checked but not yet wired through.</strong>
+    <code>anchor_block/1</code> takes any block hash, and the suite proves that two anchored blocks
+    come back in the order they went in and that a backdated anchor is caught. But rung 4&rsquo;s
+    <code>provenance/1</code> still answers with the worker, the digest, the measured accuracy, the
+    height and the author &mdash; <b>no tick</b>. Anchoring settlement blocks as they are sealed, so
+    that provenance carries a position as well as a height, is a change to rung 4 and has not been
+    made.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Every predicate name on this page is taken from the source rather than from memory:
+  <code>modules/crypto/poh.cicili</code>, <code>library/spine.pl</code>,
+  <code>spine/node.pl</code>, <code>spine/mallory.pl</code>. The measurements are
+  <code>spine/run.sh</code> at 32,000,000 ticks and 4 segments on a 4-core container; the pinned
+  constants are checked by <code>test/spine.sh</code>, sixteen checks. The companion page,
+  <i>Seal to Settlement</i>, traces rungs 2&ndash;4.</p>
+</footer>
+
+</div>
+</body>
+</html>
