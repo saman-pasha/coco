@@ -62,18 +62,14 @@ unmodified.
    curves the aggregator needs to read foreign chains, as loadable
    Cicili modules on `$COCOLOG_LIBRARY` (and, where the work belongs on
    the server, Parsi procedures over Zigurat's `Cryptography/`).
-   **STARTED: `library(keccak)`** — Keccak-256, the hash behind every
-   EVM chain, is the first module, `modules/crypto/keccak.cicili`
-   against cocolog's `lib/sdk.cicili`, no cocolog source touched. It is
-   Keccak, not SHA3 (Ethereum's 0x01 padding, not NIST's 0x06), with
-   `keccak256/2` over text bytes and `keccak256_hex/2` over hex-decoded
-   bytes — the latter the one a chain wants, because RLP is arbitrary
-   bytes a code list cannot carry. Held in `test/run.sh` to two official
-   vectors (empty, "abc"), a multi-block input across the 136-byte rate,
-   and the hex path, each matched against an independent implementation.
-   Still to come on this rung: Blake2b, RIPEMD-160, then the curves —
-   secp256k1 ECDSA verify+recover for Bitcoin and Ethereum, Ed25519 for
-   Solana and the rest.
+   **`library(keccak)` and `library(secp256k1)` are done**; the story
+   below says what they cost and what they prove. Still ahead on this
+   rung: Blake2b and RIPEMD-160 (Sui, Aptos, Bitcoin's addresses), and
+   Ed25519 (Solana, Cardano, TON, Near). Polkadot's sr25519 is
+   deliberately out of the first wave — Ristretto plus a transcript
+   protocol is a different animal, and saying so is cheaper than
+   pretending otherwise.
+
 2. **The PoA federation ledger** (`ledger/`): a federation CA issues
    per-node certificates with append grants
    (`--permission=LEDGER::ENTRIES`); signed, sha256-chained entries;
@@ -133,6 +129,66 @@ because the gate only judges what a TLS port presents. That is
 cocolog's feature to build in cocolog; The Coco uses it once it exists,
 and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
+
+## Done here
+
+### The chains' primitives: keccak256 and secp256k1
+
+The aggregator's first contact with a foreign chain is READING ITS
+PROOFS, and on every EVM or Bitcoin chain that comes down to one
+question: who signed this. Two loadable Cicili modules answer it, both
+written against cocolog's `lib/sdk.cicili`, compiled by
+`modules/crypto/build.sh` into `library/*.so`, and reached by
+`use_module` — **no cocolog source touched**, which is the whole point
+of the fourth material.
+
+**`library(keccak)`** is Keccak-256, not SHA3: Ethereum froze on the
+original submission's `0x01` domain padding before NIST finalised its
+own with `0x06`, and the two disagree on every input. `keccak256/2`
+takes the bytes of a text or code list; `keccak256_hex/2` decodes hex
+first, which is the one a chain needs, because RLP is arbitrary bytes
+and a code list cannot carry a zero.
+
+**`library(secp256k1)`** is the curve, from the ground up and borrowing
+nothing. 256-bit numbers are eight 32-bit limbs with 64-bit
+intermediates — no compiler extension, no 128-bit type. The field
+modulus p = 2^256 - 2^32 - 977 gets its fast reduction (2^256 folds
+back as one limb-shifted add plus a multiply by 977, repeated until the
+top half empties); the group order n has no such form and gets honest
+binary long division, which a verification needs only a handful of
+times. Inversion is Fermat rather than extended Euclid, because a wrong
+Euclid is a subtle bug and a wrong exponentiation is an obvious one.
+Points live in Jacobian coordinates, so a scalar multiply pays for ONE
+inversion at the end instead of one per addition — the difference
+between milliseconds and seconds. Three predicates:
+`secp256k1_pubkey/2`, `secp256k1_verify/3` (which FAILS on a bad
+signature rather than throwing — an invalid signature is an ordinary
+answer to an ordinary question), and `secp256k1_recover/4`.
+
+**`library(eth)` is nine lines of Prolog that pull in both compiled
+modules**, and it is the demonstration the loader was built for: three
+of The Coco's four materials meeting in one file, resolved at run time.
+`eth_address/2` is the last twenty bytes of keccak over the key;
+`eth_signer/4` recovers and addresses in one step — the whole question
+an EVM chain asks of a transaction.
+
+`test/crypto.sh` holds all of it to fifteen checks: the published
+Keccak vectors including a 200-byte input across the 136-byte rate; the
+generator and 2G, which between them exercise every piece of the field
+and point arithmetic; a good signature verifying and the same signature
+against another hash failing; recovery answering the signing key and a
+wrong recovery id not; and **the address of private key 1 —
+`7e5f4552091a69125d5dfcb7b8c2659029395bdf`, the one number in that file
+that comes from the world rather than from The Coco**. Both modules
+compiled clean on the first pass and every vector matched an
+independent implementation written for the purpose.
+
+**The number, since the rule is that claims wait for one**: 200
+verifications in 966ms of engine time — **4.8ms per signature, about
+207 a second, single-threaded**. That is not libsecp256k1's
+microseconds and does not try to be; for a hub verifying headers and
+settlement proofs it is the right trade, and when it stops being one
+the replacement will arrive with its own measurement.
 
 ## The disciplines
 

@@ -1,0 +1,582 @@
+;;;; The Coco -- crypto: secp256k1, the curve Bitcoin and Ethereum sign with.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili, built by
+;;;; modules/crypto/build.sh and reached by
+;;;; `use_module(library(secp256k1))'. No cocolog source is touched.
+;;;;
+;;;; WHAT IT IS FOR. The aggregator's first contact with a foreign chain
+;;;; is READING ITS PROOFS, and every proof on an EVM or Bitcoin chain
+;;;; comes down to one question: who signed this? Verification needs no
+;;;; keys and takes no custody, which is why it is the end of the crypto
+;;;; The Coco starts with -- signing for a foreign chain is a separate
+;;;; decision with real key-management weight.
+;;;;
+;;;;   secp256k1_pubkey(+PrivHex, -PubHex)         the public half
+;;;;   secp256k1_verify(+HashHex, +SigHex, +PubHex)  succeeds or FAILS
+;;;;   secp256k1_recover(+HashHex, +SigHex, +RecId, -PubHex)
+;;;;
+;;;; Hashes and keys travel as hex atoms: a 32-byte hash is 64 hex
+;;;; digits, a signature 128 (r||s), a public key 128 (x||y), 130
+;;;; (04||x||y, the uncompressed SEC form) or 66 (02/03||x, compressed --
+;;;; what Bitcoin puts in a script). RECOVER answers the 128-digit x||y,
+;;;; which is what Ethereum hashes into an address.
+;;;;
+;;;; HOW IT IS BUILT, since nothing here is borrowed: 256-bit numbers are
+;;;; eight 32-bit limbs, least significant first, with 64-bit
+;;;; intermediates -- no compiler extension, no 128-bit type. The field
+;;;; modulus p = 2^256 - 2^32 - 977 has a fast reduction: 2^256 is
+;;;; congruent to 2^32 + 977, so the high half of a product folds back as
+;;;; one limb-shifted add plus a multiply by 977, repeated until the top
+;;;; half is empty. The group order n has no such form, so reduction
+;;;; there is honest binary long division -- slower, and used only the
+;;;; handful of times a verification needs it. Inversion is Fermat's
+;;;; little theorem, a^(m-2), because a wrong extended-Euclid is a subtle
+;;;; bug and a wrong exponentiation is an obvious one. Points live in
+;;;; Jacobian coordinates so a scalar multiply pays for ONE inversion at
+;;;; the end rather than one per addition.
+;;;;
+;;;; The cost of all that honesty: verification is milliseconds, not the
+;;;; microseconds of a hand-tuned libsecp256k1. For a hub verifying
+;;;; headers and settlement proofs that is the right trade; if it ever
+;;;; stops being one, the number goes on the page before the complaint.
+
+(DEFPARAMETER *secp-predicates*
+  '(("secp256k1_pubkey"  2 sp_pubkey)
+    ("secp256k1_verify"  3 sp_verify)
+    ("secp256k1_recover" 4 sp_recover)))
+
+(source "secp256k1.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+
+  ;;; ---- the curve ------------------------------------------------------
+
+  (static) (var u32 SP_P []
+    . '{ 0xfffffc2f 0xfffffffe 0xffffffff 0xffffffff
+         0xffffffff 0xffffffff 0xffffffff 0xffffffff })
+  (static) (var u32 SP_N []
+    . '{ 0xd0364141 0xbfd25e8c 0xaf48a03b 0xbaaedce6
+         0xfffffffe 0xffffffff 0xffffffff 0xffffffff })
+  ;; (p+1)/4 -- the square-root exponent, p being 3 mod 4
+  (static) (var u32 SP_SQE []
+    . '{ 0xbfffff0c 0xffffffff 0xffffffff 0xffffffff
+         0xffffffff 0xffffffff 0xffffffff 0x3fffffff })
+  (static) (var u32 SP_GX []
+    . '{ 0x16f81798 0x59f2815b 0x2dce28d9 0x029bfcdb
+         0xce870b07 0x55a06295 0xf9dcbbac 0x79be667e })
+  (static) (var u32 SP_GY []
+    . '{ 0xfb10d4b8 0x9c47d08f 0xa6855419 0xfd17b448
+         0x0e1108a8 0x5da4fbfc 0x26a3c465 0x483ada77 })
+
+  ;;; ---- 256-bit numbers: eight limbs, least significant first ----------
+
+  (static) (func bn_set0 ((u32 * a)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i a) 0)))
+
+  (static) (func bn_set1 ((u32 * a) (u32 v)) (out void)
+        (bn_set0 a) (set (nth 0 a) v))
+
+  (static) (func bn_cpy ((u32 * d) (const u32 * s)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i d) (nth i s))))
+
+  (static) (func bn_zero_p ((const u32 * a)) (out int)
+        (for ((int i . 0)) (< i 8) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  (static) (func bn_cmp ((const u32 * a) (const u32 * b)) (out int)
+        (for ((int i . 7)) (>= i 0) ((-- i))
+          (if (> (nth i a) (nth i b)) (return 1))
+          (if (< (nth i a) (nth i b)) (return -1)))
+        (return 0))
+
+  (static) (func bn_add ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((u64 c . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set c (+ c (+ (cast u64 (nth i a)) (cast u64 (nth i b)))))
+            (set (nth i r) (cast u32 c))
+            (set c (>> c 32)))
+          (return (cast u32 c))))
+
+  (static) (func bn_sub ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (let ((i64 d . #'(- (- (cast i64 (nth i a)) (cast i64 (nth i b))) br)))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))
+          (return (cast u32 br))))
+
+  ;;; The full 512-bit product, sixteen limbs. Every intermediate fits a
+  ;;; u64 exactly: (2^32-1)^2 + 2*(2^32-1) is 2^64-1 and not a bit more.
+  (static) (func bn_mul ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i r) 0))
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (let ((u64 c . 0))
+            (for ((int j . 0)) (< j 8) ((++ j))
+              (set c (+ (+ c (cast u64 (nth (+ i j) r)))
+                        (* (cast u64 (nth i a)) (cast u64 (nth j b)))))
+              (set (nth (+ i j) r) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . #'(+ i 8)))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k r))))
+                (set (nth k r) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))))
+
+  ;;; ---- the field, mod p -----------------------------------------------
+
+  ;;; One fold of a 16-limb value: 2^256 is congruent to 2^32 + 977, so
+  ;;; the high half comes back as itself shifted up one limb plus itself
+  ;;; times 977. Each fold shrinks the value hard; three or four reach
+  ;;; the bottom eight limbs.
+  (static) (func fp_fold ((u32 * a)) (out void)
+        (let ((u32 h [8]))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set (nth i h) (nth (+ i 8) a))
+            (set (nth (+ i 8) a) 0))
+          (let ((u64 c . 0))
+            (for ((int i . 0)) (< i 8) ((++ i))
+              (set c (+ c (+ (cast u64 (nth (+ i 1) a)) (cast u64 (nth i h)))))
+              (set (nth (+ i 1) a) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . 9))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k a))))
+                (set (nth k a) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))
+          (let ((u64 c . 0))
+            (for ((int i . 0)) (< i 8) ((++ i))
+              (set c (+ (+ c (cast u64 (nth i a))) (* (cast u64 (nth i h)) 977)))
+              (set (nth i a) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . 8))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k a))))
+                (set (nth k a) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))))
+
+  (static) (func fp_top_zero ((const u32 * a)) (out int)
+        (for ((int i . 8)) (< i 16) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  ;;; A is sixteen limbs and is clobbered.
+  (static) (func fp_reduce ((u32 * r) (u32 * a)) (out void)
+        (while (not (fp_top_zero a)) (fp_fold a))
+        (bn_cpy r a)
+        (while (>= (bn_cmp r SP_P) 0) (bn_sub r r SP_P)))
+
+  (static) (func fp_mul ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (let ((u32 t [16]))
+          (bn_mul t a b)
+          (fp_reduce r t)))
+
+  (static) (func fp_add ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (let ((u32 c . #'(bn_add r a b)))
+          (if (or (!= c 0) (>= (bn_cmp r SP_P) 0)) (bn_sub r r SP_P))))
+
+  ;;; Written as the two cases rather than as a borrow-and-add-back,
+  ;;; because a + p overflows 256 bits and the carry would be lost.
+  (static) (func fp_sub ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (if (>= (bn_cmp a b) 0)
+            (bn_sub r a b)
+          (let ((u32 t [8]))
+            (bn_sub t b a)
+            (bn_sub r SP_P t))))
+
+  (static) (func fp_pow ((u32 * r) (const u32 * a) (const u32 * e)) (out void)
+        (let ((u32 base [8]) (u32 acc [8]))
+          (bn_cpy base a)
+          (bn_set1 acc 1)
+          (for ((int i . 0)) (< i 256) ((++ i))
+            (if (!= 0 (bitand (>> (nth (>> i 5) e) (bitand i 31)) 1))
+                (fp_mul acc acc base))
+            (fp_mul base base base))
+          (bn_cpy r acc)))
+
+  (static) (func fp_inv ((u32 * r) (const u32 * a)) (out void)
+        (let ((u32 e [8]) (u32 two [8]))
+          (bn_set1 two 2)
+          (bn_sub e SP_P two)
+          (fp_pow r a e)))
+
+  ;;; The square root, when there is one: p is 3 mod 4, so a^((p+1)/4) is
+  ;;; the candidate and squaring it back is the proof. Answers 0 when A
+  ;;; is not a residue, which is how a bad recovery id is caught.
+  (static) (func fp_sqrt ((u32 * r) (const u32 * a)) (out int)
+        (let ((u32 t [8]))
+          (fp_pow r a SP_SQE)
+          (fp_mul t r r)
+          (return (? (== 0 (bn_cmp t a)) 1 0))))
+
+  ;;; ---- the group order, mod n -----------------------------------------
+
+  (static) (func cmp9 ((const u32 * r) (const u32 * m)) (out int)
+        (if (!= (nth 8 r) 0) (return 1))
+        (return (bn_cmp r m)))
+
+  (static) (func sub9 ((u32 * r) (const u32 * m)) (out void)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 9) ((++ i))
+            (let ((i64 mv . #'(? (< i 8) (cast i64 (nth i m)) 0))
+                  (i64 d . 0))
+              (set d (- (- (cast i64 (nth i r)) mv) br))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))))
+
+  ;;; R = A (sixteen limbs) mod M, by shift-and-subtract. n has no fast
+  ;;; reduction and a verification needs only a handful of these.
+  (static) (func bn_mod ((u32 * r) (const u32 * a) (const u32 * m)) (out void)
+        (let ((u32 rem [9]))
+          (for ((int i . 0)) (< i 9) ((++ i)) (set (nth i rem) 0))
+          (for ((int i . 511)) (>= i 0) ((-- i))
+            (let ((u32 carry . 0))
+              (for ((int j . 0)) (< j 9) ((++ j))
+                (let ((u32 nc . #'(>> (nth j rem) 31)))
+                  (set (nth j rem) (bitor (<< (nth j rem) 1) carry))
+                  (set carry nc))))
+            (set (nth 0 rem)
+                 (bitor (nth 0 rem)
+                        (bitand (>> (nth (>> i 5) a) (bitand i 31)) 1)))
+            (if (>= (cmp9 rem m) 0) (sub9 rem m)))
+          (bn_cpy r rem)))
+
+  ;;; An eight-limb value reduced mod n, through the same door.
+  (static) (func fn_of ((u32 * r) (const u32 * a)) (out void)
+        (let ((u32 t [16]))
+          (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i t) 0))
+          (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i t) (nth i a)))
+          (bn_mod r t SP_N)))
+
+  (static) (func fn_mul ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (let ((u32 t [16]))
+          (bn_mul t a b)
+          (bn_mod r t SP_N)))
+
+  (static) (func fn_inv ((u32 * r) (const u32 * a)) (out void)
+        (let ((u32 e [8]) (u32 two [8]) (u32 base [8]) (u32 acc [8]))
+          (bn_set1 two 2)
+          (bn_sub e SP_N two)
+          (bn_cpy base a)
+          (bn_set1 acc 1)
+          (for ((int i . 0)) (< i 256) ((++ i))
+            (if (!= 0 (bitand (>> (nth (>> i 5) e) (bitand i 31)) 1))
+                (fn_mul acc acc base))
+            (fn_mul base base base))
+          (bn_cpy r acc)))
+
+  ;;; ---- points, in Jacobian coordinates --------------------------------
+  ;;;
+  ;;; (X, Y, Z) stands for the affine (X/Z^2, Y/Z^3), and Z = 0 is the
+  ;;; point at infinity. The whole reason for the third coordinate is
+  ;;; that a scalar multiply then pays for ONE modular inversion at the
+  ;;; end instead of one per addition -- a difference of two orders of
+  ;;; magnitude in the only operation that is genuinely expensive.
+
+  (struct sp_pt
+    (member u32 x [8])
+    (member u32 y [8])
+    (member u32 z [8]))
+
+  (static) (func pt_zero ((sp_pt * r)) (out void)
+        (bn_set0 (-> r x)) (bn_set0 (-> r y)) (bn_set0 (-> r z)))
+
+  (static) (func pt_cpy ((sp_pt * d) (const sp_pt * s)) (out void)
+        (bn_cpy (-> d x) (-> s x))
+        (bn_cpy (-> d y) (-> s y))
+        (bn_cpy (-> d z) (-> s z)))
+
+  (static) (func pt_is_inf ((const sp_pt * p)) (out int)
+        (return (bn_zero_p (-> p z))))
+
+  (static) (func pt_dbl ((sp_pt * r) (const sp_pt * p)) (out void)
+        (if (or (pt_is_inf p) (bn_zero_p (-> p y)))
+            (block (pt_zero r) (return)))
+        (let ((u32 a [8]) (u32 b [8]) (u32 c [8]) (u32 d [8]) (u32 t [8])
+              (u32 x3 [8]) (u32 y3 [8]) (u32 z3 [8]))
+          (fp_mul a (-> p y) (-> p y))              ;; A = Y^2
+          (fp_mul b (-> p x) a)
+          (fp_add b b b) (fp_add b b b)             ;; B = 4*X*A
+          (fp_mul c a a)
+          (fp_add c c c) (fp_add c c c) (fp_add c c c)  ;; C = 8*A^2
+          (fp_mul t (-> p x) (-> p x))
+          (fp_add d t t) (fp_add d d t)             ;; D = 3*X^2  (a = 0)
+          (fp_mul x3 d d)
+          (fp_sub x3 x3 b) (fp_sub x3 x3 b)         ;; X' = D^2 - 2B
+          (fp_sub y3 b x3)
+          (fp_mul y3 d y3)
+          (fp_sub y3 y3 c)                          ;; Y' = D*(B - X') - C
+          (fp_mul z3 (-> p y) (-> p z))
+          (fp_add z3 z3 z3)                         ;; Z' = 2*Y*Z
+          (bn_cpy (-> r x) x3)
+          (bn_cpy (-> r y) y3)
+          (bn_cpy (-> r z) z3)))
+
+  (static) (func pt_add ((sp_pt * r) (const sp_pt * p) (const sp_pt * q)) (out void)
+        (if (pt_is_inf p) (block (pt_cpy r q) (return)))
+        (if (pt_is_inf q) (block (pt_cpy r p) (return)))
+        (let ((u32 z1z1 [8]) (u32 z2z2 [8]) (u32 u1 [8]) (u32 u2 [8])
+              (u32 s1 [8]) (u32 s2 [8]) (u32 h [8]) (u32 rr [8]))
+          (fp_mul z1z1 (-> p z) (-> p z))
+          (fp_mul z2z2 (-> q z) (-> q z))
+          (fp_mul u1 (-> p x) z2z2)
+          (fp_mul u2 (-> q x) z1z1)
+          (fp_mul s1 (-> p y) z2z2) (fp_mul s1 s1 (-> q z))
+          (fp_mul s2 (-> q y) z1z1) (fp_mul s2 s2 (-> p z))
+          ;; the same x means either the same point (double it) or a
+          ;; point and its negation (the sum is infinity)
+          (if (== 0 (bn_cmp u1 u2))
+              (if (== 0 (bn_cmp s1 s2))
+                  (block (pt_dbl r p) (return))
+                (block (pt_zero r) (return))))
+          (fp_sub h u2 u1)
+          (fp_sub rr s2 s1)
+          (let ((u32 hh [8]) (u32 hhh [8]) (u32 t1 [8]) (u32 t2 [8])
+                (u32 x3 [8]) (u32 y3 [8]) (u32 z3 [8]))
+            (fp_mul hh h h)
+            (fp_mul hhh hh h)
+            (fp_mul t1 u1 hh)
+            (fp_mul x3 rr rr)
+            (fp_sub x3 x3 hhh)
+            (fp_sub x3 x3 t1) (fp_sub x3 x3 t1)
+            (fp_sub y3 t1 x3)
+            (fp_mul y3 rr y3)
+            (fp_mul t2 s1 hhh)
+            (fp_sub y3 y3 t2)
+            (fp_mul z3 (-> p z) (-> q z))
+            (fp_mul z3 z3 h)
+            (bn_cpy (-> r x) x3)
+            (bn_cpy (-> r y) y3)
+            (bn_cpy (-> r z) z3))))
+
+  (static) (func pt_mul ((sp_pt * r) (const u32 * k) (const sp_pt * p)) (out void)
+        (let ((sp_pt acc) (sp_pt tmp))
+          (pt_zero (aof acc))
+          (for ((int i . 255)) (>= i 0) ((-- i))
+            (pt_dbl (aof acc) (aof acc))
+            (if (!= 0 (bitand (>> (nth (>> i 5) k) (bitand i 31)) 1))
+                (block (pt_add (aof tmp) (aof acc) p)
+                       (pt_cpy (aof acc) (aof tmp)))))
+          (pt_cpy r (aof acc))))
+
+  (static) (func pt_affine ((u32 * ax) (u32 * ay) (const sp_pt * p)) (out int)
+        (if (pt_is_inf p) (return 0))
+        (let ((u32 zi [8]) (u32 zi2 [8]) (u32 zi3 [8]))
+          (fp_inv zi (-> p z))
+          (fp_mul zi2 zi zi)
+          (fp_mul zi3 zi2 zi)
+          (fp_mul ax (-> p x) zi2)
+          (fp_mul ay (-> p y) zi3)
+          (return 1)))
+
+  (static) (func pt_gen ((sp_pt * g)) (out void)
+        (bn_cpy (-> g x) SP_GX)
+        (bn_cpy (-> g y) SP_GY)
+        (bn_set1 (-> g z) 1))
+
+  ;;; ---- hex ------------------------------------------------------------
+
+  (static) (func sp_nib ((char c)) (out int)
+        (if (and (>= c (cast char 48)) (<= c (cast char 57)))
+            (return (- (cast int c) 48)))
+        (if (and (>= c (cast char 97)) (<= c (cast char 102)))
+            (return (+ 10 (- (cast int c) 97))))
+        (if (and (>= c (cast char 65)) (<= c (cast char 70)))
+            (return (+ 10 (- (cast int c) 65))))
+        (return -1))
+
+  ;;; LEN hex digits at S, big-endian, into an eight-limb number.
+  (static) (func bn_hex ((const char * s) (size_t len) (u32 * out)) (out int)
+        (bn_set0 out)
+        (if (> len 64) (return 0))
+        (for ((size_t k . 0)) (< k len) ((++ k))
+          (let ((int v . #'(sp_nib (nth (- (- len 1) k) s))))
+            (if (< v 0) (return 0))
+            (set (nth (>> k 3) out)
+                 (bitor (nth (>> k 3) out)
+                        (<< (cast u32 v) (* 4 (cast int (bitand k 7))))))))
+        (return 1))
+
+  ;;; An eight-limb number as 64 hex digits at HEX, which must hold 65.
+  (static) (func bn_unhex ((const u32 * a) (char * hex)) (out void)
+        (let ((const char * hx . "0123456789abcdef"))
+          (for ((int i . 0)) (< i 32) ((++ i))
+            (let ((int b . #'(bitand (cast int (>> (nth (- 7 (>> i 2)) a)
+                                                   (* 8 (- 3 (bitand i 3)))))
+                                     255)))
+              (set (nth (* 2 i) hex) (nth (bitand (>> b 4) 15) hx))
+              (set (nth (+ (* 2 i) 1) hex) (nth (bitand b 15) hx))))
+          (set (nth 64 hex) (cast char 0))))
+
+  ;;; The `0x' a chain's tooling puts in front of everything.
+  (static) (func sp_skip0x ((const char * s)) (out const char *)
+        (if (and (== (nth 0 s) (cast char 48))
+                 (or (== (nth 1 s) (cast char 120)) (== (nth 1 s) (cast char 88))))
+            (return (aof (nth 2 s))))
+        (return s))
+
+  ;;; ---- keys -----------------------------------------------------------
+
+  ;;; y from x and the parity bit: the curve is y^2 = x^3 + 7.
+  (static) (func sp_decompress ((const u32 * x) (int odd) (u32 * y)) (out int)
+        (let ((u32 t [8]) (u32 seven [8]))
+          (bn_set1 seven 7)
+          (fp_mul t x x)
+          (fp_mul t t x)
+          (fp_add t t seven)
+          (if (not (fp_sqrt y t)) (return 0))
+          (if (!= (bitand (nth 0 y) 1) (cast u32 odd))
+              (fp_sub y SP_P y))
+          (return 1)))
+
+  ;;; A public key in any of the three spellings a chain uses.
+  (static) (func sp_pub_in ((const char * s) (u32 * x) (u32 * y)) (out int)
+        (let ((const char * h . #'(sp_skip0x s)) (size_t len . 0))
+          (set len (strlen h))
+          (if (== len 128)
+              (block
+               (if (not (bn_hex h 64 x)) (return 0))
+               (if (not (bn_hex (aof (nth 64 h)) 64 y)) (return 0))
+               (return 1)))
+          (if (and (== len 130) (== (nth 0 h) (cast char 48))
+                   (== (nth 1 h) (cast char 52)))          ;; "04"
+              (block
+               (if (not (bn_hex (aof (nth 2 h)) 64 x)) (return 0))
+               (if (not (bn_hex (aof (nth 66 h)) 64 y)) (return 0))
+               (return 1)))
+          (if (== len 66)                                   ;; "02"/"03" || x
+              (block
+               (let ((int pfx . #'(sp_nib (nth 1 h))))
+                 (if (or (< pfx 2) (> pfx 3)) (return 0))
+                 (if (not (bn_hex (aof (nth 2 h)) 64 x)) (return 0))
+                 (return (sp_decompress x (- pfx 2) y)))))
+          (return 0)))
+
+  ;;; ---- the predicates -------------------------------------------------
+
+  (func sp_pubkey ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [200]) (char hex [140]))
+            (if (not (coco_m_text e in buf 200))
+                (return (coco_m_type_error e "a hex atom" in)))
+            (let ((const char * h . #'(sp_skip0x buf)) (u32 d [8]))
+              (if (not (bn_hex h (strlen h) d))
+                  (return (coco_m_domain_error e "hexadecimal" in)))
+              (if (or (bn_zero_p d) (>= (bn_cmp d SP_N) 0))
+                  (return (coco_m_domain_error e "a secp256k1 private key" in)))
+              (let ((sp_pt gp) (sp_pt q) (u32 x [8]) (u32 y [8]))
+                (pt_gen (aof gp))
+                (pt_mul (aof q) d (aof gp))
+                (if (not (pt_affine x y (aof q))) (return 0))
+                (bn_unhex x hex)
+                (bn_unhex y (aof (nth 64 hex)))
+                (return (coco_m_unify_atom e out hex)))))))
+
+  ;;; Succeeds when the signature is this key's over this hash, and FAILS
+  ;;; -- quietly, no error -- when it is not: an invalid signature is an
+  ;;; ordinary answer to an ordinary question, not an exception. Only a
+  ;;; malformed argument throws.
+  (func sp_verify ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((hin 0) (sin 1) (pin 2))
+          (let ((char hb [200]) (char sb [200]) (char pb [400]))
+            (if (not (coco_m_text e hin hb 200))
+                (return (coco_m_type_error e "a hex atom" hin)))
+            (if (not (coco_m_text e sin sb 200))
+                (return (coco_m_type_error e "a hex atom" sin)))
+            (if (not (coco_m_text e pin pb 400))
+                (return (coco_m_type_error e "a hex atom" pin)))
+            (let ((const char * hh . #'(sp_skip0x hb))
+                  (const char * sh . #'(sp_skip0x sb))
+                  (u32 z [8]) (u32 r [8]) (u32 s [8]) (u32 qx [8]) (u32 qy [8]))
+              (if (not (bn_hex hh (strlen hh) z))
+                  (return (coco_m_domain_error e "hexadecimal" hin)))
+              (if (!= (strlen sh) 128)
+                  (return (coco_m_domain_error e "a 64-byte signature" sin)))
+              (if (not (bn_hex sh 64 r)) (return (coco_m_domain_error e "hexadecimal" sin)))
+              (if (not (bn_hex (aof (nth 64 sh)) 64 s))
+                  (return (coco_m_domain_error e "hexadecimal" sin)))
+              (if (not (sp_pub_in pb qx qy))
+                  (return (coco_m_domain_error e "a secp256k1 public key" pin)))
+              ;; r and s must be in [1, n)
+              (if (or (bn_zero_p r) (>= (bn_cmp r SP_N) 0)) (return 0))
+              (if (or (bn_zero_p s) (>= (bn_cmp s SP_N) 0)) (return 0))
+              (let ((u32 w [8]) (u32 u1 [8]) (u32 u2 [8]) (u32 zn [8]))
+                (fn_of zn z)
+                (fn_inv w s)
+                (fn_mul u1 zn w)
+                (fn_mul u2 r w)
+                (let ((sp_pt gp) (sp_pt qp) (sp_pt t1) (sp_pt t2) (sp_pt sum))
+                  (pt_gen (aof gp))
+                  (bn_cpy ($ qp x) qx)
+                  (bn_cpy ($ qp y) qy)
+                  (bn_set1 ($ qp z) 1)
+                  (pt_mul (aof t1) u1 (aof gp))
+                  (pt_mul (aof t2) u2 (aof qp))
+                  (pt_add (aof sum) (aof t1) (aof t2))
+                  (let ((u32 px [8]) (u32 py [8]) (u32 pn [8]))
+                    (if (not (pt_affine px py (aof sum))) (return 0))
+                    (fn_of pn px)
+                    (return (? (== 0 (bn_cmp pn r)) 1 0)))))))))
+
+  ;;; The public key that made this signature, from the recovery id a
+  ;;; chain carries beside it (Ethereum's v, minus 27 or the EIP-155
+  ;;; offset, which the caller has already stripped). Fails when the id
+  ;;; names no point -- which is what a wrong id looks like.
+  (func sp_recover ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((hin 0) (sin 1) (vin 2) (out 3))
+          (let ((char hb [200]) (char sb [200]) (char hex [140]) (i64 recid . 0))
+            (if (not (coco_m_text e hin hb 200))
+                (return (coco_m_type_error e "a hex atom" hin)))
+            (if (not (coco_m_text e sin sb 200))
+                (return (coco_m_type_error e "a hex atom" sin)))
+            (if (not (coco_m_int e vin (aof recid)))
+                (return (coco_m_type_error e "an integer" vin)))
+            (if (or (< recid 0) (> recid 3))
+                (return (coco_m_domain_error e "a recovery id (0..3)" vin)))
+            (let ((const char * hh . #'(sp_skip0x hb))
+                  (const char * sh . #'(sp_skip0x sb))
+                  (u32 z [8]) (u32 r [8]) (u32 s [8]))
+              (if (not (bn_hex hh (strlen hh) z))
+                  (return (coco_m_domain_error e "hexadecimal" hin)))
+              (if (!= (strlen sh) 128)
+                  (return (coco_m_domain_error e "a 64-byte signature" sin)))
+              (if (not (bn_hex sh 64 r)) (return (coco_m_domain_error e "hexadecimal" sin)))
+              (if (not (bn_hex (aof (nth 64 sh)) 64 s))
+                  (return (coco_m_domain_error e "hexadecimal" sin)))
+              (if (or (bn_zero_p r) (>= (bn_cmp r SP_N) 0)) (return 0))
+              (if (or (bn_zero_p s) (>= (bn_cmp s SP_N) 0)) (return 0))
+              ;; x = r, or r + n for the two rare ids that say so
+              (let ((u32 x [8]) (u32 y [8]))
+                (bn_cpy x r)
+                (if (>= recid 2)
+                    (block
+                     (if (!= 0 (bn_add x x SP_N)) (return 0))
+                     (if (>= (bn_cmp x SP_P) 0) (return 0))))
+                (if (not (sp_decompress x (cast int (bitand recid 1)) y)) (return 0))
+                ;; Q = r^-1 * (s*R - z*G)
+                (let ((sp_pt rp) (sp_pt gp) (sp_pt a) (sp_pt b) (sp_pt sum) (sp_pt q)
+                      (u32 zn [8]) (u32 nz [8]) (u32 ri [8]))
+                  (bn_cpy ($ rp x) x)
+                  (bn_cpy ($ rp y) y)
+                  (bn_set1 ($ rp z) 1)
+                  (pt_gen (aof gp))
+                  (fn_of zn z)
+                  (if (bn_zero_p zn) (bn_set0 nz) (bn_sub nz SP_N zn))
+                  (pt_mul (aof a) s (aof rp))
+                  (pt_mul (aof b) nz (aof gp))
+                  (pt_add (aof sum) (aof a) (aof b))
+                  (fn_inv ri r)
+                  (pt_mul (aof q) ri (aof sum))
+                  (let ((u32 px [8]) (u32 py [8]))
+                    (if (not (pt_affine px py (aof q))) (return 0))
+                    (bn_unhex px hex)
+                    (bn_unhex py (aof (nth 64 hex)))
+                    (return (coco_m_unify_atom e out hex)))))))))
+
+  (static) (coco-emit-module-dispatch sp_dispatch *secp-predicates*)
+  (coco-deflibrary "secp256k1" sp_dispatch nil)
+
+  ) ; source

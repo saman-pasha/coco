@@ -109,7 +109,8 @@ sh test/run.sh        # every case; the wire cases SKIP without a server
 modules/          the Prolog: what The Coco is made of
 modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
-library/          the built .so's, on the default $COCOLOG_LIBRARY path
+library/          the built .so's on the default $COCOLOG_LIBRARY path,
+                  and eth.pl -- a Prolog library over two of them
 test/             the arrangements that hold it GREEN
 art/              the banner -- Coco, the engineer, one of the three
 ```

@@ -3,3 +3,4 @@ modules/crypto/*.c
 modules/crypto/sdk.cicili
 library/*.so
 test/*.log
+test/*.out

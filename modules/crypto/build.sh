@@ -18,7 +18,7 @@ ln -sfn "$COCOLOG/lib/sdk.cicili" "$HERE/sdk.cicili"
 OUT="$ROOT/library"
 mkdir -p "$OUT"
 
-for mod in keccak; do
+for mod in keccak secp256k1; do
   ( cd "$CICILI" && sbcl --script cicili.lisp "$HERE/$mod.cicili" )
   gcc -shared -fPIC -O2 -o "$OUT/$mod.so" "$HERE/$mod.c"
   echo "built $OUT/$mod.so"

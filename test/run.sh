@@ -1,8 +1,10 @@
 #!/bin/sh
-# The Coco's suite. Two cases so far -- the assembly proof:
+# The Coco's suite.
 #
 #   local   the one cocolog binary consults modules/hello.pl and answers,
 #           no server anywhere: the pillars build and The Coco runs.
+#   crypto  the chains' primitives -- keccak256 and secp256k1 as loadable
+#           Cicili modules, held to published vectors; test/crypto.sh.
 #   wire    one process WRITES the module's clauses into a knowledge
 #           base, a second -- which consulted nothing -- reads them
 #           back: the family's cross-process claim, made from this
@@ -36,35 +38,18 @@ else
   say local "RED: got [$got]"; red=$((red + 1))
 fi
 
-# ---- crypto: keccak256, the first rung of the aggregator's crypto ----
-# A loadable Cicili module, built and held to the published Keccak
-# vectors -- the same digest every EVM chain computes. Two independent
-# official vectors (empty, "abc") pin the permutation and padding; a
-# multi-block input (200 bytes) crosses the 136-byte rate boundary; and
-# keccak256_hex proves the hex-input path a chain needs for RLP bytes.
-# SKIPs when the module cannot be built (no sbcl or CICILI checkout).
-KLIB="$ROOT/library/keccak.so"
-if [ ! -f "$KLIB" ]; then
-  ( cd "$ROOT" && CICILI="${CICILI:-$HOME/cicili}" COCOLOG="${COCOLOG:-$ROOT/../cocolog}" \
-      sh modules/crypto/build.sh ) > "$HERE/crypto-build.log" 2>&1 || true
-fi
-if [ -f "$KLIB" ]; then
-  kk() { COCOLOG_LIBRARY="$ROOT/library" timeout 60 "$C" query \
-           "use_module(library(keccak)), $1, write(H), nl" 2>/dev/null \
-           | grep -aoE '[0-9a-f]{64}' | head -1; }
-  cfail=0
-  ckeck() { [ "$2" = "$3" ] || { echo "   keccak $1: got $2 want $3"; cfail=1; }; }
-  ckeck empty    "$(kk "keccak256_hex('0x', H)")" \
-                 "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-  ckeck abc      "$(kk "keccak256(abc, H)")" \
-                 "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
-  ckeck hex-abc  "$(kk "keccak256_hex('616263', H)")" \
-                 "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
-  ckeck multi    "$(kk "findall(0'a, between(1,200,_), L), keccak256(L, H)")" \
-                 "96ea54061def936c4be90b518992fdc6f12f535068a256229aca54267b4d084d"
-  if [ "$cfail" -eq 0 ]; then say crypto GREEN; else say crypto RED; red=$((red + 1)); fi
+# ---- crypto: the chains' primitives -----------------------------------
+# keccak256 and secp256k1 as loadable Cicili modules, and library(eth)
+# composing them into the question an EVM chain asks: who signed this.
+# test/crypto.sh has the vectors and says why each is there.
+if sh "$HERE/crypto.sh" > "$HERE/crypto.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/crypto.out"; then
+    say crypto "$(head -1 "$HERE/crypto.out")"
+  else
+    say crypto GREEN
+  fi
 else
-  say crypto "SKIP (keccak.so not built -- no sbcl or CICILI checkout)"
+  say crypto RED; sed 's/^/   /' "$HERE/crypto.out"; red=$((red + 1))
 fi
 
 # ---- wire -----------------------------------------------------------
