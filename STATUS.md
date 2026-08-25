@@ -2,13 +2,14 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and the first five rungs: `test/run.sh` GREEN with a server up
-— local, crypto, ledger, contracts, training, spine, wire — which is
-sixty-two crypto checks against numbers published by other people, plus a
-federation ledger, contracts under a fence, settlement that measures
-rather than believes, and a proof-of-history spine held to constants
-computed outside this project. Everything from rung 6 down is aimed, not
-built.
+assembly and the first six rungs: `test/run.sh` GREEN with a server up
+— local, crypto, ledger, contracts, training, spine, votes, wire — which
+is sixty-two crypto checks against numbers published by other people,
+plus a federation ledger, contracts under a fence, settlement that
+measures rather than believes, a proof-of-history spine held to constants
+computed outside this project, and a stake-weighted BFT vote whose
+safety arithmetic names the validators who break it. Everything from rung
+7 down is aimed, not built.
 The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
@@ -125,12 +126,17 @@ the three pillars used and unmodified.
    is what a clock is. Still ahead: a spine is a lower bound on *work*,
    not a reading of a wall clock, and choosing between two honest forks
    is the ledger's question, not this rung's.
-6. **PoS and BFT votes, where the trust model wants them.** Stake is a
-   query over the ledger's own entries; the leader draw is a
-   deterministic function of chain state (hash-seeded — grindable, an
-   accepted trade inside a certificate-gated federation, not outside
-   it); a quorum certificate is a counting rule over verified
-   signatures, and a turn makes vote-and-lock atomic.
+6. **PoS and BFT votes** (`votes/`) — **DONE**. Stake is a query over
+   the ledger's own entries; the leader draw is a deterministic
+   function of chain state; a quorum certificate is a counting rule over
+   verified signatures; and a turn makes vote-and-lock atomic.
+   Thirty-seven checks, finality that beats length, and mallory is an
+   INSIDER for the first time — admitted, staked, voting, with one of
+   her eight attacks succeeding because a hash-seeded draw is grindable.
+   Still ahead: nobody is SLASHED (the evidence is produced; burning a
+   bond is a policy question), and there is no round timer, so no
+   liveness argument — the honest form of a clock here is rung 5's
+   spine, not wall time.
 7. **The aggregator.** A chain is a kb, so one node hosts many chains
    under different consensus regimes — and each chain publishes its own
    validity and fork-choice rules as entries on itself, so a foreign
@@ -164,6 +170,101 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### PoS and BFT votes: a quorum that names its own traitors
+
+**Rung 2's federation is a file; a validator set here is a query.** The
+roster still answers one question — whose key is this — and the stake
+answers the other. A validator's weight is `stake(Name, Amount)` sealed
+as an ordinary block, read back by `stake_from_chain/0` off blocks the
+node already holds. In the choreography **alice seals every entry and bob
+reads them**: nobody distributed anything, and there is no roster of
+weights to keep in step.
+
+**dave is why those are two questions.** He is in the federation, his
+signature verifies perfectly, and his vote counts for nothing. Admission
+and weight are different facts with different sources, and a system that
+conflated them could not change its validator set without redistributing
+a file.
+
+**A quorum is counted by weight and never by head.** Two of four
+validators can be short (alice + mallory is 55 of 100) and three can be
+enough (85). The cheapest attack in the rung is one real vote repeated
+four times, which a length check would pass, so the rule requires as many
+distinct voters as votes before it counts a single token.
+
+**The 2/3 threshold is not a convention, it is the whole safety
+argument.** With `Q = 2T/3 + 1`, two quorums must share at least
+`2Q − T = T/3 + 2` of the stake — strictly more than the fault bound. So
+two certificates for different blocks at one height cannot exist without
+naming the validators whose keys signed both sides, and `culprits/3` is
+that list. **Byzantine fault tolerance here is not "the bad case cannot
+happen"; it is "the bad case names the validators who caused it"**, and
+a name is what a slashing rule needs.
+
+**The vote and the lock are one goal, so they are one transaction.** A
+precommit visible without its lock would be a validator that had voted
+and was still free to vote again; a lock without its vote would be a
+validator bound to a block it never endorsed. Neither is reachable —
+the same guarantee `ledger_seal/1` leans on one rung down, doing a
+different job.
+
+**Finality is one rule, and it beats length.** Rung 2's fork choice may
+revisit any tip; `extends_final/1` says a chain that omits a finalised
+block is not a candidate at all. The choreography ends with a real
+partition: mallory forks at the same height, grows her chain three blocks
+longer, and loses — fork choice alone prefers her height 7, and the
+finalised block at height 4 is not on it.
+
+**mallory is an insider, for the first time on the ladder.** Every
+earlier criminal was a stranger — sealing without authority, writing
+fenced-out contracts, submitting models she never trained. A Byzantine
+fault is an admitted party, so she holds fifteen tokens of real stake and
+votes on every block. Seven of her eight attacks are refused, and the
+double-certificate attack does not pretend she could act alone: fifteen
+is nowhere near sixty-seven and her best pairing reaches fifty-five, so
+she buys alice and carol, both certificates are genuinely valid, and the
+arithmetic hands back `[alice, carol]` weighing 60 against a bound of 33.
+
+**Equivocation is the one fault that proves itself.** Both of her votes
+are valid and no checker looking at one could say a thing. What she
+cannot do is stop the pair existing, and the pair is the whole of the
+case — nothing to corroborate and nobody to believe.
+
+**One attack succeeds and is in the suite as a success.** The leader is a
+function of the head's hash, and the head's hash is a function of the
+payload of the block that made it, so a proposer tries payloads until the
+next draw favours her. With fifteen per cent of the stake she expects
+about seven attempts; here the first that worked was the twenty-fourth,
+and there is nothing to detect because every payload she tried was
+legitimate. **That is the price of a schedule anyone can recompute from
+rows**, and inside a certificate-gated federation — named parties who had
+to be admitted and can be removed — it is worth paying. Outside one it is
+not, and it would want a VRF. The trade is stated where it is made.
+
+**One bug was found by writing the choreography rather than the rule.**
+The first draft of "finality beats length" had mallory extending the
+finalised chain instead of forking from its parent, because she had
+already gossiped alice's block — so the demonstration printed *yes* to
+"does the longer tip contain the finalised block" and proved nothing. The
+fix was not to the rule but to the arrangement: a partition is a gossip
+list that is short for a while, so who a node hears from became an
+argument. **A demonstration that cannot fail is not a demonstration.**
+
+**And one hazard is written into the code rather than remembered.**
+`stake_from_chain/0` asserts rows, and entries accumulate on purpose — a
+top-up is a second block, not an edit. Nothing can tell a genuine second
+entry from the same entry read twice except the block it came from, so
+the reader keys on the block hash. Without that, a validator that ran it
+twice would hold double the stake and disagree with every peer about the
+quorum, from rows that were all perfectly correct.
+
+**What is honestly not here:** nobody is slashed — the evidence is
+produced, and burning a bond is a policy question this rung takes no
+position on. And there is no round timer, so there is no liveness
+argument: rounds advance because the choreography advances them, and
+deciding when a validator gives up on a proposer needs a clock. The
+honest form of a clock here is rung 5's spine, not wall time.
 
 ### The PoH spine: a clock nobody can wind backwards
 

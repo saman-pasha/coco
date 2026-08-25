@@ -111,6 +111,21 @@ else
   say spine RED; sed 's/^/   /' "$HERE/spine.out"; red=$((red + 1))
 fi
 
+# ---- votes: rung 6 ----------------------------------------------------
+# Stake is a query over the chain, a quorum is a counting rule, and a
+# block a quorum precommitted is final. mallory is an INSIDER here --
+# admitted, staked, entitled to vote -- and one of her eight attacks
+# succeeds, because a hash-seeded draw is grindable.
+if sh "$HERE/votes.sh" > "$HERE/votes.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/votes.out"; then
+    say votes "$(head -1 "$HERE/votes.out")"
+  else
+    say votes GREEN
+  fi
+else
+  say votes RED; sed 's/^/   /' "$HERE/votes.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then

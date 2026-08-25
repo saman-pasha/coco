@@ -88,6 +88,8 @@ libraries:
     - contract       # rung 3: the fence, scoped state, the call door
     - settle         # rung 4: the acceptance predicate over held-out data
     - poh            # rung 5: segments, parallel verification, the ledger seam
+    - stake          # rung 6: weight as a query, and the leader draw
+    - bft            # rung 6: votes, quorum certificates, the lock, the evidence
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -101,3 +103,4 @@ suite:
     - contracts      # rung 3: a contract is a predicate; mallory writes them too
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
+    - votes          # rung 6: stake off the chain, quorums, finality

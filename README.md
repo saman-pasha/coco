@@ -129,10 +129,11 @@ modules/crypto/   the chains' primitives as loadable Cicili modules;
                   build.sh compiles them to library/*.so
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
                   and the Prolog libraries beside them: bytes, base58,
-                  bech32, eth, btc, poa, contract, settle, poh. A caller
-                  cannot tell which of its libraries are Prolog and which
-                  are compiled C, which is the point -- btc.pl composes
-                  two of each, and poh.pl is the layer over spine.so
+                  bech32, eth, btc, poa, contract, settle, poh, stake,
+                  bft. A caller cannot tell which of its libraries are
+                  Prolog and which are compiled C, which is the point --
+                  btc.pl composes two of each, and poh.pl is the layer
+                  over spine.so
 coco.yaml         the one declaration -- pillars, paths, the knowledge
                   base, the module list, the suite. Read by every script
 ledger/           rung 2: the PoA federation ledger -- the federation,
@@ -143,8 +144,12 @@ training/         rung 4: training as settlement -- the task, the
                   worker, mallory the criminal worker
 spine/            rung 5: the PoH spine -- the producer, the parallel
                   verifiers, and mallory attacking a clock
+votes/            rung 6: PoS and BFT votes -- stake read off the chain,
+                  quorum certificates, finality, and mallory INSIDE the
+                  validator set
 docs/             diagrams worth keeping: seal-to-settlement.html traces
-                  one payload through every gate, rungs 2 to 4
+                  one payload through every gate, rungs 2 to 4;
+                  tick-to-settlement.html does the same for rung 5
 test/             the arrangements that hold it GREEN; config.sh reads
                   coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three
