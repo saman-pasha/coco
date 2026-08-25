@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stake to Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+/* Volume three of the series, on the same tokens as seal-to-settlement
+   and tick-to-settlement. One pair is new: --weight, for stake itself.
+   Rules are teal, work is amber, and the thing this rung measures --
+   how much a validator counts for -- gets its own material rather than
+   borrowing one. It is used on two figures and nowhere else. */
+:root{
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F1;
+  --ink:#0F1D1C; --ink-2:#3A4A48; --muted:#6B7C7A; --rule:#D9E3E1;
+  --accent:#0D6B65; --accent-soft:#D5E7E5;
+  --pass:#2A7551; --pass-soft:#DBEBE1;
+  --fail:#A8412A; --fail-soft:#F3E1DB;
+  --weight:#54459B; --weight-soft:#E3DFF3;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+    --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+    --accent:#4EBDB1; --accent-soft:#10302D;
+    --pass:#5FC08E; --pass-soft:#0F2A1F;
+    --fail:#E08466; --fail-soft:#301810;
+    --weight:#A093DE; --weight-soft:#211B3B;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+  --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+  --accent:#4EBDB1; --accent-soft:#10302D;
+  --pass:#5FC08E; --pass-soft:#0F2A1F;
+  --fail:#E08466; --fail-soft:#301810;
+  --weight:#A093DE; --weight-soft:#211B3B;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink-2);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:56px 28px 96px}
+
+header.top{border-bottom:1px solid var(--rule); padding-bottom:28px; margin-bottom:44px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 14px
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(30px,5vw,46px);
+  line-height:1.1; color:var(--ink); margin:0 0 14px; text-wrap:balance;
+}
+.standfirst{font-size:17px; max-width:62ch; margin:0}
+.standfirst strong{color:var(--ink); font-weight:600}
+
+h2{
+  font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.2;
+  color:var(--ink); margin:0 0 6px; text-wrap:balance;
+}
+h3{
+  font-family:var(--sans); font-weight:600; font-size:15px; color:var(--ink);
+  margin:24px 0 8px;
+}
+p{margin:0 0 14px; max-width:66ch}
+a{color:var(--accent)}
+
+section.act{margin:0 0 60px; padding-top:34px; border-top:1px solid var(--rule)}
+section.act:first-of-type{border-top:none; padding-top:0}
+.act-head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.act-no{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:3px; padding:3px 8px;
+  letter-spacing:.06em; flex:none;
+}
+.act-sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0}
+
+figure{margin:26px 0 22px; padding:0}
+.figbox{
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:22px 20px; overflow-x:auto;
+}
+svg{display:block; max-width:100%; height:auto; margin:0 auto; color:var(--ink)}
+figcaption{
+  font-size:13.5px; color:var(--muted); margin-top:12px; max-width:70ch;
+}
+figcaption code{font-size:12.5px}
+figcaption b{color:var(--ink-2); font-weight:600}
+
+code{font-family:var(--mono); font-size:13.5px; color:var(--ink);
+  background:var(--surface-2); padding:1px 5px; border-radius:3px}
+
+table{border-collapse:collapse; width:100%; margin:20px 0; font-size:14px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--ink-2);
+}
+td code{background:none; padding:0; font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px;
+  background:var(--surface); padding:2px 14px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:13px;
+  text-align:right}
+th.num{text-align:right}
+.v-pass{color:var(--pass); font-weight:600; font-family:var(--mono); font-size:12.5px}
+.v-fail{color:var(--fail); font-weight:600; font-family:var(--mono); font-size:12.5px}
+
+.note{
+  border-left:2px solid var(--accent); background:var(--surface);
+  padding:14px 18px; margin:20px 0; border-radius:0 4px 4px 0;
+}
+.note p{margin:0; font-size:15px}
+.note p + p{margin-top:10px}
+.note strong{color:var(--ink)}
+.note.heavy{border-left-color:var(--weight)}
+
+.steps{list-style:none; margin:18px 0 0; padding:0; display:grid; gap:2px}
+.steps li{
+  display:grid; grid-template-columns:26px 1fr; gap:12px;
+  padding:10px 0; border-bottom:1px solid var(--rule); align-items:start;
+}
+.steps li:last-child{border-bottom:none}
+.steps .n{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  padding-top:3px; font-variant-numeric:tabular-nums;
+}
+.steps .body{font-size:14.5px}
+.steps .body b{color:var(--ink); font-weight:600}
+.steps .body .pred{
+  display:block; font-family:var(--mono); font-size:12.5px; color:var(--accent);
+  margin-top:2px;
+}
+
+.chain{display:flex; flex-wrap:nowrap; align-items:stretch; gap:0;
+  margin:22px 0 8px; overflow-x:auto}
+.chain .link{
+  flex:1 1 150px; min-width:150px; background:var(--surface);
+  border:1px solid var(--rule); border-radius:5px; padding:12px 14px;
+}
+.chain .link.votes{border-color:var(--accent); background:var(--accent-soft)}
+.chain .link.done{border-color:var(--pass); background:var(--pass-soft)}
+.chain .link .who{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px;
+}
+.chain .link .what{font-size:13.5px; color:var(--ink); font-weight:600; display:block}
+.chain .link .pred{
+  font-family:var(--mono); font-size:11.5px; color:var(--accent);
+  display:block; margin-top:5px;
+}
+.chain .arrow{
+  flex:0 0 30px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-family:var(--mono); font-size:15px;
+}
+
+footer{border-top:1px solid var(--rule); margin-top:20px; padding-top:22px;
+  font-size:13.5px; color:var(--muted)}
+footer p{max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">The Coco &middot; rung 6</p>
+  <h1>Stake to Settlement</h1>
+  <p class="standfirst">A token staked in one block, traced to a settled verdict &mdash; every
+  proof-of-stake and BFT function it passes through, which process runs which goal, and what row
+  each step leaves behind. <strong>Who may vote is a query over the chain, a quorum is a counting
+  rule, and a block a quorum precommitted is final</strong> &mdash; which is where a longer chain
+  stops being an argument.</p>
+</header>
+
+<figure>
+  <div class="figbox">
+  <svg viewBox="0 0 720 660" role="img" aria-label="Ten stages from staking to settlement: stake, derive, draw, propose, prevote, polka, precommit, finalise, bounded fork choice, settle. Each stage names the rows it leaves behind and the predicates that ran.">
+    <line x1="46" y1="42" x2="46" y2="600" stroke="var(--rule)" stroke-width="2"/>
+
+    <!-- 1 stake -->
+    <circle cx="46" cy="42" r="9" fill="var(--weight)"/>
+    <text x="46" y="46" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">1</text>
+    <rect x="86" y="18" width="330" height="48" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+    <text x="100" y="38" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">STAKE &mdash; an ordinary block</text>
+    <text x="100" y="56" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">payload stake(alice,40): sealed, hashed, gossiped</text>
+    <text x="432" y="36" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">ledger_seal/1 &rarr; block_hash/5</text>
+    <text x="432" y="52" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">no new mechanism: rung 2 already seals</text>
+
+    <!-- 2 derive -->
+    <circle cx="46" cy="104" r="9" fill="var(--weight)"/>
+    <text x="46" y="108" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">2</text>
+    <rect x="86" y="80" width="330" height="48" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+    <text x="100" y="100" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">DERIVE &mdash; who may vote, from rows</text>
+    <text x="100" y="118" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">no roster of weights was distributed</text>
+    <text x="432" y="98" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">stake_from_chain/0 &rarr; learn_stake/1</text>
+    <text x="432" y="114" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz stake_entry/2 &middot; stake_seen/1</text>
+
+    <!-- 3 draw -->
+    <circle cx="46" cy="166" r="9" fill="var(--accent)"/>
+    <text x="46" y="170" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">3</text>
+    <rect x="86" y="142" width="330" height="48" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="162" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">DRAW &mdash; whose turn, from chain state</text>
+    <text x="100" y="180" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">the head's hash, reduced into the stake table</text>
+    <text x="432" y="160" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">leader_at/2 &rarr; leader/3</text>
+    <text x="432" y="176" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">draw_index/3 &middot; walk_stake/3</text>
+
+    <!-- 4 propose -->
+    <circle cx="46" cy="228" r="9" fill="var(--accent)"/>
+    <text x="46" y="232" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">4</text>
+    <rect x="86" y="204" width="330" height="48" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="224" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PROPOSE &mdash; the drawn leader seals</text>
+    <text x="100" y="242" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">and every voter re-derives who was drawn</text>
+    <text x="432" y="222" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">may_propose/1 &middot; ledger_seal/1</text>
+    <text x="432" y="238" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">proposal_ok/2, from the block's own parent</text>
+
+    <!-- 5 prevote -->
+    <circle cx="46" cy="290" r="9" fill="var(--accent)"/>
+    <text x="46" y="294" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">5</text>
+    <rect x="86" y="266" width="330" height="48" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="286" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PREVOTE &mdash; &ldquo;I would accept this&rdquo;</text>
+    <text x="100" y="304" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">gossiped, and re-verified by each receiver</text>
+    <text x="432" y="284" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">prevote_block/3 &rarr; do_prevote/3</text>
+    <text x="432" y="300" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">cast/6 &middot; votes_export/0 &rarr; votes_sync/1</text>
+
+    <!-- 6 polka -->
+    <circle cx="46" cy="352" r="9" fill="var(--accent)"/>
+    <text x="46" y="356" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">6</text>
+    <rect x="86" y="328" width="330" height="48" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="348" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">POLKA &mdash; a quorum of prevotes</text>
+    <text x="100" y="366" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">the only thing that can ever release a lock</text>
+    <text x="432" y="346" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">learn_pol/3 &rarr; gather/5 &rarr; qc_valid/1</text>
+    <text x="432" y="362" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz pol_row/3 &mdash; verified here, not taken</text>
+
+    <!-- 7 precommit -->
+    <circle cx="46" cy="414" r="9" fill="var(--accent)"/>
+    <text x="46" y="418" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">7</text>
+    <rect x="86" y="390" width="330" height="48" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="410" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PRECOMMIT &mdash; &ldquo;I am bound to it&rdquo;</text>
+    <text x="100" y="428" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">the vote and the lock, in ONE goal</text>
+    <text x="432" y="408" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">do_precommit/3 &middot; locked_ok/5</text>
+    <text x="432" y="424" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz vote/6 + lock_row/3, one turn</text>
+
+    <!-- 8 finalise -->
+    <circle cx="46" cy="476" r="9" fill="var(--pass)"/>
+    <text x="46" y="480" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">8</text>
+    <rect x="86" y="452" width="330" height="48" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+    <text x="100" y="472" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">FINALISE &mdash; a quorum of precommits</text>
+    <text x="100" y="490" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">85 of 100, against a quorum of 67</text>
+    <text x="432" y="470" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">finalize/3 &rarr; qc_valid/1</text>
+    <text x="432" y="486" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">assertz final/2</text>
+
+    <!-- 9 fork choice -->
+    <circle cx="46" cy="538" r="9" fill="var(--muted)"/>
+    <text x="46" y="542" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">9</text>
+    <rect x="86" y="514" width="330" height="48" rx="4" fill="var(--surface-2)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+    <text x="100" y="534" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">FORK CHOICE, NOW BOUNDED</text>
+    <text x="100" y="552" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">height proposes; finality disposes</text>
+    <text x="432" y="532" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">ledger_head/1 &rarr; better_head/2</text>
+    <text x="432" y="548" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">extends_final/1 &mdash; rung 6's one added rule</text>
+
+    <!-- 10 settle -->
+    <circle cx="46" cy="600" r="9" fill="var(--pass)"/>
+    <text x="46" y="604" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">10</text>
+    <rect x="86" y="576" width="330" height="48" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+    <text x="100" y="596" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">SETTLE &mdash; measured, not believed</text>
+    <text x="100" y="614" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">accepted(A) / rejected(Why), on a final chain</text>
+    <text x="432" y="594" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--accent)">settle_submissions/0 &rarr; judge/4</text>
+    <text x="432" y="610" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">settle/4 &middot; measure/6 &middot; provenance/1</text>
+  </svg>
+  </div>
+  <figcaption>The whole arc. Left of the rail is what exists after each stage; right of it is what
+  produced it. <b>Violet is stake</b> &mdash; the material this rung adds, and the only thing here
+  that is neither a rule nor a signature. Stage 9 is dashed because rung 6 does not replace fork
+  choice: it puts one boundary on it.</figcaption>
+</figure>
+
+<div class="note">
+  <p><strong>The split that shapes all of it:</strong> the federation roster answers <em>whose key
+  is this</em>. The chain answers <em>how much do they weigh</em>. Two questions, two sources
+  &mdash; and <code>dave</code> is why they are two: he is in the federation, his signature
+  verifies perfectly, and his vote counts for nothing.</p>
+</div>
+
+<!-- ============ ACT 1 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">01</span>
+    <div>
+      <h2>Staking, and reading it back</h2>
+      <p class="act-sub">ledger_seal/1 &rarr; stake_from_chain/0 &rarr; learn_stake/1</p>
+    </div>
+  </div>
+
+  <p>A validator's weight is a <b>payload</b>. <code>stake(alice,40)</code> is sealed as an
+  ordinary block, so the entry is hash-committed, signed by an authority, gossiped like anything
+  else and identical on every node &mdash; and none of that needed a new mechanism, because rung 2
+  already does all of it.</p>
+
+  <ol class="steps">
+    <li><span class="n">1</span><span class="body"><b>Seal it.</b> Four blocks, four entries. The
+      founding authority signs them, because a chain with no stake on it has no quorum to admit
+      any.
+      <span class="pred">ledger_seal('stake(alice,40)') &rarr; block_hash/5 &rarr; secp256k1_sign/3</span></span></li>
+    <li><span class="n">2</span><span class="body"><b>Gossip it.</b> Every node re-verifies every
+      block it is offered, exactly as it would any other. A stake entry is not a special kind of
+      block and is not treated as one.
+      <span class="pred">ledger_export/0 &rarr; ledger_sync/1 &rarr; valid_block/6</span></span></li>
+    <li><span class="n">3</span><span class="body"><b>Read it back.</b> Walk the blocks, parse the
+      payloads that are stake entries, skip the ones that are not &mdash; the chain carries
+      contracts and submissions too, and a rule that choked on somebody else's payload would only
+      work on a chain used for one thing.
+      <span class="pred">stake_from_chain/0 &middot; stake_payload/3 &rarr; learn_stake/1</span></span></li>
+    <li><span class="n">4</span><span class="body"><b>Count each block once.</b> Entries accumulate
+      on purpose &mdash; a top-up is a second block, not an edit &mdash; so nothing can tell a
+      genuine second entry from the same entry read twice <em>except the block it came from</em>.
+      <span class="pred">stake_seen(Hash) &mdash; the block, not the entry</span></span></li>
+  </ol>
+
+  <div class="note heavy">
+    <p><strong>In the choreography, alice seals every entry and bob reads them.</strong> bob was
+    never handed a roster of weights and never asked anyone what the validator set is. He read
+    blocks he already held. That is the difference between rung 2 and rung 6 in one sentence: an
+    authority is <em>declared in a file every node is given</em>, and a validator is <em>a query
+    over rows every node already has</em>.</p>
+  </div>
+
+  <h3>The distribution this rung runs on</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>validator</th><th class="num">stake</th><th>in the federation</th><th>may vote</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>alice</td><td class="num">40</td><td>yes</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>bob</td><td class="num">25</td><td>yes</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>carol</td><td class="num">20</td><td>yes</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>mallory</td><td class="num">15</td><td>yes</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>dave</td><td class="num">0</td><td>yes</td><td><span class="v-fail">no</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Total <b>100</b>, quorum <b>67</b>, fault bound <b>33</b>. Two of four validators can be short
+  &mdash; alice and mallory together are 55 &mdash; and three can be enough at 85. <b>A head count
+  would get both wrong</b>, which is why nothing here is ever counted by head.</p>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">02</span>
+    <div>
+      <h2>The draw, and who is allowed to check it</h2>
+      <p class="act-sub">leader/3 &middot; draw_index/3 &middot; proposal_ok/2</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 250" role="img" aria-label="A bar of one hundred tokens split into alice forty, bob twenty-five, carol twenty and mallory fifteen. A hash is reduced to an index which lands inside bob's segment.">
+      <rect x="286" y="14" width="290" height="26" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="431" y="31" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">sha256(head hash &#124; height) &rarr; draw_index/3</text>
+      <line x1="378" y1="40" x2="378" y2="74" stroke="var(--weight)" stroke-width="1.5"/>
+      <path d="M374,74 L378,82 L382,74 z" fill="var(--weight)"/>
+      <text x="392" y="60" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--weight)">I = 53</text>
+
+      <rect x="60"  y="86" width="240" height="46" fill="var(--weight)" fill-opacity="0.55"/>
+      <rect x="300" y="86" width="150" height="46" fill="var(--weight)" fill-opacity="0.40"/>
+      <rect x="450" y="86" width="120" height="46" fill="var(--weight)" fill-opacity="0.27"/>
+      <rect x="570" y="86" width="90"  height="46" fill="var(--weight)" fill-opacity="0.16"/>
+      <rect x="60"  y="86" width="600" height="46" fill="none" stroke="var(--weight)"/>
+      <line x1="300" y1="86" x2="300" y2="132" stroke="var(--surface)" stroke-width="1"/>
+      <line x1="450" y1="86" x2="450" y2="132" stroke="var(--surface)" stroke-width="1"/>
+      <line x1="570" y1="86" x2="570" y2="132" stroke="var(--surface)" stroke-width="1"/>
+
+      <text x="180" y="107" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">alice</text>
+      <text x="180" y="123" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">40</text>
+      <text x="375" y="107" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">bob</text>
+      <text x="375" y="123" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">25</text>
+      <text x="510" y="107" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">carol</text>
+      <text x="510" y="123" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">20</text>
+      <text x="615" y="107" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">mallory</text>
+      <text x="615" y="123" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">15</text>
+
+      <line x1="378" y1="82" x2="378" y2="140" stroke="var(--ink)" stroke-width="2"/>
+      <text x="378" y="156" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">bob proposes</text>
+
+      <text x="60" y="146" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">0</text>
+      <text x="660" y="146" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">100</text>
+
+      <line x1="60" y1="182" x2="660" y2="182" stroke="var(--rule)"/>
+      <text x="60" y="204" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">over 400 heights from one seed, the draw came out:</text>
+      <text x="60" y="224" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">alice 163 &middot; bob 94 &middot; carol 89 &middot; mallory 54</text>
+      <text x="60" y="242" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">against stakes of 40 &middot; 25 &middot; 20 &middot; 15. The ORDER is the claim; exact counts would be a test of sha256.</text>
+    </svg>
+    </div>
+    <figcaption>Nothing here is random. The leader is a fixed function of two things every node
+    already holds &mdash; the head's hash and the height &mdash; so every node draws the same
+    leader without being told, and a node that was offline draws it too. The index shown is the real
+    one: from the genesis seed at height 1, <code>draw_index/3</code> returns 53, which falls inside
+    bob's interval.</figcaption>
+  </figure>
+
+  <p>A validator with twice the stake occupies twice the interval and is drawn twice as often. The
+  suite checks the <b>ordering</b> rather than the counts: alice drawn most, mallory least. Pinning
+  exact counts would be testing sha256, not the draw.</p>
+
+  <h3>And the voter checks the proposer from the block's own parent</h3>
+  <p><code>proposal_ok/2</code> re-derives the draw using the block's <b>own</b> parent hash as the
+  seed &mdash; not the reader's current head. So &ldquo;was this author drawn for this
+  height&rdquo; has the same answer forever, on every node, including one reading the chain a year
+  later. A rule that depended on the reader's head would give different answers to different
+  readers, which is not a rule.</p>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">03</span>
+    <div>
+      <h2>Two phases, and the lock</h2>
+      <p class="act-sub">do_prevote/3 &rarr; learn_pol/3 &rarr; do_precommit/3</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 270" role="img" aria-label="A validator moves from free to prevoted to locked. From locked it may repeat the same block in any later round, but moving to a different block requires a prevote quorum from a later round; without one it is refused.">
+      <rect x="30" y="46" width="150" height="46" rx="5" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="105" y="68" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">FREE</text>
+      <text x="105" y="84" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">lock = none</text>
+
+      <line x1="180" y1="69" x2="252" y2="69" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M252,65 L260,69 L252,73 z" fill="var(--accent)"/>
+      <text x="216" y="42" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--accent)">do_prevote/3</text>
+      <text x="216" y="90" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">&ldquo;I would accept&rdquo;</text>
+
+      <rect x="260" y="46" width="150" height="46" rx="5" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="335" y="68" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PREVOTED</text>
+      <text x="335" y="84" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">a polka may form</text>
+
+      <line x1="410" y1="69" x2="482" y2="69" stroke="var(--accent)" stroke-width="1.5"/>
+      <path d="M482,65 L490,69 L482,73 z" fill="var(--accent)"/>
+      <text x="446" y="42" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--accent)">do_precommit/3</text>
+      <text x="446" y="90" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">&ldquo;I am bound&rdquo;</text>
+
+      <rect x="490" y="46" width="180" height="46" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="580" y="68" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">LOCKED</text>
+      <text x="580" y="84" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">lock(H, R, Block)</text>
+
+      <rect x="30" y="118" width="640" height="26" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="44" y="135" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">the vote and the lock are ONE GOAL &mdash; assertz vote/6 and assertz lock_row/3 commit together, or neither does</text>
+
+      <text x="30" y="176" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">from LOCKED, three ways out &mdash; and only three:</text>
+
+      <rect x="30" y="188" width="205" height="58" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="44" y="208" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">the same block again</text>
+      <text x="44" y="225" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">any later round</text>
+      <text x="44" y="240" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--pass)">allowed</text>
+
+      <rect x="247" y="188" width="205" height="58" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="261" y="208" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">another block, with a POL</text>
+      <text x="261" y="225" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">pol(H,R2,B), R2 &gt; lock round</text>
+      <text x="261" y="240" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--pass)">released</text>
+
+      <rect x="464" y="188" width="206" height="58" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+      <text x="478" y="208" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">another block, no POL</text>
+      <text x="478" y="225" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">or one from an EARLIER round</text>
+      <text x="478" y="240" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">refused</text>
+    </svg>
+    </div>
+    <figcaption><code>locked_ok/5</code> is consulted <b>before</b> anything is written, and a
+    validator that is bound elsewhere simply fails to precommit. It does not throw: being unable to
+    vote is an ordinary answer.</figcaption>
+  </figure>
+
+  <p><b>Without the second phase, two quorums at one height need nobody to have done anything
+  provably wrong.</b> With it, they need a third of the stake to have ignored its own rule &mdash;
+  and that is the difference between a protocol that is safe and one that is merely usually right.</p>
+
+  <p>A POL is not taken on anyone's word. The prevote certificate is checked by <em>this</em>
+  validator against <em>this</em> validator's own view of the stake, and only then does it become a
+  reason to change a lock. A lock that could be released by an unverified claim is not a lock.</p>
+
+  <h3>The choreography, invocation by invocation</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>step</th><th>who runs it</th><th>goal</th><th>rows written</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>stake</td><td>alice, one process per entry</td><td><code>ledger_seal('stake(bob,25)')</code></td><td><code>block/6</code> + <code>head_mark/2</code></td></tr>
+      <tr><td>gossip</td><td>each node, reading a peer's kb</td><td><code>ledger_export/0</code> &rarr; <code>ledger_sync([...])</code></td><td>the peer's blocks, re-verified</td></tr>
+      <tr><td>derive</td><td>each node, once</td><td><code>stake_from_chain</code></td><td><code>stake_entry/2</code>, <code>stake_seen/1</code></td></tr>
+      <tr><td>draw</td><td>anyone, any time</td><td><code>leader_at(H, Who)</code></td><td>nothing</td></tr>
+      <tr><td>propose</td><td>the drawn leader</td><td><code>ledger_seal('the block at height H')</code></td><td><code>block/6</code> + <code>head_mark/2</code></td></tr>
+      <tr><td>prevote</td><td>one process per validator</td><td><code>prevote_block(H, 0, Hash)</code></td><td><code>vote(prevote,&hellip;)</code></td></tr>
+      <tr><td>gossip votes</td><td>each node, reading a peer's kb</td><td><code>votes_export/0</code> &rarr; <code>votes_sync([...])</code></td><td>the peer's votes, re-verified</td></tr>
+      <tr><td>polka</td><td>any node holding the votes</td><td><code>learn_pol(H, 0, Hash)</code></td><td><code>pol_row/3</code></td></tr>
+      <tr><td>precommit</td><td>one process per validator</td><td><code>do_precommit(H, 0, Hash)</code></td><td><code>vote(precommit,&hellip;)</code> + <code>lock_row/3</code>, one turn</td></tr>
+      <tr><td>finalise</td><td>any node holding the votes</td><td><code>finalize(H, 0, Hash)</code></td><td><code>final/2</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>There is no round timer, no leader announcement, no aggregator role and no daemon. <b>A
+  validator is a cocolog invocation that reads rows, casts one vote and exits.</b> What another
+  validator has voted is a row it can read, which is why a certificate can be assembled by anyone
+  at all &mdash; and why two nodes holding the same votes build the same one.</p>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">04</span>
+    <div>
+      <h2>The counting rule, and why two thirds</h2>
+      <p class="act-sub">qc_valid/1 &middot; quorum/2 &middot; culprits/3</p>
+    </div>
+  </div>
+
+  <p>A quorum certificate is <b>a list of signatures and a predicate that says whether the list is
+  enough</b>. There is no message type and no protocol. Every clause of <code>qc_valid/1</code> is a
+  way the list can be a lie:</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>the check</th><th>the lie it answers</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>every vote matches the certificate's kind, height, round and block</td><td>a pile of votes for four different blocks, offered as a quorum for one</td></tr>
+      <tr><td>every vote is valid &mdash; staked voter, real signature</td><td>a stranger's vote, or a signature that was never made</td></tr>
+      <tr><td>as many distinct voters as votes</td><td><b>one validator's vote repeated</b> &mdash; the cheapest attack here, and the one a length check would pass</td></tr>
+      <tr><td>the voters' stake reaches the quorum</td><td>a majority of names holding a minority of the stake</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 260" role="img" aria-label="Two quorums drawn over the same hundred tokens. The first is alice, bob and carol at eighty-five; the second is alice, carol and mallory at seventy-five. Their overlap, alice and carol, is sixty tokens, above the fault bound of thirty-three.">
+      <text x="60" y="26" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">two certificates for different blocks at one height, over the same 100 tokens</text>
+
+      <text x="52" y="62" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">QC 1</text>
+      <rect x="60" y="44" width="600" height="26" fill="none" stroke="var(--rule)" stroke-dasharray="3 3"/>
+      <rect x="60" y="44" width="510" height="26" fill="var(--weight)" fill-opacity="0.55" stroke="var(--weight)"/>
+      <text x="315" y="62" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">alice + bob + carol = 85</text>
+
+      <text x="52" y="104" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">QC 2</text>
+      <rect x="60" y="86" width="600" height="26" fill="none" stroke="var(--rule)" stroke-dasharray="3 3"/>
+      <rect x="60" y="86" width="240" height="26" fill="var(--weight)" fill-opacity="0.55" stroke="var(--weight)"/>
+      <rect x="450" y="86" width="210" height="26" fill="var(--weight)" fill-opacity="0.55" stroke="var(--weight)"/>
+      <text x="180" y="104" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">alice</text>
+      <text x="555" y="104" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">carol + mallory = 75 in all</text>
+
+      <text x="52" y="146" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">BOTH</text>
+      <rect x="60" y="128" width="600" height="26" fill="none" stroke="var(--rule)" stroke-dasharray="3 3"/>
+      <rect x="60" y="128" width="240" height="26" fill="var(--fail)" fill-opacity="0.28" stroke="var(--fail)"/>
+      <rect x="450" y="128" width="120" height="26" fill="var(--fail)" fill-opacity="0.28" stroke="var(--fail)"/>
+      <text x="180" y="146" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">alice 40</text>
+      <text x="510" y="146" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">carol 20</text>
+
+      <line x1="258" y1="172" x2="258" y2="196" stroke="var(--fail)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="264" y="190" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">fault bound 33</text>
+
+      <rect x="60" y="204" width="600" height="46" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+      <text x="76" y="223" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">guaranteed overlap = 2Q &minus; T = 2&times;67 &minus; 100 = 34, which is already above the bound of 33</text>
+      <text x="76" y="240" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">measured overlap = culprits/3 returns [alice, carol], weighing 60</text>
+    </svg>
+    </div>
+    <figcaption>The arithmetic is not a convention &mdash; it is the entire safety argument. With
+    <code>Q = 2T/3 + 1</code>, two quorums <b>cannot</b> share less than <code>2Q &minus; T</code>,
+    and that number is above the fault bound by construction.</figcaption>
+  </figure>
+
+  <div class="note">
+    <p><strong>Byzantine fault tolerance here is not &ldquo;the bad case cannot happen&rdquo;.</strong>
+    It is &ldquo;the bad case names the validators who caused it&rdquo; &mdash; and a name is what a
+    slashing rule needs.</p>
+    <p><code>equivocation/3</code> is the sharper form of the same idea. A validator who signs two
+    different blocks at one height and round has produced, with its own key, a pair of documents
+    nobody else could have made. Both votes are individually valid and no checker looking at one
+    could say a thing; what she cannot do is stop the pair existing. <strong>There is nothing to
+    corroborate and nobody to believe.</strong></p>
+  </div>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">05</span>
+    <div>
+      <h2>Finality beats length</h2>
+      <p class="act-sub">extends_final/1 &mdash; rung 6's one added rule</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 230" role="img" aria-label="A chain of four blocks splits in two at height four. The upper branch is one finalised block; the lower branch grows to height seven but does not contain it, so it is not a candidate.">
+      <g font-family="IBM Plex Mono, monospace" font-size="11">
+        <rect x="20" y="86" width="62" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+        <text x="51" y="107" text-anchor="middle" fill="currentColor">0</text>
+        <rect x="98" y="86" width="62" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+        <text x="129" y="107" text-anchor="middle" fill="currentColor">1</text>
+        <rect x="176" y="86" width="62" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+        <text x="207" y="107" text-anchor="middle" fill="currentColor">2</text>
+        <rect x="254" y="86" width="62" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+        <text x="285" y="107" text-anchor="middle" fill="currentColor">3</text>
+      </g>
+      <line x1="82" y1="103" x2="94" y2="103" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="160" y1="103" x2="172" y2="103" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="238" y1="103" x2="250" y2="103" stroke="var(--muted)" stroke-width="1.5"/>
+
+      <!-- the finalised branch -->
+      <path d="M316,100 C346,100 356,58 386,58" fill="none" stroke="var(--pass)" stroke-width="1.8"/>
+      <path d="M386,54 L394,58 L386,62 z" fill="var(--pass)"/>
+      <rect x="394" y="40" width="86" height="36" rx="4" fill="var(--pass-soft)" stroke="var(--pass)" stroke-width="1.8"/>
+      <text x="437" y="57" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">4</text>
+      <text x="437" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--pass)">FINAL</text>
+      <text x="496" y="52" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--pass)">85 of 100 precommitted it</text>
+      <text x="496" y="68" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">extends_final/1 &rarr; yes</text>
+
+      <!-- the longer branch -->
+      <path d="M316,106 C346,106 356,152 386,152" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M386,148 L394,152 L386,156 z" fill="var(--muted)"/>
+      <g font-family="IBM Plex Mono, monospace" font-size="11">
+        <rect x="394" y="134" width="58" height="34" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+        <text x="423" y="155" text-anchor="middle" fill="currentColor">4&#8242;</text>
+        <rect x="464" y="134" width="58" height="34" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+        <text x="493" y="155" text-anchor="middle" fill="currentColor">5</text>
+        <rect x="534" y="134" width="58" height="34" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+        <text x="563" y="155" text-anchor="middle" fill="currentColor">6</text>
+        <rect x="604" y="134" width="58" height="34" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+        <text x="633" y="155" text-anchor="middle" fill="currentColor">7</text>
+      </g>
+      <line x1="452" y1="151" x2="460" y2="151" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="522" y1="151" x2="530" y2="151" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="592" y1="151" x2="600" y2="151" stroke="var(--muted)" stroke-width="1.5"/>
+      <text x="394" y="188" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">every block signed, well formed, correctly parented</text>
+      <text x="394" y="204" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">extends_final/1 &rarr; no</text>
+
+      <text x="20" y="188" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">fork choice</text>
+      <text x="20" y="204" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">alone prefers</text>
+      <text x="20" y="220" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="currentColor">height 7</text>
+    </svg>
+    </div>
+    <figcaption>Nothing about the longer chain is malformed. mallory's blocks are signed, correctly
+    parented and gossiped like anyone's &mdash; they simply do not contain the finalised one, and no
+    amount of growing changes that.</figcaption>
+  </figure>
+
+  <p>Rung 2's fork choice may revisit any tip: a longer chain wins, and &ldquo;longer&rdquo; is a
+  fact that can change tomorrow. <code>extends_final/1</code> is one rule &mdash; <b>a chain that
+  omits a finalised block is not a candidate at all</b> &mdash; and fork choice may then prefer
+  whatever it likes among the chains that pass.</p>
+
+  <div class="note">
+    <p><strong>The first version of this demonstration proved nothing, and the fix was to the
+    arrangement rather than the rule.</strong> mallory had already gossiped alice's block, so she
+    <em>extended</em> the finalised chain instead of forking from its parent &mdash; and the page
+    would have printed &ldquo;yes, the longer tip contains it&rdquo;. A partition is a gossip list
+    that is short for a while, so who a node hears from became an argument. <strong>A demonstration
+    that cannot fail is not a demonstration.</strong></p>
+  </div>
+</section>
+
+<!-- ============ ACT 6 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">06</span>
+    <div>
+      <h2>mallory, from inside the validator set</h2>
+      <p class="act-sub">votes/mallory.pl &mdash; seven refused, one accepted</p>
+    </div>
+  </div>
+
+  <p>Every earlier rung's criminal was an outsider: she sealed blocks without being an authority,
+  wrote contracts that were fenced out, submitted models she had not trained. <b>Here she is
+  admitted, staked and entitled to vote on every block</b> &mdash; because that is what a Byzantine
+  fault is, and a rung about tolerating faults that only tested strangers would have tested
+  nothing.</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>attack</th><th>what she tries</th><th>what answers it</th><th>outcome</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>attack_no_stake</code></td><td>vote with dave's key, which never staked</td><td><code>has_stake/1</code>, before the curve is paid for</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_stuff_quorum</code></td><td>one real vote, repeated four times</td><td>as many distinct voters as votes</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_forge_vote</code></td><td>relabel a signature as a vote for another block</td><td>the block hash is inside the signed text</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_replay_phase</code></td><td>present a prevote as a precommit</td><td>the kind is inside the signed text too</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_equivocate</code></td><td>sign two blocks at one height</td><td><code>equivocation/3</code> returns her name</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_unlock</code></td><td>vote away from a lock with no proof</td><td><code>locked_ok/5</code>, before any write</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_double_qc</code></td><td>two certificates, bought with a coalition</td><td><code>culprits/3</code> names all of them</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_grind</code></td><td>bias the leader draw</td><td>nothing here, and nothing can</td><td><span class="v-fail">ACCEPTED</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p><b>She cannot make two certificates alone, and the attack does not pretend she can.</b> Fifteen
+  is nowhere near sixty-seven, and even her best pairing reaches fifty-five &mdash; so she buys
+  alice and carol. Both certificates are <em>real</em>: a node holding either one is not being
+  deceived about anything. What the arithmetic guarantees is that they could not both exist without
+  an overlap heavier than a third of the stake.</p>
+
+  <div class="note heavy">
+    <p><strong>The grind succeeds and is supposed to.</strong> The leader is a function of the
+    head's hash, and the head's hash is a function of the payload of the block that made it &mdash;
+    so a proposer tries payloads until the next draw favours her. With fifteen per cent of the stake
+    she expects about seven attempts; here the first payload that worked was the <b>twenty-fourth</b>.
+    There is nothing to detect: every payload she tried was legitimate, and the one she published is
+    a legitimate block.</p>
+    <p><strong>That is the price of a schedule anyone can recompute from rows.</strong> Inside a
+    certificate-gated federation &mdash; named parties who had to be admitted and can be removed
+    &mdash; biasing your own turn is a cost worth paying for a draw with no beacon, no committee and
+    no extra round of messages. Outside one it is not, and it would want a VRF or an unbiasable
+    beacon. The trade is stated where it is made, in <code>library(pos)</code>.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 7 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">07</span>
+    <div>
+      <h2>Till settlement complete</h2>
+      <p class="act-sub">where rung 6 hands back to rungs 2&ndash;4</p>
+    </div>
+  </div>
+
+  <p>Nothing downstream changed. The payload under all of this is still a contract's source or a
+  training submission whose weights travel as chunked rows and whose digest is the join, and
+  settlement still asks the only question with a checkable answer &mdash; <b>does it work</b>.</p>
+
+  <div class="chain">
+    <div class="link"><span class="who">rung 2 &middot; ledger</span><span class="what">a block is sealed</span><span class="pred">ledger_seal/1</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link votes"><span class="who">rung 6 &middot; votes</span><span class="what">the drawn leader, checked</span><span class="pred">proposal_ok/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link votes"><span class="who">rung 6 &middot; votes</span><span class="what">two quorums, and a lock</span><span class="pred">qc_valid/1 &middot; locked_ok/5</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 6 &middot; finality</span><span class="what">settled, not merely deepest</span><span class="pred">finalize/3 &rarr; final/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 4 &middot; settlement</span><span class="what">measured, and settled</span><span class="pred">settle_submissions/0 &rarr; judge/4</span></div>
+  </div>
+
+  <p>What rung 6 adds is that the chain settlement reads is no longer merely the deepest one
+  anybody happened to see. <b>&ldquo;This submission was on the chain&rdquo; stops being a fact that
+  can be revised</b> &mdash; and a verdict computed over a finalised prefix is a verdict that does
+  not have to be recomputed if a longer fork turns up next week.</p>
+
+  <h3>What this rung does not add</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>not this</th><th>why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>a slashing rule</td><td><code>culprits/3</code> and <code>equivocation/3</code> produce the evidence. Burning a bond &mdash; how much, on whose judgement, with what appeal &mdash; is a policy question this rung takes no position on.</td></tr>
+      <tr><td>a liveness argument</td><td>there is no round timer, so rounds advance because the choreography advances them. Deciding when a validator gives up on a proposer needs a clock, and the honest form of a clock here is rung 5's spine, not wall time.</td></tr>
+      <tr><td>a genesis distribution</td><td>the first stake entries are sealed by a founding authority, because a chain with no stake on it has no quorum to admit any. Bootstrapping is a real problem; this rung inherits rung 2's federation for exactly one block's worth of trust.</td></tr>
+      <tr><td>an unbiasable draw</td><td>see <code>attack_grind</code>. Stated where the trade is made rather than left for a reader to discover.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <p>Every predicate name on this page is taken from the source rather than from memory:
+  <code>library/pos.pl</code>, <code>library/bft.pl</code>, <code>votes/node.pl</code>,
+  <code>votes/mallory.pl</code>, with <code>library/poa.pl</code> and <code>ledger/node.pl</code>
+  underneath. The numbers &mdash; 100, 67, 33, the 85-of-100 certificate, the draw over 400 heights,
+  the twenty-four payloads, the culprit weight of 60 &mdash; are printed by
+  <code>test/votes.sh</code> (37 checks) and <code>votes/run.sh</code>. The companion pages are
+  <i>Seal to Settlement</i>, rungs 2&ndash;4, and <i>Tick to Settlement</i>, rung 5.</p>
+</footer>
+
+</div>
+</body>
+</html>

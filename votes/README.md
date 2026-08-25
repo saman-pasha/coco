@@ -17,6 +17,10 @@ sh test/votes.sh         # the same rules, checked: 37 checks
 | `mallory.pl` | eight attacks from inside the validator set |
 | `run.sh` | the choreography |
 
+`../docs/stake-to-settlement.html` is the flowchart: the same arc as a
+diagram, stage by stage, with the choreography written out invocation by
+invocation.
+
 ## What this rung adds to the ledger under it
 
 **Rung 2's federation is a file.** Every node is handed the same

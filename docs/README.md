@@ -6,6 +6,7 @@ Diagrams and explainers that are worth keeping but are not code.
 |---|---|
 | `seal-to-settlement.html` | the whole arc, rungs 2&ndash;4: one payload traced from a node's hands to a settled verdict, with every PoA function, gossip hop, fork-choice key and settlement gate in the order it is reached |
 | `tick-to-settlement.html` | rung 5: a spine traced from thirty-two zero bytes to a settled verdict, with every PoH function, the choreography invocation by invocation, and the measured sequential/parallel asymmetry |
+| `stake-to-settlement.html` | rung 6: a staked token traced to a settled verdict, with every PoS and BFT function, the choreography invocation by invocation, the weighted draw, and the quorum arithmetic that names its own traitors |
 
 Open either from a checkout &mdash; they are standalone documents with no build step
 and no local assets. The only thing they fetch is the webfont; without a network it
@@ -31,6 +32,13 @@ there is no test that reads an SVG. The names it uses live in:
                           poh_verify_segments/1  poh_slow_run/3
     spine/node.pl         spine_produce/2  verify_one/1  spine_sound/0
                           anchor_block/1  anchor_order/1  anchor_genuine/1
+    library/pos.pl        stake_of/2  stake_table/1  total_stake/1
+                          quorum/2  fault_bound/2  leader/3  draw_index/3
+    library/bft.pl        cast/6  valid_vote/1  qc_valid/1  qc_stake/2
+                          locked_ok/5  equivocation/3  culprits/3
+    votes/node.pl         stake_from_chain/0  leader_at/2  proposal_ok/2
+                          prevote_block/3  do_precommit/3  learn_pol/3
+                          gather/5  finalize/3  extends_final/1
 
 ## The published copies
 
@@ -41,7 +49,7 @@ host supplies its own:
 ```sh
 python3 - <<'EOF'
 import re
-s = open('docs/seal-to-settlement.html').read()   # or tick-to-settlement.html
+s = open('docs/seal-to-settlement.html').read()   # or any page here
 body = s.split('<head>', 1)[1].replace('</head>', '').replace('<body>', '')
 body = body.rsplit('</body>', 1)[0]
 body = re.sub(r'<meta[^>]*>\s*', '', body)   # the host sets charset and viewport
