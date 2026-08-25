@@ -60,34 +60,14 @@ READ_UNCOMMITTED to SERIALIZABLE, chosen per turn.
 
 ## The ladder
 
-Each rung is an arrangement that ends in a GREEN line, and no claim is
-made before its `run.sh` prints one.
-
-1. **Crypto as Coco's own Parsi objects** — `sha256`, HMAC, sign and
-   verify as stored procedures over Zigurat's `Cryptography/`.
-2. **The PoA federation ledger** — a federation CA, per-node certificates
-   carrying append grants, signed hash-chained entries, blocks committed
-   with their head mark in one turn, gossip, fork choice as rules, a
-   Zeytun page for public audit.
-3. **Contracts** — predicates deployed as signed entries, run under a
-   whitelisted goal vocabulary and `max_steps`; long-lived contracts
-   suspend as machines and thaw when their condition arrives.
-4. **Training as settlement** — a contract names data, architecture and
-   seed; workers train in `--local`; settlement is the acceptance
-   predicate over held-out data. Train freely, verify deterministically,
-   commit rows.
-5. **A PoH spine** — an iterated hash chain as a clock, produced
-   sequentially, verified in parallel across coworkers.
-6. **PoS and BFT votes** where the trust model wants them — stake as a
-   query, quorum certificates as counting rules.
-7. **The aggregator** — many chains on one node, foreign chains verified
-   by consulting the rules they publish about themselves, bridges as
-   suspended-machine escrows, an anchor chain of checkpoints,
-   unification as the translation layer.
-8. **The TPS harness** — a speculative lane at READ_UNCOMMITTED
-   pipelining ahead of a settlement lane at commit isolation; the
-   harness prints transactions per second, and no sentence here says
-   "competes with" until that number is printed.
+STATUS.md carries the missions in full — what stands under each and the
+disciplines that hold across all of them. The short of it, each rung an
+arrangement that ends in a GREEN line before it is claimed: crypto as
+The Coco's own Parsi objects; the PoA federation ledger; contracts as
+predicates under `max_steps`; training as settlement; a PoH spine; PoS
+and BFT votes where the trust model wants them; the aggregator, where a
+chain carries its own light client; and the TPS harness, whose number
+is printed before any sentence uses it.
 
 ## Running
 
