@@ -58,10 +58,22 @@ this repository's three materials only — Prolog modules, The Coco's own
 Parsi objects, choreography — with the three pillars used and
 unmodified.
 
-1. **Crypto as The Coco's own Parsi objects.** `sha256`, HMAC, sign and
-   verify as stored procedures whose backticks reach straight into
-   Zigurat's `Cryptography/` — hashing and signing are the warrior's
-   job, reached over the wire, and not a line of C lives here.
+1. **Crypto — the chains' primitives, in-process.** The hashes and
+   curves the aggregator needs to read foreign chains, as loadable
+   Cicili modules on `$COCOLOG_LIBRARY` (and, where the work belongs on
+   the server, Parsi procedures over Zigurat's `Cryptography/`).
+   **STARTED: `library(keccak)`** — Keccak-256, the hash behind every
+   EVM chain, is the first module, `modules/crypto/keccak.cicili`
+   against cocolog's `lib/sdk.cicili`, no cocolog source touched. It is
+   Keccak, not SHA3 (Ethereum's 0x01 padding, not NIST's 0x06), with
+   `keccak256/2` over text bytes and `keccak256_hex/2` over hex-decoded
+   bytes — the latter the one a chain wants, because RLP is arbitrary
+   bytes a code list cannot carry. Held in `test/run.sh` to two official
+   vectors (empty, "abc"), a multi-block input across the 136-byte rate,
+   and the hex path, each matched against an independent implementation.
+   Still to come on this rung: Blake2b, RIPEMD-160, then the curves —
+   secp256k1 ECDSA verify+recover for Bitcoin and Ethereum, Ed25519 for
+   Solana and the rest.
 2. **The PoA federation ledger** (`ledger/`): a federation CA issues
    per-node certificates with append grants
    (`--permission=LEDGER::ENTRIES`); signed, sha256-chained entries;

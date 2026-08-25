@@ -106,9 +106,12 @@ sh test/run.sh        # every case; the wire cases SKIP without a server
 ## Layout
 
 ```
-modules/    the Prolog: what The Coco is made of
-test/       the arrangements that hold it GREEN
-art/        the banner -- Coco, the engineer, one of the three
+modules/          the Prolog: what The Coco is made of
+modules/crypto/   the chains' primitives as loadable Cicili modules;
+                  build.sh compiles them to library/*.so
+library/          the built .so's, on the default $COCOLOG_LIBRARY path
+test/             the arrangements that hold it GREEN
+art/              the banner -- Coco, the engineer, one of the three
 ```
 
 The layout grows a directory per rung as each rung is climbed; nothing is
