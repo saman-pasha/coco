@@ -2,9 +2,12 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and the first rung: `test/run.sh` GREEN with a server up, and
-sixty-two crypto checks against numbers published by other people.
-Everything from rung 2 down is aimed, not built. The missions below moved here from cocolog's
+assembly and the first four rungs: `test/run.sh` GREEN with a server up
+— local, crypto, ledger, contracts, training, wire — which is sixty-two
+crypto checks against numbers published by other people, plus a
+federation ledger, contracts under a fence, and settlement that measures
+rather than believes. Everything from rung 5 down is aimed, not built.
+The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
 
@@ -104,13 +107,14 @@ the three pillars used and unmodified.
    per call (`--steps` is the mechanism; who pays is policy), and
    contract-to-contract calls, which need a rule about whose state is
    entered.
-4. **Training as settlement — proof of useful work.** A contract term
-   names data, architecture and seed; workers train in `--local` and
-   publish signed, hash-chained parameter rows; settlement is the
-   acceptance predicate over held-out data. The discipline in one
-   sentence: train freely, verify deterministically, commit rows.
-   Federated learning gains an audit trail — "where did this model come
-   from" becomes a query.
+4. **Training as settlement — proof of useful work** (`training/`) —
+   **DONE**. A task names data, architecture, seed, a hash-committed
+   holdout and a threshold; workers train in `--local` and publish
+   signed, hash-chained parameter rows; settlement re-measures every
+   submission on the committed holdout. Eighteen checks, and mallory is
+   a criminal worker now. Still ahead: nobody is PAID — turning a
+   verdict into a reward is a policy question this rung takes no
+   position on.
 5. **A PoH spine.** An iterated sha256 chain as a clock nobody can
    backdate — produced sequentially, verified in parallel by splitting
    the range balancer-style across coworkers.
@@ -153,6 +157,74 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### Training as settlement: the chain pays for a model that works
+
+**The discipline in one sentence: train freely, verify
+deterministically, commit rows.**
+
+Training is expensive, non-deterministic and unverifiable — two honest
+workers with the same data land on entirely different weights, which the
+suite proves rather than assumes, and nobody can audit a gradient step
+after the fact. Evaluation is none of those things. So settlement never
+asks *did you really train this*; it asks the only question with a
+checkable answer: **does it work**.
+
+**Every worker claims 0.99** — the honest ones and the liar alike — and
+settlement reaches different verdicts, because it measures. alice and bob
+are accepted at 1.0 from different weights; carol, who trained for one
+epoch and claimed the same 0.99, is rejected at the 0.36 she actually
+delivers. A worker's word about its own model is not evidence and is
+never treated as any. That is what makes this proof of *useful* work
+rather than proof of effort.
+
+**A task names what is needed to CHECK an answer and nothing about how
+to get one** — no epochs, no optimiser, no learning rate. And the data is
+a function of the index rather than a file, so there is no dataset to
+distribute, no file hash to agree on, and no way for two nodes to be
+evaluating different things.
+
+**The split between block and rows is forced.** A row must fit in a page
+and a model does not, so the block carries the submission term and the
+weights travel as chunked rows. The digest is the join: signed and
+hash-chained inside the block, and the rows are believed only if they
+hash back to it.
+
+**The holdout is committed before any worker exists**, and re-checked on
+every submission. Without that, a settler could read the submissions and
+then choose the range that gave the answer it wanted — an attack nobody
+would ever see in the result, because the accuracy would be real,
+measured honestly, on the wrong points. It is caught by arithmetic
+rather than by trust, and it is the rung's insider attack, as rung 2 had
+one and rung 3 had one.
+
+**Long compute never sits inside a database turn**, so training runs in
+`--local` with no connection open and prints its weights as facts; a
+second process consults them and a third seals the submission. That is
+cocolog's law, learned over there in blood, obeyed here without argument.
+
+**One attack was found by accident and kept.** An early draft had every
+worker training from the task's seed, so alice and bob produced
+byte-identical weights — one digest, two sets of rows under it, and a
+join twice as long as it should be. Every submission failed its digest
+check, and the cause was not fraud but determinism. Workers now train
+from their own seed, and the duplicate rule that caught it is the same
+one that catches deliberate plagiarism.
+
+**And the rung's real payload is a query.** "Where did this model come
+from" answers: the digest, the worker, the measured accuracy, the block,
+and the authority that sealed it. Federated learning with an audit trail
+is a `findall` over signed, hash-chained, gossiped blocks — and a second
+node that did none of the training settles to the same verdicts, which
+the suite checks, because determinism is the whole reason any of this
+holds.
+
+**What is honestly not here:** a worker who trains on the held-out points
+cannot be caught by evaluation. The commitment stops the settler moving
+the goalposts and stops a worker knowing the range in advance, but
+nothing stops a worker who simply trains on everything. Catching that
+needs a holdout the worker never sees, or a proof of what it trained on,
+and neither is on this rung.
 
 ### Contracts: a predicate, a block, a fence, and gas
 

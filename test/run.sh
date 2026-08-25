@@ -82,6 +82,20 @@ else
   say contracts RED; sed 's/^/   /' "$HERE/contracts.out"; red=$((red + 1))
 fi
 
+# ---- training: rung 4 -------------------------------------------------
+# Proof of USEFUL work. Every worker claims 0.99; settlement measures and
+# reaches different verdicts. test/training.sh says what each check is
+# for and which attack it answers.
+if sh "$HERE/training.sh" > "$HERE/training.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/training.out"; then
+    say training "$(head -1 "$HERE/training.out")"
+  else
+    say training GREEN
+  fi
+else
+  say training RED; sed 's/^/   /' "$HERE/training.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
