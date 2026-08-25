@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400">
+  <!-- The Coco, the engineer; one of the three: Cicili writes it, Zigurat
+       keeps it, Coco makes it think. Hand-drawn SVG, no external assets. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0e1a"/>
+      <stop offset="0.7" stop-color="#121831"/>
+      <stop offset="1" stop-color="#182040"/>
+    </linearGradient>
+    <radialGradient id="medal" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#1d2647"/>
+      <stop offset="1" stop-color="#131a35"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="400" fill="url(#sky)"/>
+
+  <!-- stars -->
+  <g fill="#cfd6ef">
+    <circle cx="70" cy="52" r="1.6" opacity="0.8"/><circle cx="150" cy="120" r="1.1" opacity="0.5"/>
+    <circle cx="215" cy="35" r="1.3" opacity="0.6"/><circle cx="330" cy="70" r="1.0" opacity="0.4"/>
+    <circle cx="415" cy="30" r="1.5" opacity="0.7"/><circle cx="470" cy="105" r="1.0" opacity="0.5"/>
+    <circle cx="540" cy="48" r="1.2" opacity="0.6"/><circle cx="600" cy="22" r="1.6" opacity="0.8"/>
+    <circle cx="705" cy="40" r="1.1" opacity="0.5"/><circle cx="760" cy="90" r="1.4" opacity="0.6"/>
+    <circle cx="835" cy="28" r="1.0" opacity="0.5"/><circle cx="905" cy="72" r="1.5" opacity="0.7"/>
+    <circle cx="975" cy="38" r="1.1" opacity="0.5"/><circle cx="1060" cy="60" r="1.4" opacity="0.7"/>
+    <circle cx="1130" cy="110" r="1.0" opacity="0.4"/><circle cx="1195" cy="42" r="1.6" opacity="0.8"/>
+    <circle cx="1245" cy="95" r="1.1" opacity="0.5"/><circle cx="35" cy="150" r="1.0" opacity="0.4"/>
+    <circle cx="640" cy="12" r="1.2" opacity="0.6"/>
+  </g>
+
+  <!-- constellations of linked knowledge bases, the engineer's climate -->
+  <g stroke="#3aa89b" stroke-width="1.5" opacity="0.16">
+    <line x1="150" y1="180" x2="240" y2="130"/>
+    <line x1="240" y1="130" x2="330" y2="185"/>
+    <line x1="240" y1="130" x2="255" y2="235"/>
+    <line x1="1030" y1="190" x2="1115" y2="135"/>
+    <line x1="1115" y1="135" x2="1205" y2="185"/>
+    <line x1="1115" y1="135" x2="1120" y2="245"/>
+  </g>
+  <g fill="#67c9bc" opacity="0.22">
+    <circle cx="150" cy="180" r="5"/><circle cx="240" cy="130" r="7"/>
+    <circle cx="330" cy="185" r="5"/><circle cx="255" cy="235" r="4"/>
+    <circle cx="1030" cy="190" r="5"/><circle cx="1115" cy="135" r="7"/>
+    <circle cx="1205" cy="185" r="5"/><circle cx="1120" cy="245" r="4"/>
+  </g>
+
+  <!-- ziggurat skyline, the family's horizon -->
+  <g fill="#0e1327">
+    <path d="M0 400 L0 360 H70 V340 H130 V360 H200 V400 Z"/>
+    <path d="M170 400 V352 H240 V330 H290 V310 H350 V330 H400 V352 H470 V400 Z"/>
+    <path d="M430 400 V366 H500 V344 H560 V366 H630 V400 Z"/>
+    <path d="M820 400 V362 H890 V338 H950 V362 H1020 V400 Z"/>
+    <path d="M990 400 V354 H1060 V330 H1110 V312 H1170 V330 H1220 V354 H1280 V400 Z"/>
+    <path d="M1200 400 V368 H1260 V350 H1280 V400 Z"/>
+  </g>
+  <rect y="398" width="1280" height="2" fill="#0d1122"/>
+
+  <!-- ================= COCO, the engineer ================= -->
+  <g transform="translate(640,158) scale(1.02) translate(-640,-162)">
+    <circle cx="640" cy="162" r="124" fill="#3aa89b" opacity="0.10"/>
+    <circle cx="640" cy="162" r="113" fill="url(#medal)" stroke="#3aa89b" stroke-width="3"/>
+    <circle cx="640" cy="162" r="105" fill="none" stroke="#3aa89b" stroke-width="1" opacity="0.35"/>
+    <g fill="#2f8d82">
+      <g transform="translate(640,162)">
+        <rect x="-10" y="-92" width="20" height="20" rx="4"/>
+        <rect x="-10" y="72" width="20" height="20" rx="4"/>
+        <rect x="-92" y="-10" width="20" height="20" rx="4"/>
+        <rect x="72" y="-10" width="20" height="20" rx="4"/>
+        <g transform="rotate(45)">
+          <rect x="-10" y="-92" width="20" height="20" rx="4"/>
+          <rect x="-10" y="72" width="20" height="20" rx="4"/>
+          <rect x="-92" y="-10" width="20" height="20" rx="4"/>
+          <rect x="72" y="-10" width="20" height="20" rx="4"/>
+        </g>
+      </g>
+    </g>
+    <circle cx="640" cy="162" r="74" fill="none" stroke="#3aa89b" stroke-width="14"/>
+    <circle cx="640" cy="162" r="60" fill="none" stroke="#2c7f75" stroke-width="2" opacity="0.6"/>
+    <g stroke="#67c9bc" stroke-width="2">
+      <line x1="640" y1="162" x2="640" y2="118"/>
+      <line x1="640" y1="162" x2="678" y2="140"/>
+      <line x1="640" y1="162" x2="678" y2="184"/>
+      <line x1="640" y1="162" x2="640" y2="206"/>
+      <line x1="640" y1="162" x2="602" y2="184"/>
+      <line x1="640" y1="162" x2="602" y2="140"/>
+    </g>
+    <g fill="#8fdcd1">
+      <circle cx="640" cy="118" r="7"/>
+      <circle cx="678" cy="140" r="7"/>
+      <circle cx="678" cy="184" r="7"/>
+      <circle cx="640" cy="206" r="7"/>
+      <circle cx="602" cy="184" r="7"/>
+      <circle cx="602" cy="140" r="7"/>
+    </g>
+    <circle cx="640" cy="162" r="12" fill="#e0a84a" stroke="#f3cf8d" stroke-width="2"/>
+  </g>
+
+  <!-- name -->
+  <g font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+    <text x="640" y="323" font-size="32" font-weight="bold" fill="#e8e2d0" letter-spacing="10">THE COCO</text>
+    <text x="640" y="347" font-size="16" font-style="italic" fill="#9aa2c4">the engineer &#183; an intelligent aggregator hub</text>
+  </g>
+
+  <!-- the one line -->
+  <text x="640" y="380" font-family="Georgia, 'Times New Roman', serif" font-size="15"
+        font-style="italic" fill="#7d86ad" text-anchor="middle" letter-spacing="1">
+    the philosopher writes it &#183; the warrior keeps it &#183; the engineer makes it think
+  </text>
+</svg>
