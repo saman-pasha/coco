@@ -90,6 +90,7 @@ libraries:
     - poh            # rung 5: segments, parallel verification, the ledger seam
     - pos            # rung 6: weight as a query, and the leader draw
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
+    - hub            # rung 7: rules as entries, the namespace, the anchor, the bridge
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -104,3 +105,4 @@ suite:
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality
+    - hub            # rung 7: many chains, one node, none known in advance

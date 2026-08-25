@@ -163,7 +163,18 @@ sort_by_height(Bs, Sorted) :-
     keysort(Keyed, KS),
     findall(B, member(_-B, KS), Sorted).
 
+%% `~q' AND NOT `~w' AROUND THE PAYLOAD. What is exported is goal text a
+%% peer will read back, so every atom has to come out quoted the way the
+%% reader expects -- and a payload that itself contains a quote has to
+%% come out with that quote DOUBLED. Hand-written quotes around `~w' do
+%% neither, and the failure is silent in the worst way: the peer's reader
+%% stops early, `ledger_sync/1' is handed a shorter term than was sent,
+%% and blocks vanish with nothing logged.
+%%
+%% Rung 2's payloads were prose and never showed it. Rung 7's are source
+%% code -- a chain publishing its own rules -- and the first one broke
+%% every gossip hop in the aggregator.
 export_lines([]).
 export_lines([block(H, Prev, A, P, S, Hash)|T]) :-
-    format("block(~w,'~w',~w,'~w','~w','~w').~n", [H, Prev, A, P, S, Hash]),
+    format("block(~w,~q,~q,~q,~q,~q).~n", [H, Prev, A, P, S, Hash]),
     export_lines(T).

@@ -2,14 +2,15 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and the first six rungs: `test/run.sh` GREEN with a server up
-— local, crypto, ledger, contracts, training, spine, votes, wire — which
-is sixty-two crypto checks against numbers published by other people,
-plus a federation ledger, contracts under a fence, settlement that
-measures rather than believes, a proof-of-history spine held to constants
-computed outside this project, and a stake-weighted BFT vote whose
-safety arithmetic names the validators who break it. Everything from rung
-7 down is aimed, not built.
+assembly and the first seven rungs: `test/run.sh` GREEN with a server up
+— local, crypto, ledger, contracts, training, spine, votes, hub, wire —
+which is sixty-two crypto checks against numbers published by other
+people, plus a federation ledger, contracts under a fence, settlement
+that measures rather than believes, a proof-of-history spine held to
+constants computed outside this project, a stake-weighted BFT vote whose
+safety arithmetic names the validators who break it, and an aggregator
+that verifies three chains under three regimes by reading each chain's
+own rules off its own blocks. Only rung 8 is aimed, not built.
 The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
@@ -137,18 +138,20 @@ the three pillars used and unmodified.
    bond is a policy question), and there is no round timer, so no
    liveness argument — the honest form of a clock here is rung 5's
    spine, not wall time.
-7. **The aggregator.** A chain is a kb, so one node hosts many chains
-   under different consensus regimes — and each chain publishes its own
-   validity and fork-choice rules as entries on itself, so a foreign
-   chain is verified by consulting its rules under the same fence
-   contracts run under: **the chain carries its own light client**.
+7. **The aggregator** (`hub/`) — **DONE**. A chain is a kb, so one node
+   hosts many under different consensus regimes; each chain publishes
+   its own validity and fork-choice rules as entries on itself, and a
+   foreign chain is verified by consulting those rules under the fence
+   contracts run under — **the chain carries its own light client**.
    Bridges are suspended-machine escrows that thaw on a rule-verified
-   finality proof; an anchor chain checkpoints member heads
-   accumulator-style; unification is the translation layer, so
-   cross-chain provenance is a join. (Aggregating foreign ecosystems
-   needed primitives `Cryptography/` does not carry — secp256k1,
-   keccak, RIPEMD-160. Rung 1 built them, so what remains here is
-   architecture rather than arithmetic.)
+   finality proof; an anchor chain checkpoints member heads with a
+   Merkle accumulator that gives inclusion proofs; unification is the
+   translation layer, so cross-chain provenance is a join. Forty-one
+   checks, and mallory's eighth attack SUCCEEDS: own every validator on
+   your own chain and the host verifies you correctly, because an
+   aggregator cannot be stronger than what it aggregates. Still ahead:
+   nothing decides WHICH chains a hub will admit, and rule upgrades
+   across a fork have no written-down answer.
 8. **The TPS harness, from day one.** Two lanes on one engine: a
    speculative lane at READ_UNCOMMITTED — peers read a block while its
    turn is still open, pipelining verification ahead of finality, dirty
@@ -170,6 +173,94 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### The aggregator: the chain carries its own light client
+
+**Every rule the host uses to judge a foreign chain is read off that
+chain.** Publishing rules is sealing a block whose payload is the
+clauses, so they are hash-committed, signed, gossiped and identical on
+every node — and there is no rule-distribution mechanism because there
+did not need to be one. In the choreography the aggregator consults a
+ledger node and an aggregator node and **never consults `chains.pl`**;
+everything it knows about zeta, omega and psi it read off their blocks.
+
+**Foreign rules are untrusted code, and rung 3 already solved that.**
+`rules_admit/3` is `contract_admit/3` with one rule added. The fence's
+vocabulary fits a validity rule *without alteration* — it already carries
+`block_hash/5`, `secp256k1_verify/3` and the rest, and already refuses
+`assertz`, `getenv`, `call/1`, `=..` and a variable in goal position.
+That it fits is not luck: a validity rule and a contract are the same
+kind of thing, a function of the chain.
+
+**The one added rule is a namespace**, and it is the thing a contract
+fence never had to think about. A contract is alone in its own state; a
+chain is not. Without it two chains would both define `valid/1` and the
+second would answer for the first — or a hostile chain would define
+`zeta_valid/1` on purpose and become the authority on somebody else's.
+
+**Two regimes, one host, opposite answers.** Given the same list of two
+heads, zeta picks the longest and omega picks the heaviest, on one node
+with one code path. The difference between the two chains is data.
+
+**The rules are pinned to a height.** A block at height 4 is judged by
+the rules that were on the chain at height 4. That is the difference
+between a chain that may *change* its rules, which any chain may, and one
+that may *rewrite what its old blocks meant*, which none may — and both
+readings are defensible until somebody writes one down.
+
+**The bridge is rung 3's gas mechanism doing a job it was not built
+for.** A bridge waiting for a proof is a frozen machine in a table:
+`suspended at 301 inference(s)`, then a proof arrives and it is
+`finished after 306`. Not a process, not a timer, not a poll loop. And
+what counts as *final* is the foreign chain's business, so it supplies
+its own goal.
+
+**One attack succeeds, and it is the most important line in the rung.**
+psi's rules are impeccable — fenced, namespaced, real signature checks,
+the same two-thirds threshold rung 6 uses. And every psi validator is
+mallory. The host verifies correctly, under the correct rules, and
+answers the question it was asked, which was *is this final on psi* and
+not *is psi honest*. **An aggregator cannot be stronger than the chains
+it aggregates**, and that is the door every drained bridge went through
+rather than a broken signature check.
+
+**Two bugs found by building, and both were silent.**
+
+`ledger_export/0` wrapped payloads in hand-written quotes around `~w`
+instead of using `~q`. A payload containing a quote therefore came out
+malformed, the peer's reader stopped early, and blocks vanished with
+nothing logged. Rung 2's payloads were prose and never showed it; rung
+7's are *source code*, and the first one broke every gossip hop in the
+aggregator — the symptom was an aggregator that had learned zero chains.
+`votes_export/0` had the same shape and was fixed with it: a rule that is
+only right because of what its data happens to look like is a rule
+waiting for different data.
+
+And **rules come back from a payload as a variant, not the identical
+term** — fresh variables, same structure — because a payload is text and
+a clause's variables are local to the clause. That is right rather than a
+defect, and it made the obvious round-trip check (`Cs2 == Cs`) fail. The
+check that replaced it installs what came back and asks it about a real
+signed block, which is the claim that actually matters; a term comparison
+would have been testing the writer.
+
+**A pillar gap, fixed in the pillar.** The namespace check is `does this
+atom start with that one`, which anyone writes as `atom_concat(Prefix, _,
+Name)` — and cocolog raised `instantiation_error` instead of answering.
+Only the concatenating mode existed; the two splitting modes ISO 8.16.6
+requires were unreachable. Fixed in cocolog on its own merits with seven
+regression checks (`8021435`), including that a wrong prefix now *fails*
+rather than raising. The enumerating mode `(-,-,+)` stays refused there,
+deliberately: it needs a choice point, and that file's own note says a
+builtin holding the choice stack would be the one piece of the system
+nobody else could have written.
+
+**What is honestly not here:** nothing decides *which* chains a hub is
+willing to aggregate. Any chain whose rules pass the fence can be
+learned, and `attack_captured_chain` is exactly why that decision matters
+— and exactly why it is a policy question rather than a technical one.
+Rule upgrades across a fork have no written-down answer either, and the
+bridge thaws rather than moving anything.
 
 ### PoS and BFT votes: a quorum that names its own traitors
 

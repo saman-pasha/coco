@@ -220,9 +220,15 @@ extends_final(Hash) :-
 %% good is a claim; `valid_vote/1' is cheap next to believing it. A vote
 %% that does not check out is skipped rather than refused, because a
 %% batch containing one bad vote is not a bad batch.
+%% `~q' rather than hand-written quotes, for the reason ledger_export/0
+%% now carries at length: an exported term is goal text a peer reads
+%% back, and an atom containing a quote has to come out with that quote
+%% doubled. A block hash never contains one, so this was never wrong
+%% here -- but a rule that is only right because of what its data happens
+%% to look like is a rule waiting for different data.
 votes_export :-
     forall(vote(K, H, R, B, W, S),
-           format("vote(~w,~w,~w,'~w',~w,'~w').~n", [K, H, R, B, W, S])).
+           format("vote(~q,~q,~q,~q,~q,~q).~n", [K, H, R, B, W, S])).
 
 votes_sync([]).
 votes_sync([vote(K, H, R, B, W, S)|T]) :-

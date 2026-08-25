@@ -130,7 +130,7 @@ modules/crypto/   the chains' primitives as loadable Cicili modules;
 library/          the built .so's on the default $COCOLOG_LIBRARY path,
                   and the Prolog libraries beside them: bytes, base58,
                   bech32, eth, btc, poa, contract, settle, poh, pos,
-                  bft. A caller cannot tell which of its libraries are
+                  bft, hub. A caller cannot tell which of its libraries are
                   Prolog and which are compiled C, which is the point --
                   btc.pl composes two of each, and poh.pl is the layer
                   over spine.so
@@ -147,6 +147,9 @@ spine/            rung 5: the PoH spine -- the producer, the parallel
 votes/            rung 6: PoS and BFT votes -- stake read off the chain,
                   quorum certificates, finality, and mallory INSIDE the
                   validator set
+hub/              rung 7: the aggregator -- three chains under three
+                  regimes, each publishing its own rules as entries on
+                  itself, verified by a host that consulted none of them
 docs/             diagrams worth keeping: seal-to-settlement.html traces
                   one payload through every gate, rungs 2 to 4;
                   tick-to-settlement.html does the same for rung 5,

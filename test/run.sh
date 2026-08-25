@@ -126,6 +126,22 @@ else
   say votes RED; sed 's/^/   /' "$HERE/votes.out"; red=$((red + 1))
 fi
 
+# ---- hub: rung 7 ------------------------------------------------------
+# The aggregator. Each chain publishes its own validity and fork-choice
+# rules as entries on itself, and the host verifies foreign chains by
+# reading those rules and running them under the fence contracts run
+# under. One of mallory's eight attacks succeeds, because an aggregator
+# cannot be stronger than the chains it aggregates.
+if sh "$HERE/hub.sh" > "$HERE/hub.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/hub.out"; then
+    say hub "$(head -1 "$HERE/hub.out")"
+  else
+    say hub GREEN
+  fi
+else
+  say hub RED; sed 's/^/   /' "$HERE/hub.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
