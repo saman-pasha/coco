@@ -83,6 +83,7 @@ libraries:
     - bech32         # bech32, bech32m, segwit addresses
     - eth            # keccak + secp256k1: Ethereum addresses, who signed
     - btc            # sha256 + ripemd160 + base58 + bech32: Bitcoin
+    - poa            # rung 2: proof of authority, as rules
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -92,3 +93,4 @@ suite:
     - local          # the binary consults a .pl and answers
     - crypto         # the primitives, against published vectors
     - wire           # one process writes, a second reads it back
+    - ledger         # rung 2: the PoA federation, and mallory attacking it

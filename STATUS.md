@@ -86,12 +86,15 @@ the three pillars used and unmodified.
    out: Ristretto plus a transcript protocol is a different animal, and
    saying so is cheaper than pretending otherwise.
 
-2. **The PoA federation ledger** (`ledger/`): a federation CA issues
-   per-node certificates with append grants
-   (`--permission=LEDGER::ENTRIES`); signed, sha256-chained entries;
-   blocks committed with their head mark in one turn; balancer-style
-   gossip; validity and fork choice as Prolog rules; a Zeytun page so
-   anyone can audit the chain without a write path existing.
+2. **The PoA federation ledger** (`ledger/`) — **DONE**, except the
+   certificate gate. Signed, sha256-chained blocks; committed with their
+   head mark in one turn; balancer-style gossip; validity, the round-robin
+   schedule and fork choice all as Prolog rules; **and mallory, a criminal
+   node that attacks every law the chain has**. Twenty-four checks. The
+   story below says what holds and what does not. Still ahead on this
+   rung: the certificate gate (`--permission=LEDGER::ENTRIES`), which
+   waits on TLS in cocolog's C client, and a Zeytun page — the read path
+   is proven, the page is choreography not yet written.
 3. **Contracts.** A contract is a predicate; deployment is a signed
    entry whose payload is clauses. Contract goals run against a
    restricted goal vocabulary (no clock, no files, no torch) under
@@ -147,6 +150,75 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### The PoA federation ledger, and mallory
+
+Three authorities on three knowledge bases, no centre and no daemon. A
+node is not a process that runs: it is a `cocolog` invocation that seals
+or syncs and exits, and everything it knows is rows.
+
+**The consensus is clauses.** `library(poa)` is the whole of it —
+`block_hash/5`, `valid_block/6`, `in_turn/2`, `better_head/2` — and every
+one is a rule a node reads, a peer checks, and the chain itself could
+eventually carry. The aggregator's premise arriving four rungs early.
+
+**Five laws, and validity is not position.** The hash is recomputed
+rather than believed; the author is a member; the signature is that
+author's over that hash; the parent is held; the height follows. The
+first three are validity and the last two are position, and they are
+deliberately separate — a block can be perfectly signed and simply
+early, and conflating the two is what makes a gossip loop drop blocks it
+should have kept.
+
+**The fork closes by rule.** Two authorities seal at the same height
+while neither has heard the other, which is what a partition looks like
+from inside: two valid chains of equal length. After gossip all three
+nodes land on the same head, and on the *in-turn* one — length, then
+in-turn count, then the lower hash as a coin toss every node makes the
+same way. A head mark is a candidate and not an answer: every accepted
+block gets one, marks are appended and never removed, and the head is
+whatever fork choice says over the whole set. That is why a reorg needs
+no retraction, and why arrival order — the one thing that differs
+between nodes — cannot change the answer.
+
+**Mallory.** A federation that has only ever been offered honest blocks
+has not been tested, it has been rehearsed. So the criminal node is part
+of the arrangement, not an afterthought in a test file: a real key, the
+real protocol, and everything a real attacker starts with, because a
+chain is public. Seven attacks refused — sealing as a non-member,
+impersonating alice, tampering with a payload, forging a hash, replaying
+a real signature onto another block, re-pointing a parent, and offering
+an orphan.
+
+**And one attack succeeds, which is the point.** For every ECDSA
+signature `(r, s)` the pair `(r, n−s)` is equally valid and anyone can
+compute it without the key, so mallory *can* produce a different
+signature for alice's block and it *will* verify. A test suite reporting
+that every attack was refused would be lying. What she gains is nothing:
+the block's hash covers height, parent, author and payload and **not the
+signature**, so the malleated block is the same block. Bitcoin's
+transaction ids did cover the signature, and that was transaction
+malleability.
+
+**The last attack comes from inside.** A member of the federation seals
+a valid block that rewrites settled history. Nothing refuses it — every
+check passes, because somebody entitled to sign signed it. It is not
+refused, it is **outweighed**: the rewrite is shorter, fork choice
+prefers the longer chain, the head does not move. The suite asserts the
+block *is* valid before asserting the head *did not* move, because the
+distinction between what is valid and what is agreed is the whole of
+what a consensus rule is for.
+
+**What this cost in the pillars, and both went to the pillars.**
+`library(secp256k1)` gained signing — RFC 6979 deterministic nonces
+derived by HMAC-SHA256 inside the module, held to the RFC's own vectors
+byte for byte, low-s per BIP-62. That is The Coco's own module and its
+own work. But cocolog was missing `getenv/2` (a node's signing key must
+never become a row, and a consulted file becomes rows), and cocolog was
+losing `:- dynamic` declarations across processes despite its README
+saying a declaration has to outlive the process. Both were diagnosed and
+fixed **in cocolog**, on their own merits, with their own tests. Nothing
+here works around either.
 
 ### base58 and bech32: the last step to an address
 

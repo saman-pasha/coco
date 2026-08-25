@@ -41,15 +41,25 @@
 ;;;; stops being one, the number goes on the page before the complaint.
 
 (DEFPARAMETER *secp-predicates*
-  '(("secp256k1_pubkey"  2 sp_pubkey)
-    ("secp256k1_verify"  3 sp_verify)
-    ("secp256k1_recover" 4 sp_recover)))
+  '(("secp256k1_pubkey"    2 sp_pubkey)
+    ("secp256k1_verify"    3 sp_verify)
+    ("secp256k1_recover"   4 sp_recover)
+    ("secp256k1_sign"      3 sp_sign)
+    ("secp256k1_sign_rec"  4 sp_sign_rec)))
 
 (source "secp256k1.c"
   (make :std #t :compile #f)
 
   (import "./sdk.cicili")
   (coco-sdk)
+
+  ;;; SHA-256 lives INSIDE this module, not across a Prolog call: RFC 6979
+  ;;; derives a signature's nonce by HMAC-SHA256 over the private key and
+  ;;; the message hash, and neither the constructed buffer nor the nonce
+  ;;; may ever leave. A nonce that reaches Prolog is a nonce in a term,
+  ;;; and a nonce that leaks or repeats hands over the private key.
+  (import "./lib-sha256.cicili")
+  (sha256-core)
 
   ;;; ---- the curve ------------------------------------------------------
 
@@ -455,6 +465,150 @@
                  (return (sp_decompress x (- pfx 2) y)))))
           (return 0)))
 
+  ;;; ---- HMAC-SHA256, and RFC 6979 --------------------------------------
+  ;;;
+  ;;; WHY DETERMINISTIC. ECDSA needs a per-signature nonce k, and the
+  ;;; nonce is the whole secret: two signatures made with the same k
+  ;;; reveal the private key by school algebra, and a k with a few
+  ;;; predictable bits gives it up to lattice reduction. Sony shipped a
+  ;;; constant k in the PlayStation 3 and lost their signing key to it.
+  ;;;
+  ;;; So there is no random number generator here at all. RFC 6979
+  ;;; derives k by HMAC-SHA256 from the private key and the message hash
+  ;;; alone: the same key over the same message always produces the same
+  ;;; signature. That removes the entropy source as a thing that can be
+  ;;; wrong -- a node with no /dev/urandom, a container with a cloned
+  ;;; seed, a VM restored from a snapshot -- and it makes the result
+  ;;; TESTABLE, which no randomised signer is. The vectors in
+  ;;; test/crypto.sh are RFC 6979's own.
+
+  (static) (func hmac256 ((const u8 * key) (size_t klen)
+                          (const u8 * msg) (size_t mlen) (u8 * out)) (out void)
+        (let ((u8 k [64]) (u8 ipad [64]) (u8 opad [64])
+              (u8 inner [32768]) (u8 outer [96]) (u8 ih [32]))
+          (for ((int i . 0)) (< i 64) ((++ i)) (set (nth i k) 0))
+          ;; a key longer than the block is replaced by its own hash --
+          ;; which is why two keys can collide, and why RFC 6979 never
+          ;; hands one longer than 32 bytes
+          (if (> klen 64)
+              (s2_hash key klen k)
+            (for ((size_t i . 0)) (< i klen) ((++ i)) (set (nth i k) (nth i key))))
+          (for ((int i . 0)) (< i 64) ((++ i))
+            (set (nth i ipad) (cast u8 (xor (nth i k) 0x36)))
+            (set (nth i opad) (cast u8 (xor (nth i k) 0x5c))))
+          (for ((int i . 0)) (< i 64) ((++ i)) (set (nth i inner) (nth i ipad)))
+          (for ((size_t i . 0)) (< i mlen) ((++ i)) (set (nth (+ 64 i) inner) (nth i msg)))
+          (s2_hash inner (+ 64 mlen) ih)
+          (for ((int i . 0)) (< i 64) ((++ i)) (set (nth i outer) (nth i opad)))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth (+ 64 i) outer) (nth i ih)))
+          (s2_hash outer 96 out)))
+
+  (static) (func bn_bytes ((const u32 * a) (u8 * out)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (for ((int j . 0)) (< j 4) ((++ j))
+            (set (nth (+ (* (- 7 i) 4) j) out)
+                 (cast u8 (bitand (>> (nth i a) (* 8 (- 3 j))) 255))))))
+
+  (static) (func bytes_bn ((const u8 * in) (u32 * a)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (set (nth i a)
+               (bitor (<< (cast u32 (nth (* (- 7 i) 4) in)) 24)
+                      (bitor (<< (cast u32 (nth (+ (* (- 7 i) 4) 1) in)) 16)
+                             (bitor (<< (cast u32 (nth (+ (* (- 7 i) 4) 2) in)) 8)
+                                    (cast u32 (nth (+ (* (- 7 i) 4) 3) in))))))))
+
+  ;;; k for THIS key over THIS hash. D is the private key, H1 the message
+  ;;; hash reduced into the group; K comes back in the range [1, n-1].
+  ;;;
+  ;;; The loop at the end is not decoration. A candidate that lands at
+  ;;; zero or above the order is unusable, and the RFC's answer is to
+  ;;; turn the generator once more rather than to clamp -- clamping would
+  ;;; bias k, and a biased nonce leaks the key a few bits per signature.
+  (static) (func rfc6979_k ((const u32 * d) (const u32 * h1) (u32 * k)) (out void)
+        (let ((u8 V [32]) (u8 K [32]) (u8 buf [97]) (u8 db [32]) (u8 hb [32]))
+          (bn_bytes d db)
+          (bn_bytes h1 hb)
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i V) 0x01) (set (nth i K) 0x00))
+          ;; K = HMAC_K(V || 0x00 || d || h1), V = HMAC_K(V)
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i buf) (nth i V)))
+          (set (nth 32 buf) 0x00)
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth (+ 33 i) buf) (nth i db)))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth (+ 65 i) buf) (nth i hb)))
+          (hmac256 K 32 buf 97 K)
+          (hmac256 K 32 V 32 V)
+          ;; and again with 0x01, which is what separates the two rounds
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i buf) (nth i V)))
+          (set (nth 32 buf) 0x01)
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth (+ 33 i) buf) (nth i db)))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth (+ 65 i) buf) (nth i hb)))
+          (hmac256 K 32 buf 97 K)
+          (hmac256 K 32 V 32 V)
+          (while 1
+            (hmac256 K 32 V 32 V)
+            (bytes_bn V k)
+            (if (and (not (bn_zero_p k)) (< (bn_cmp k SP_N) 0)) (return))
+            ;; K = HMAC_K(V || 0x00), V = HMAC_K(V)
+            (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i buf) (nth i V)))
+            (set (nth 32 buf) 0x00)
+            (hmac256 K 32 buf 33 K)
+            (hmac256 K 32 V 32 V))))
+
+  ;;; The signature itself. Answers 0 if r or s came out zero, which is
+  ;;; not possible for any k this function will use but is the check the
+  ;;; algorithm specifies. REC comes back as the recovery id -- which of
+  ;;; the two points with this r was the real one -- so that a verifier
+  ;;; can recover the public key instead of being told it.
+  (static) (func sp_do_sign ((const u32 * d) (const u32 * z) (u32 * r) (u32 * s)
+                             (int * rec)) (out int)
+        (let ((u32 k [8]) (u32 kinv [8]) (u32 x [8]) (u32 y [8])
+              (u32 rd [8]) (u32 t [8]) (sp_pt gp) (sp_pt p))
+          (rfc6979_k d z k)
+          (pt_gen (aof gp))
+          (pt_mul (aof p) k (aof gp))
+          (if (not (pt_affine x y (aof p))) (return 0))
+          ;; r is x mod n; the recovery id remembers y's parity and
+          ;; whether x had to be reduced at all.
+          ;;
+          ;; `fn_of' and not `bn_mod': bn_mod reads a SIXTEEN-limb value
+          ;; (fn_of is what zero-extends an eight-limb one for it), so
+          ;; handing it an eight-limb array reads off the end of the
+          ;; array and reduces by whatever was on the stack.
+          (fn_of r x)
+          (if (bn_zero_p r) (return 0))
+          (set (cof rec) (bitor (bitand (nth 0 y) 1)
+                                (? (!= (bn_cmp x r) 0) 2 0)))
+          (fn_inv kinv k)
+          (fn_mul rd r d)
+          ;; (r*d + z) mod n, with the carry kept. Both terms are below n
+          ;; and n is just under 2^256, so their sum can carry OUT of the
+          ;; eight limbs -- a conditional subtract on the truncated value
+          ;; would then reduce the wrong number, for about one signature
+          ;; in every 2^127. Widening is cheaper than reasoning about it.
+          (let ((u32 wide [16]) (u32 sum [8]))
+            (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i wide) 0))
+            (set (nth 8 wide) (bn_add wide rd z))
+            (bn_mod sum wide SP_N)
+            (fn_mul t kinv sum))
+          (bn_cpy s t)
+          (if (bn_zero_p s) (return 0))
+          ;; LOW-S, which is a consensus rule and not a preference. For
+          ;; every valid (r, s) the pair (r, n-s) is equally valid, so a
+          ;; signature can be flipped by anyone without the key -- and a
+          ;; transaction id computed over the signature then changes.
+          ;; That is transaction malleability, and Bitcoin's answer
+          ;; (BIP-62, and consensus since) is that only the lower of the
+          ;; two is accepted. The recovery id flips with it.
+          (let ((u32 half [8]))
+            (bn_cpy half SP_N)
+            (for ((int i . 0)) (< i 8) ((++ i))
+              (set (nth i half)
+                   (bitor (>> (nth i half) 1)
+                          (? (< i 7) (<< (bitand (nth (+ i 1) half) 1) 31) 0))))
+            (if (> (bn_cmp s half) 0)
+                (block (bn_sub s SP_N s)
+                       (set (cof rec) (xor (cof rec) 1)))))
+          (return 1)))
+
   ;;; ---- the predicates -------------------------------------------------
 
   (func sp_pubkey ((coco_engine * e) (size_t g)) (out int)
@@ -575,6 +729,48 @@
                     (bn_unhex px hex)
                     (bn_unhex py (aof (nth 64 hex)))
                     (return (coco_m_unify_atom e out hex)))))))))
+
+  ;;; secp256k1_sign(+PrivHex, +HashHex, -SigHex)
+  ;;;
+  ;;; The hash is the caller's business: an EVM chain hands a keccak256
+  ;;; here and Bitcoin a double SHA-256, and neither is this module's to
+  ;;; choose. What arrives is a 32-byte number, reduced into the group
+  ;;; the way ECDSA reduces it -- taking the leftmost bits, which for a
+  ;;; 256-bit curve and a 256-bit hash means a plain reduction mod n.
+  (static) (func sp_sign_common ((coco_engine * e) (size_t g) (int want_rec)) (out int)
+        (let ((size_t din . #'(coco_m_arg e g 0)) (size_t hin . #'(coco_m_arg e g 1))
+              (size_t sout . #'(coco_m_arg e g 2))
+              (char db [200]) (char hb [200]) (char hex [140]))
+          (if (not (coco_m_text e din db 200))
+              (return (coco_m_type_error e "a hex atom" din)))
+          (if (not (coco_m_text e hin hb 200))
+              (return (coco_m_type_error e "a hex atom" hin)))
+          (let ((const char * dh . #'(sp_skip0x db)) (const char * hh . #'(sp_skip0x hb))
+                (u32 d [8]) (u32 z [8]) (u32 zr [8]))
+            (if (not (bn_hex dh (strlen dh) d))
+                (return (coco_m_domain_error e "hexadecimal" din)))
+            (if (or (bn_zero_p d) (>= (bn_cmp d SP_N) 0))
+                (return (coco_m_domain_error e "a secp256k1 private key" din)))
+            (if (not (bn_hex hh (strlen hh) z))
+                (return (coco_m_domain_error e "hexadecimal" hin)))
+            (fn_of zr z)               ; the eight-limb reduction, not bn_mod
+            (let ((u32 r [8]) (u32 sg [8]) (int rec . 0))
+              (if (not (sp_do_sign d zr r sg (aof rec))) (return 0))
+              (bn_unhex r hex)
+              (bn_unhex sg (aof (nth 64 hex)))
+              (if (not (coco_m_unify_atom e sout hex)) (return 0))
+              (if want_rec
+                  (return (coco_m_unify_int e (coco_m_arg e g 3) (cast i64 rec))))
+              (return 1)))))
+
+  (func sp_sign ((coco_engine * e) (size_t g)) (out int)
+        (return (sp_sign_common e g 0)))
+
+  ;;; The same signature, plus the recovery id an EVM chain carries as
+  ;;; `v' -- so `secp256k1_recover' can answer the signing key from the
+  ;;; signature alone and nobody has to send a public key at all.
+  (func sp_sign_rec ((coco_engine * e) (size_t g)) (out int)
+        (return (sp_sign_common e g 1)))
 
   (static) (coco-emit-module-dispatch sp_dispatch *secp-predicates*)
   (coco-deflibrary "secp256k1" sp_dispatch nil)

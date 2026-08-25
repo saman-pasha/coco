@@ -53,6 +53,21 @@ else
   say crypto RED; sed 's/^/   /' "$HERE/crypto.out"; red=$((red + 1))
 fi
 
+# ---- ledger: rung 2 ---------------------------------------------------
+# Three authorities on three knowledge bases seal in turn, gossip, fork,
+# and close the fork by rule -- and mallory attacks every law the chain
+# has. test/ledger.sh says what each check is for and why one attack is
+# supposed to succeed.
+if sh "$HERE/ledger.sh" > "$HERE/ledger.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/ledger.out"; then
+    say ledger "$(head -1 "$HERE/ledger.out")"
+  else
+    say ledger GREEN
+  fi
+else
+  say ledger RED; sed 's/^/   /' "$HERE/ledger.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
