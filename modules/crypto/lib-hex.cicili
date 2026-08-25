@@ -1,0 +1,51 @@
+;;;; Hex in and hex out, as a core the crypto modules share.
+;;;;
+;;;; Bytes reach a chain's tooling as hexadecimal and leave the same
+;;;; way, and a Prolog code list cannot carry a zero byte -- so hex is
+;;;; not a convenience here, it is the only faithful spelling for
+;;;; arbitrary bytes. `0x' in front is accepted because every chain's
+;;;; tooling writes it.
+
+(DEFMACRO hex-core ()
+  '($$$
+
+  (static) (func hx_nib ((char c)) (out int)
+        (if (and (>= c (cast char 48)) (<= c (cast char 57)))
+            (return (- (cast int c) 48)))
+        (if (and (>= c (cast char 97)) (<= c (cast char 102)))
+            (return (+ 10 (- (cast int c) 97))))
+        (if (and (>= c (cast char 65)) (<= c (cast char 70)))
+            (return (+ 10 (- (cast int c) 65))))
+        (return -1))
+
+  (static) (func hx_skip0x ((const char * s)) (out const char *)
+        (if (and (== (nth 0 s) (cast char 48))
+                 (or (== (nth 1 s) (cast char 120)) (== (nth 1 s) (cast char 88))))
+            (return (aof (nth 2 s))))
+        (return s))
+
+  ;;; The bytes of S into OUT: the count, or -1 for an odd length, a
+  ;;; digit that is not one, or more bytes than CAP holds.
+  (static) (func hx_bytes ((const char * s) (u8 * out) (size_t cap)) (out i64)
+        (let ((const char * h . #'(hx_skip0x s)) (size_t i . 0) (size_t n . 0))
+          (while (!= (nth i h) (cast char 0))
+            (let ((int hi . #'(hx_nib (nth i h))))
+              (if (< hi 0) (return -1))
+              (if (== (nth (+ i 1) h) (cast char 0)) (return -1))
+              (let ((int lo . #'(hx_nib (nth (+ i 1) h))))
+                (if (< lo 0) (return -1))
+                (if (>= n cap) (return -1))
+                (set (nth n out) (cast u8 (bitor (<< hi 4) lo)))
+                (set n (+ n 1))
+                (set i (+ i 2)))))
+          (return (cast i64 n))))
+
+  ;;; N bytes as 2N lowercase digits and a terminator.
+  (static) (func hx_out ((const u8 * b) (size_t n) (char * hex)) (out void)
+        (let ((const char * hc . "0123456789abcdef"))
+          (for ((size_t i . 0)) (< i n) ((++ i))
+            (set (nth (* 2 i) hex) (nth (bitand (>> (nth i b) 4) 15) hc))
+            (set (nth (+ (* 2 i) 1) hex) (nth (bitand (nth i b) 15) hc)))
+          (set (nth (* 2 n) hex) (cast char 0))))
+
+  ))

@@ -1,0 +1,492 @@
+;;;; The Coco -- crypto: Ed25519, the signature Solana and half the
+;;;; newer chains use.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili. Where
+;;;; secp256k1 opened Bitcoin and the EVM family, this opens Solana,
+;;;; Cardano, TON, Near, Stellar, and the Ed25519 half of Cosmos, Sui
+;;;; and Aptos.
+;;;;
+;;;;   ed25519_pubkey(+SeedHex, -PubHex)          32 bytes in, 32 out
+;;;;   ed25519_sign(+SeedHex, +MsgHex, -SigHex)   64 bytes of signature
+;;;;   ed25519_verify(+MsgHex, +SigHex, +PubHex)  succeeds or FAILS
+;;;;
+;;;; Everything travels as hex bytes. Signing is here and signing was
+;;;; NOT in the secp256k1 module, and the difference is deliberate: this
+;;;; is the curve a Coco node would hold its OWN identity on, and
+;;;; Ed25519 signing is deterministic -- no nonce to get wrong, and the
+;;;; published RFC 8032 vectors can therefore be reproduced byte for
+;;;; byte, which is the strongest test a signature scheme admits. Taking
+;;;; custody of a foreign chain's keys remains a separate decision this
+;;;; module does not make.
+;;;;
+;;;; THREE THINGS ARE BACKWARDS FROM secp256k1, and each has bitten
+;;;; somebody: the encoding is LITTLE-endian throughout, not big; a
+;;;; point is 32 bytes of y with the sign of x in the TOP BIT of the
+;;;; last byte; and the message is signed whole rather than pre-hashed,
+;;;; because the hash is inside the scheme.
+;;;;
+;;;; The curve is the twisted Edwards -x^2 + y^2 = 1 + d x^2 y^2 over
+;;;; 2^255 - 19, in extended coordinates (X:Y:Z:T) where x = X/Z, y =
+;;;; Y/Z and xy = T/Z. Its addition formula is UNIFIED -- the same
+;;;; expression adds two points and doubles one -- which is why there is
+;;;; no doubling function below and no special case to get wrong. The
+;;;; field reduction is the same shape as secp256k1's: 2^256 is
+;;;; congruent to 38, so the top half of a product folds back as a
+;;;; multiply by 38.
+
+(DEFPARAMETER *ed-predicates*
+  '(("ed25519_pubkey" 2 ed_p_pubkey)
+    ("ed25519_sign"   3 ed_p_sign)
+    ("ed25519_verify" 3 ed_p_verify)))
+
+(source "ed25519.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+  (import "./lib-hex.cicili")
+  (hex-core)
+  (import "./lib-sha512.cicili")
+  (sha512-core)
+
+  ;;; ---- the curve ------------------------------------------------------
+
+  (static) (var u32 ED_P []
+    . '{ 0xffffffed 0xffffffff 0xffffffff 0xffffffff
+         0xffffffff 0xffffffff 0xffffffff 0x7fffffff })
+  (static) (var u32 ED_D2 []
+    . '{ 0x26b2f159 0xebd69b94 0x8283b156 0x00e0149a
+         0xeef3d130 0x198e80f2 0x56dffce7 0x2406d9dc })
+  (static) (var u32 ED_D []
+    . '{ 0x135978a3 0x75eb4dca 0x4141d8ab 0x00700a4d
+         0x7779e898 0x8cc74079 0x2b6ffe73 0x52036cee })
+  ;; the square root of -1, for the half of the decompressions that need it
+  (static) (var u32 ED_I []
+    . '{ 0x4a0ea0b0 0xc4ee1b27 0xad2fe478 0x2f431806
+         0x3dfbd7a7 0x2b4d0099 0x4fc1df0b 0x2b832480 })
+  (static) (var u32 ED_BX []
+    . '{ 0x8f25d51a 0xc9562d60 0x9525a7b2 0x692cc760
+         0xfdd6dc5c 0xc0a4e231 0xcd6e53fe 0x216936d3 })
+  (static) (var u32 ED_BY []
+    . '{ 0x66666658 0x66666666 0x66666666 0x66666666
+         0x66666666 0x66666666 0x66666666 0x66666666 })
+  ;; the order of the base point: 2^252 + 27742317777372353535851937790883648493
+  (static) (var u32 ED_L []
+    . '{ 0x5cf5d3ed 0x5812631a 0xa2f79cd6 0x14def9de
+         0x00000000 0x00000000 0x00000000 0x10000000 })
+  ;; (p+3)/8 -- the square-root exponent for this prime
+  (static) (var u32 ED_P38 []
+    . '{ 0xfffffffe 0xffffffff 0xffffffff 0xffffffff
+         0xffffffff 0xffffffff 0xffffffff 0x0fffffff })
+
+  ;;; ---- 256-bit numbers ------------------------------------------------
+
+  (static) (func bn_set0 ((u32 * a)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i a) 0)))
+
+  (static) (func bn_set1 ((u32 * a) (u32 v)) (out void)
+        (bn_set0 a) (set (nth 0 a) v))
+
+  (static) (func bn_cpy ((u32 * d) (const u32 * s)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i d) (nth i s))))
+
+  (static) (func bn_zero_p ((const u32 * a)) (out int)
+        (for ((int i . 0)) (< i 8) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  (static) (func bn_cmp ((const u32 * a) (const u32 * b)) (out int)
+        (for ((int i . 7)) (>= i 0) ((-- i))
+          (if (> (nth i a) (nth i b)) (return 1))
+          (if (< (nth i a) (nth i b)) (return -1)))
+        (return 0))
+
+  (static) (func bn_add ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((u64 c . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set c (+ c (+ (cast u64 (nth i a)) (cast u64 (nth i b)))))
+            (set (nth i r) (cast u32 c))
+            (set c (>> c 32)))
+          (return (cast u32 c))))
+
+  (static) (func bn_sub ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (let ((i64 d . #'(- (- (cast i64 (nth i a)) (cast i64 (nth i b))) br)))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))
+          (return (cast u32 br))))
+
+  (static) (func bn_mul ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i r) 0))
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (let ((u64 c . 0))
+            (for ((int j . 0)) (< j 8) ((++ j))
+              (set c (+ (+ c (cast u64 (nth (+ i j) r)))
+                        (* (cast u64 (nth i a)) (cast u64 (nth j b)))))
+              (set (nth (+ i j) r) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . #'(+ i 8)))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k r))))
+                (set (nth k r) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))))
+
+  ;;; ---- the field, mod 2^255 - 19 --------------------------------------
+
+  (static) (func fe_fold ((u32 * a)) (out void)
+        (let ((u32 h [8]))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set (nth i h) (nth (+ i 8) a))
+            (set (nth (+ i 8) a) 0))
+          (let ((u64 c . 0))
+            (for ((int i . 0)) (< i 8) ((++ i))
+              (set c (+ (+ c (cast u64 (nth i a))) (* (cast u64 (nth i h)) 38)))
+              (set (nth i a) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . 8))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k a))))
+                (set (nth k a) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))))
+
+  (static) (func fe_top_zero ((const u32 * a)) (out int)
+        (for ((int i . 8)) (< i 16) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  (static) (func fe_reduce ((u32 * r) (u32 * a)) (out void)
+        (while (not (fe_top_zero a)) (fe_fold a))
+        (bn_cpy r a)
+        ;; 2^256 is 2p + 38, so at most two subtractions stand between
+        ;; the folded value and the canonical one
+        (while (>= (bn_cmp r ED_P) 0) (bn_sub r r ED_P)))
+
+  (static) (func fe_mul ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (let ((u32 t [16]))
+          (bn_mul t a b)
+          (fe_reduce r t)))
+
+  (static) (func fe_add ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (bn_add r a b)
+        (if (>= (bn_cmp r ED_P) 0) (bn_sub r r ED_P)))
+
+  (static) (func fe_sub ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (if (>= (bn_cmp a b) 0)
+            (bn_sub r a b)
+          (let ((u32 t [8]))
+            (bn_sub t b a)
+            (bn_sub r ED_P t))))
+
+  (static) (func fe_pow ((u32 * r) (const u32 * a) (const u32 * e)) (out void)
+        (let ((u32 base [8]) (u32 acc [8]))
+          (bn_cpy base a)
+          (bn_set1 acc 1)
+          (for ((int i . 0)) (< i 256) ((++ i))
+            (if (!= 0 (bitand (>> (nth (>> i 5) e) (bitand i 31)) 1))
+                (fe_mul acc acc base))
+            (fe_mul base base base))
+          (bn_cpy r acc)))
+
+  (static) (func fe_inv ((u32 * r) (const u32 * a)) (out void)
+        (let ((u32 e [8]) (u32 two [8]))
+          (bn_set1 two 2)
+          (bn_sub e ED_P two)
+          (fe_pow r a e)))
+
+  ;;; ---- the group order, mod L -----------------------------------------
+
+  (static) (func cmp9 ((const u32 * r) (const u32 * m)) (out int)
+        (if (!= (nth 8 r) 0) (return 1))
+        (return (bn_cmp r m)))
+
+  (static) (func sub9 ((u32 * r) (const u32 * m)) (out void)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 9) ((++ i))
+            (let ((i64 mv . #'(? (< i 8) (cast i64 (nth i m)) 0))
+                  (i64 d . 0))
+              (set d (- (- (cast i64 (nth i r)) mv) br))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))))
+
+  (static) (func bn_mod ((u32 * r) (const u32 * a) (const u32 * m)) (out void)
+        (let ((u32 rem [9]))
+          (for ((int i . 0)) (< i 9) ((++ i)) (set (nth i rem) 0))
+          (for ((int i . 511)) (>= i 0) ((-- i))
+            (let ((u32 carry . 0))
+              (for ((int j . 0)) (< j 9) ((++ j))
+                (let ((u32 nc . #'(>> (nth j rem) 31)))
+                  (set (nth j rem) (bitor (<< (nth j rem) 1) carry))
+                  (set carry nc))))
+            (set (nth 0 rem)
+                 (bitor (nth 0 rem)
+                        (bitand (>> (nth (>> i 5) a) (bitand i 31)) 1)))
+            (if (>= (cmp9 rem m) 0) (sub9 rem m)))
+          (bn_cpy r rem)))
+
+  ;;; ---- bytes, little-endian throughout --------------------------------
+
+  (static) (func le_bn ((const u8 * b) (u32 * out)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (set (nth i out)
+               (bitor (cast u32 (nth (* i 4) b))
+                      (bitor (<< (cast u32 (nth (+ (* i 4) 1) b)) 8)
+                             (bitor (<< (cast u32 (nth (+ (* i 4) 2) b)) 16)
+                                    (<< (cast u32 (nth (+ (* i 4) 3) b)) 24)))))))
+
+  (static) (func le_bn16 ((const u8 * b) (u32 * out)) (out void)
+        (for ((int i . 0)) (< i 16) ((++ i))
+          (set (nth i out)
+               (bitor (cast u32 (nth (* i 4) b))
+                      (bitor (<< (cast u32 (nth (+ (* i 4) 1) b)) 8)
+                             (bitor (<< (cast u32 (nth (+ (* i 4) 2) b)) 16)
+                                    (<< (cast u32 (nth (+ (* i 4) 3) b)) 24)))))))
+
+  (static) (func bn_le ((const u32 * a) (u8 * out)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (for ((int j . 0)) (< j 4) ((++ j))
+            (set (nth (+ (* i 4) j) out)
+                 (cast u8 (bitand (>> (nth i a) (* 8 j)) 255))))))
+
+  ;;; ---- points ---------------------------------------------------------
+
+  (struct ed_pt
+    (member u32 x [8])
+    (member u32 y [8])
+    (member u32 z [8])
+    (member u32 t [8]))
+
+  (static) (func pt_cpy ((ed_pt * d) (const ed_pt * s)) (out void)
+        (bn_cpy (-> d x) (-> s x)) (bn_cpy (-> d y) (-> s y))
+        (bn_cpy (-> d z) (-> s z)) (bn_cpy (-> d t) (-> s t)))
+
+  (static) (func pt_id ((ed_pt * r)) (out void)
+        (bn_set0 (-> r x)) (bn_set1 (-> r y) 1)
+        (bn_set1 (-> r z) 1) (bn_set0 (-> r t)))
+
+  (static) (func pt_base ((ed_pt * r)) (out void)
+        (bn_cpy (-> r x) ED_BX)
+        (bn_cpy (-> r y) ED_BY)
+        (bn_set1 (-> r z) 1)
+        (fe_mul (-> r t) ED_BX ED_BY))
+
+  ;;; The unified addition: this same expression doubles a point, which
+  ;;; is the whole reason an Edwards curve is pleasant to implement --
+  ;;; there is no second formula to get subtly wrong, and no branch on
+  ;;; secret data to leak a bit.
+  (static) (func pt_add ((ed_pt * r) (const ed_pt * p) (const ed_pt * q)) (out void)
+        (let ((u32 a [8]) (u32 b [8]) (u32 c [8]) (u32 d [8])
+              (u32 ee [8]) (u32 f [8]) (u32 g [8]) (u32 h [8]) (u32 tmp [8]))
+          (fe_sub a (-> p y) (-> p x))
+          (fe_sub tmp (-> q y) (-> q x))
+          (fe_mul a a tmp)                        ;; A = (Y1-X1)(Y2-X2)
+          (fe_add b (-> p y) (-> p x))
+          (fe_add tmp (-> q y) (-> q x))
+          (fe_mul b b tmp)                        ;; B = (Y1+X1)(Y2+X2)
+          (fe_mul c (-> p t) ED_D2)
+          (fe_mul c c (-> q t))                   ;; C = 2d*T1*T2
+          (fe_mul d (-> p z) (-> q z))
+          (fe_add d d d)                          ;; D = 2*Z1*Z2
+          (fe_sub ee b a)
+          (fe_sub f d c)
+          (fe_add g d c)
+          (fe_add h b a)
+          (fe_mul (-> r x) ee f)
+          (fe_mul (-> r y) g h)
+          (fe_mul (-> r z) f g)
+          (fe_mul (-> r t) ee h)))
+
+  (static) (func pt_mul ((ed_pt * r) (const u32 * k) (const ed_pt * p)) (out void)
+        (let ((ed_pt acc) (ed_pt tmp))
+          (pt_id (aof acc))
+          (for ((int i . 255)) (>= i 0) ((-- i))
+            (pt_add (aof tmp) (aof acc) (aof acc))
+            (pt_cpy (aof acc) (aof tmp))
+            (if (!= 0 (bitand (>> (nth (>> i 5) k) (bitand i 31)) 1))
+                (block (pt_add (aof tmp) (aof acc) p)
+                       (pt_cpy (aof acc) (aof tmp)))))
+          (pt_cpy r (aof acc))))
+
+  ;;; Thirty-two bytes: y little-endian, with the low bit of x riding in
+  ;;; the top bit of the last byte.
+  (static) (func pt_encode ((const ed_pt * p) (u8 * out)) (out void)
+        (let ((u32 zi [8]) (u32 x [8]) (u32 y [8]))
+          (fe_inv zi (-> p z))
+          (fe_mul x (-> p x) zi)
+          (fe_mul y (-> p y) zi)
+          (bn_le y out)
+          (set (nth 31 out)
+               (cast u8 (bitor (nth 31 out) (<< (cast u8 (bitand (nth 0 x) 1)) 7))))))
+
+  (static) (func pt_decode ((ed_pt * r) (const u8 * in)) (out int)
+        (let ((u8 buf [32]) (int sign . 0) (u32 y [8]) (u32 u [8]) (u32 v [8])
+              (u32 xx [8]) (u32 x [8]) (u32 t [8]) (u32 one [8]))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i buf) (nth i in)))
+          (set sign (bitand (>> (nth 31 buf) 7) 1))
+          (set (nth 31 buf) (cast u8 (bitand (nth 31 buf) 127)))
+          (le_bn buf y)
+          ;; a y outside the field is not a point, whatever it looks like
+          (if (>= (bn_cmp y ED_P) 0) (return 0))
+          (bn_set1 one 1)
+          (fe_mul t y y)
+          (fe_sub u t one)                        ;; u = y^2 - 1
+          (fe_mul v t ED_D)
+          (fe_add v v one)                        ;; v = d*y^2 + 1
+          (if (bn_zero_p v) (return 0))
+          (fe_inv t v)
+          (fe_mul xx u t)                         ;; x^2 = u/v
+          (fe_pow x xx ED_P38)
+          (fe_mul t x x)
+          (if (!= 0 (bn_cmp t xx))
+              (block
+               (fe_mul x x ED_I)
+               (fe_mul t x x)
+               (if (!= 0 (bn_cmp t xx)) (return 0))))
+          (if (and (bn_zero_p x) (== sign 1)) (return 0))
+          (if (!= (cast int (bitand (nth 0 x) 1)) sign) (fe_sub x ED_P x))
+          (bn_cpy (-> r x) x)
+          (bn_cpy (-> r y) y)
+          (bn_set1 (-> r z) 1)
+          (fe_mul (-> r t) x y)
+          (return 1)))
+
+  ;;; ---- the scheme ------------------------------------------------------
+
+  ;;; The secret scalar: the low half of SHA-512 over the seed, with the
+  ;;; three low bits and the top bit cleared and the second-from-top set
+  ;;; -- the clamping that keeps every scalar in the same subgroup and
+  ;;; the same bit length.
+  (static) (func ed_clamp ((const u8 * h) (u32 * a)) (out void)
+        (let ((u8 buf [32]))
+          (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i buf) (nth i h)))
+          (set (nth 0 buf) (cast u8 (bitand (nth 0 buf) 248)))
+          (set (nth 31 buf) (cast u8 (bitand (nth 31 buf) 127)))
+          (set (nth 31 buf) (cast u8 (bitor (nth 31 buf) 64)))
+          (le_bn buf a)))
+
+  ;;; A 64-byte hash as a scalar mod L, little-endian as everything here.
+  (static) (func ed_scalar ((const u8 * h64) (u32 * out)) (out void)
+        (let ((u32 wide [16]))
+          (le_bn16 h64 wide)
+          (bn_mod out wide ED_L)))
+
+  ;;; The public key of a seed, into 32 bytes.
+  (static) (func ed_pub ((const u8 * seed) (u8 * out) (u8 * hout)) (out void)
+        (let ((u8 h [64]) (u32 a [8]) (ed_pt bp) (ed_pt ap))
+          (sh512 seed 32 h)
+          (ed_clamp h a)
+          (pt_base (aof bp))
+          (pt_mul (aof ap) a (aof bp))
+          (pt_encode (aof ap) out)
+          (if (!= hout nil)
+              (for ((int i . 0)) (< i 64) ((++ i)) (set (nth i hout) (nth i h))))))
+
+  ;;; ---- the predicates -------------------------------------------------
+
+  (func ed_p_pubkey ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [200]) (u8 seed [32]) (u8 pub [32]) (char hex [70]))
+            (if (not (coco_m_text e in buf 200))
+                (return (coco_m_type_error e "a hex atom" in)))
+            (let ((i64 n . #'(hx_bytes buf seed 32)))
+              (if (!= n 32) (return (coco_m_domain_error e "a 32-byte seed" in)))
+              (ed_pub seed pub nil)
+              (hx_out pub 32 hex)
+              (return (coco_m_unify_atom e out hex))))))
+
+  (func ed_p_sign ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((sin 0) (min 1) (out 2))
+          (let ((char sbuf [200]) (char mbuf [65536])
+                (u8 seed [32]) (u8 msg [32768]) (char hex [140]))
+            (if (not (coco_m_text e sin sbuf 200))
+                (return (coco_m_type_error e "a hex atom" sin)))
+            (if (not (coco_m_text e min mbuf 65536))
+                (return (coco_m_type_error e "a hex atom" min)))
+            (let ((i64 sn . #'(hx_bytes sbuf seed 32))
+                  (i64 mn . #'(hx_bytes mbuf msg 32768)))
+              (if (!= sn 32) (return (coco_m_domain_error e "a 32-byte seed" sin)))
+              (if (< mn 0) (return (coco_m_domain_error e "hexadecimal" min)))
+              (let ((u8 h [64]) (u8 pub [32]) (u32 a [8]))
+                (ed_pub seed pub h)
+                (ed_clamp h a)
+                ;; r = H(prefix || M) mod L, the deterministic nonce that
+                ;; makes this scheme reproducible and these vectors exact
+                (let ((u8 cat [32900]) (u8 hr [64]) (u32 r [8]) (ed_pt bp) (ed_pt rp)
+                      (u8 rb [32]))
+                  (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i cat) (nth (+ i 32) h)))
+                  (for ((i64 i . 0)) (< i mn) ((++ i))
+                    (set (nth (+ 32 i) cat) (nth i msg)))
+                  (sh512 cat (cast size_t (+ 32 mn)) hr)
+                  (ed_scalar hr r)
+                  (pt_base (aof bp))
+                  (pt_mul (aof rp) r (aof bp))
+                  (pt_encode (aof rp) rb)
+                  ;; k = H(R || A || M) mod L, and S = r + k*a mod L
+                  (let ((u8 hk [64]) (u32 k [8]) (u32 ka [16]) (u32 kam [8])
+                        (u32 s [8]) (u8 sig [64]))
+                    (for ((int i . 0)) (< i 32) ((++ i))
+                      (set (nth i cat) (nth i rb))
+                      (set (nth (+ 32 i) cat) (nth i pub)))
+                    (for ((i64 i . 0)) (< i mn) ((++ i))
+                      (set (nth (+ 64 i) cat) (nth i msg)))
+                    (sh512 cat (cast size_t (+ 64 mn)) hk)
+                    (ed_scalar hk k)
+                    (bn_mul ka k a)
+                    (bn_mod kam ka ED_L)
+                    (bn_add s r kam)
+                    (if (>= (bn_cmp s ED_L) 0) (bn_sub s s ED_L))
+                    (for ((int i . 0)) (< i 32) ((++ i)) (set (nth i sig) (nth i rb)))
+                    (bn_le s (aof (nth 32 sig)))
+                    (hx_out sig 64 hex)
+                    (return (coco_m_unify_atom e out hex)))))))))
+
+  ;;; Succeeds when the signature is this key's over this message, FAILS
+  ;;; when it is not -- an invalid signature being an ordinary answer.
+  (func ed_p_verify ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((min 0) (sin 1) (pin 2))
+          (let ((char mbuf [65536]) (char sbuf [200]) (char pbuf [200])
+                (u8 msg [32768]) (u8 sig [64]) (u8 pub [32]))
+            (if (not (coco_m_text e min mbuf 65536))
+                (return (coco_m_type_error e "a hex atom" min)))
+            (if (not (coco_m_text e sin sbuf 200))
+                (return (coco_m_type_error e "a hex atom" sin)))
+            (if (not (coco_m_text e pin pbuf 200))
+                (return (coco_m_type_error e "a hex atom" pin)))
+            (let ((i64 mn . #'(hx_bytes mbuf msg 32768))
+                  (i64 sn . #'(hx_bytes sbuf sig 64))
+                  (i64 pn . #'(hx_bytes pbuf pub 32)))
+              (if (< mn 0) (return (coco_m_domain_error e "hexadecimal" min)))
+              (if (!= sn 64) (return (coco_m_domain_error e "a 64-byte signature" sin)))
+              (if (!= pn 32) (return (coco_m_domain_error e "a 32-byte public key" pin)))
+              (let ((ed_pt ap) (ed_pt rp) (u32 s [8]))
+                (if (not (pt_decode (aof ap) pub)) (return 0))
+                (if (not (pt_decode (aof rp) sig)) (return 0))
+                (le_bn (aof (nth 32 sig)) s)
+                ;; S must be canonical: a scalar at or above L is the
+                ;; malleability every checker is required to refuse
+                (if (>= (bn_cmp s ED_L) 0) (return 0))
+                (let ((u8 cat [32900]) (u8 hk [64]) (u32 k [8]))
+                  (for ((int i . 0)) (< i 32) ((++ i))
+                    (set (nth i cat) (nth i sig))
+                    (set (nth (+ 32 i) cat) (nth i pub)))
+                  (for ((i64 i . 0)) (< i mn) ((++ i))
+                    (set (nth (+ 64 i) cat) (nth i msg)))
+                  (sh512 cat (cast size_t (+ 64 mn)) hk)
+                  (ed_scalar hk k)
+                  ;; [S]B must equal R + [k]A
+                  (let ((ed_pt bp) (ed_pt lhs) (ed_pt ka) (ed_pt rhs)
+                        (u8 lb [32]) (u8 rb [32]))
+                    (pt_base (aof bp))
+                    (pt_mul (aof lhs) s (aof bp))
+                    (pt_mul (aof ka) k (aof ap))
+                    (pt_add (aof rhs) (aof rp) (aof ka))
+                    (pt_encode (aof lhs) lb)
+                    (pt_encode (aof rhs) rb)
+                    (for ((int i . 0)) (< i 32) ((++ i))
+                      (if (!= (nth i lb) (nth i rb)) (return 0)))
+                    (return 1))))))))
+
+  (static) (coco-emit-module-dispatch ed_dispatch *ed-predicates*)
+  (coco-deflibrary "ed25519" ed_dispatch nil)
+
+  ) ; source

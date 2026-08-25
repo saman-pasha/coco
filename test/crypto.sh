@@ -24,6 +24,13 @@
 #   EVM chain asks, and `eth_signer' takes it the last step to an
 #   address.
 #
+#   ED25519 IS HELD TO RFC 8032 BYTE FOR BYTE. Ed25519 signing is
+#   DETERMINISTIC -- there is no nonce -- so the published signatures
+#   can be reproduced exactly, which is the strongest test a signature
+#   scheme admits: every part of the scheme (SHA-512, the clamping, the
+#   scalar multiply, the point encoding, the challenge hash, the
+#   arithmetic mod L) has to be right or the 64 bytes differ.
+#
 #   THE ADDRESS OF PRIVATE KEY 1 IS PUBLIC KNOWLEDGE:
 #   7e5f4552091a69125d5dfcb7b8c2659029395bdf. Nothing here computed
 #   that constant -- it is the one number in this file that comes from
@@ -108,6 +115,48 @@ check "secp256k1: recovery answers the signing key" \
 check "secp256k1: the wrong recovery id does not" \
   "$(q "$S, (secp256k1_recover('$Z','$SIG',1,P), P == '$PUB' -> write(same) ; write(other)), nl" '^(same|other)$')" \
   "other"
+
+# ---- sha512 ----------------------------------------------------------
+H5="use_module(library(sha512))"
+D='[0-9a-f]{128}'
+check "sha512: the empty string" \
+  "$(q "$H5, sha512_hex('0x', H), write(H), nl" "$D")" \
+  "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+check "sha512: abc" \
+  "$(q "$H5, sha512(abc, H), write(H), nl" "$D")" \
+  "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+check "sha512: 200 bytes, a second block" \
+  "$(q "$H5, findall(0'a, between(1,200,_), L), sha512(L, H), write(H), nl" "$D")" \
+  "4b11459c33f52a22ee8236782714c150a3b2c60994e9acee17fe68947a3e6789f31e7668394592da7bef827cddca88c4e6f86e4df7ed1ae6cba71f3e98faee9f"
+
+# ---- ed25519, against RFC 8032 ---------------------------------------
+ED="use_module(library(ed25519))"
+K='[0-9a-f]{64}'
+S='[0-9a-f]{128}'
+S1=9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60
+P1=d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+G1=e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b
+S2=4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb
+P2=3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
+G2=92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00
+
+check "ed25519: RFC 8032 test 1, the public key" \
+  "$(q "$ED, ed25519_pubkey('$S1', P), write(P), nl" "$K")" "$P1"
+check "ed25519: RFC 8032 test 1, the signature" \
+  "$(q "$ED, ed25519_sign('$S1', '', G), write(G), nl" "$S")" "$G1"
+check "ed25519: RFC 8032 test 2, the public key" \
+  "$(q "$ED, ed25519_pubkey('$S2', P), write(P), nl" "$K")" "$P2"
+check "ed25519: RFC 8032 test 2, the signature" \
+  "$(q "$ED, ed25519_sign('$S2', '72', G), write(G), nl" "$S")" "$G2"
+check "ed25519: and both verify" \
+  "$(q "$ED, (ed25519_verify('', '$G1', '$P1'), ed25519_verify('72', '$G2', '$P2') -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "yes"
+check "ed25519: another message does not" \
+  "$(q "$ED, (ed25519_verify('73', '$G2', '$P2') -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
+check "ed25519: another key does not" \
+  "$(q "$ED, (ed25519_verify('72', '$G2', '$P1') -> write(yes) ; write(no)), nl" '^(yes|no)$')" \
+  "no"
 
 # ---- library(eth): a Prolog library over two compiled modules --------
 E="use_module(library(eth))"

@@ -62,13 +62,17 @@ unmodified.
    curves the aggregator needs to read foreign chains, as loadable
    Cicili modules on `$COCOLOG_LIBRARY` (and, where the work belongs on
    the server, Parsi procedures over Zigurat's `Cryptography/`).
-   **`library(keccak)` and `library(secp256k1)` are done**; the story
+   **`library(keccak)`, `library(secp256k1)`, `library(sha512)` and
+   `library(ed25519)` are done** — between them the signature schemes
+   of Bitcoin, the whole EVM family, Solana, Cardano, TON, Near,
+   Stellar, and the Ed25519 halves of Cosmos, Sui and Aptos. The story
    below says what they cost and what they prove. Still ahead on this
-   rung: Blake2b and RIPEMD-160 (Sui, Aptos, Bitcoin's addresses), and
-   Ed25519 (Solana, Cardano, TON, Near). Polkadot's sr25519 is
-   deliberately out of the first wave — Ristretto plus a transcript
-   protocol is a different animal, and saying so is cheaper than
-   pretending otherwise.
+   rung: Blake2b and RIPEMD-160, which are hashes rather than curves
+   and open Sui and Aptos addresses and Bitcoin's; and base58/bech32,
+   which are encodings and belong in Prolog, where cocolog's DCG engine
+   is waiting for them. Polkadot's sr25519 is deliberately out of the
+   first wave — Ristretto plus a transcript protocol is a different
+   animal, and saying so is cheaper than pretending otherwise.
 
 2. **The PoA federation ledger** (`ledger/`): a federation CA issues
    per-node certificates with append grants
@@ -131,6 +135,47 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### Ed25519, held to RFC 8032 byte for byte
+
+The other half of the chain world signs with Ed25519 — Solana,
+Cardano, TON, Near, Stellar, and the Ed25519 side of Cosmos, Sui and
+Aptos — so `library(ed25519)` followed, and `library(sha512)` with it,
+because the challenge scalar of an Ed25519 signature is a SHA-512 over
+three concatenated things and no Prolog round trip belongs in the
+middle of that. The hash lives in `lib-sha512.cicili` and is compiled
+into both modules; its constants were generated from their definition
+(the fractional parts of the square roots of the first eight primes and
+the cube roots of the first eighty) rather than copied from a table,
+which is the only way to be sure of eighty-eight sixteen-digit numbers.
+
+The curve is the twisted Edwards one over 2^255 - 19, in extended
+coordinates. Its addition formula is **unified** — the same expression
+adds two points and doubles one — so unlike secp256k1 there is no
+second formula to get subtly wrong and no branch to leak a bit. Three
+things run backwards from secp256k1 and each has bitten somebody: the
+encoding is little-endian, a point is 32 bytes of y with the sign of x
+in the top bit of the last byte, and the message is signed whole
+rather than pre-hashed.
+
+**Signing is in this module and was deliberately not in secp256k1.**
+Ed25519 is the curve a Coco node would hold its own identity on, and
+its signing is deterministic — there is no nonce — which means the
+published RFC 8032 signatures can be reproduced exactly. That is the
+strongest test a signature scheme admits: every part of it (SHA-512,
+the clamping, the scalar multiply, the point encoding, the challenge
+hash, the arithmetic mod L) has to be right or the 64 bytes differ.
+**Both RFC 8032 vectors come back byte for byte**, and verification
+accepts them and refuses a changed message and a changed key.
+
+**1.5ms a verification, about 650 a second** — faster than
+secp256k1's, because Ed25519 needs no modular inversion mod the group
+order and the Edwards addition is cheap.
+
+An honest note on how it was built: the Python oracle written to
+generate the constants disagreed with the RFC vector on the first run,
+because Z and T came out swapped in its addition. The RFC's published
+bytes are what caught it. An oracle is only worth what checks it.
 
 ### The chains' primitives: keccak256 and secp256k1
 

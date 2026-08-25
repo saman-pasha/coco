@@ -1,0 +1,51 @@
+;;;; The Coco -- crypto: SHA-512.
+;;;;
+;;;; A loadable Cicili module over the core in lib-sha512.cicili, which
+;;;; library(ed25519) also carries inside itself -- Ed25519's challenge
+;;;; scalar is a SHA-512 over three concatenated things and no Prolog
+;;;; round trip belongs in the middle of that. Here it is a hash a
+;;;; program can call.
+;;;;
+;;;;   sha512(+Text, -Hex)      the bytes of a text or code list
+;;;;   sha512_hex(+HexIn, -Hex) bytes given as hexadecimal, which is the
+;;;;                            only faithful spelling for arbitrary
+;;;;                            bytes -- a code list cannot carry a zero
+
+(DEFPARAMETER *sha512-predicates*
+  '(("sha512"     2 sh_p_text)
+    ("sha512_hex" 2 sh_p_hex)))
+
+(source "sha512.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+  (import "./lib-hex.cicili")
+  (hex-core)
+  (import "./lib-sha512.cicili")
+  (sha512-core)
+
+  (func sh_p_text ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 dg [64]) (char hex [140]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "text or a code list" in)))
+            (sh512 (cast (const u8 *) buf) (strlen buf) dg)
+            (hx_out dg 64 hex)
+            (return (coco_m_unify_atom e out hex)))))
+
+  (func sh_p_hex ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((in 0) (out 1))
+          (let ((char buf [65536]) (u8 raw [32768]) (u8 dg [64]) (char hex [140]))
+            (if (not (coco_m_text e in buf 65536))
+                (return (coco_m_type_error e "a hex atom" in)))
+            (let ((i64 n . #'(hx_bytes buf raw 32768)))
+              (if (< n 0) (return (coco_m_domain_error e "hexadecimal" in)))
+              (sh512 (cast (const u8 *) raw) (cast size_t n) dg)
+              (hx_out dg 64 hex)
+              (return (coco_m_unify_atom e out hex))))))
+
+  (static) (coco-emit-module-dispatch sh_dispatch *sha512-predicates*)
+  (coco-deflibrary "sha512" sh_dispatch nil)
+
+  ) ; source
