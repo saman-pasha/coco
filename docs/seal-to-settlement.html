@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seal to Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F1;
+  --ink:#0F1D1C; --ink-2:#3A4A48; --muted:#6B7C7A; --rule:#D9E3E1;
+  --accent:#0D6B65; --accent-soft:#D5E7E5;
+  --pass:#2A7551; --pass-soft:#DBEBE1;
+  --fail:#A8412A; --fail-soft:#F3E1DB;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+    --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+    --accent:#4EBDB1; --accent-soft:#10302D;
+    --pass:#5FC08E; --pass-soft:#0F2A1F;
+    --fail:#E08466; --fail-soft:#301810;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+  --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+  --accent:#4EBDB1; --accent-soft:#10302D;
+  --pass:#5FC08E; --pass-soft:#0F2A1F;
+  --fail:#E08466; --fail-soft:#301810;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink-2);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:56px 28px 96px}
+
+header.top{border-bottom:1px solid var(--rule); padding-bottom:28px; margin-bottom:44px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 14px
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(30px,5vw,46px);
+  line-height:1.1; color:var(--ink); margin:0 0 14px; text-wrap:balance;
+}
+.standfirst{font-size:17px; max-width:62ch; margin:0}
+.standfirst strong{color:var(--ink); font-weight:600}
+
+h2{
+  font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.2;
+  color:var(--ink); margin:0 0 6px; text-wrap:balance;
+}
+h3{
+  font-family:var(--sans); font-weight:600; font-size:15px; color:var(--ink);
+  margin:0 0 8px;
+}
+p{margin:0 0 14px; max-width:66ch}
+a{color:var(--accent)}
+
+section.act{margin:0 0 60px; padding-top:34px; border-top:1px solid var(--rule)}
+section.act:first-of-type{border-top:none; padding-top:0}
+.act-head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.act-no{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:3px; padding:3px 8px;
+  letter-spacing:.06em; flex:none;
+}
+.act-sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0}
+
+figure{margin:26px 0 22px; padding:0}
+.figbox{
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:22px 20px; overflow-x:auto;
+}
+svg{display:block; max-width:100%; height:auto; margin:0 auto; color:var(--ink)}
+figcaption{
+  font-size:13.5px; color:var(--muted); margin-top:12px; max-width:70ch;
+}
+figcaption code{font-size:12.5px}
+
+code{font-family:var(--mono); font-size:13.5px; color:var(--ink);
+  background:var(--surface-2); padding:1px 5px; border-radius:3px}
+
+table{border-collapse:collapse; width:100%; margin:20px 0; font-size:14px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--ink-2);
+}
+td code{background:none; padding:0; font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px;
+  background:var(--surface); padding:2px 14px}
+.v-pass{color:var(--pass); font-weight:600; font-family:var(--mono); font-size:12.5px}
+.v-fail{color:var(--fail); font-weight:600; font-family:var(--mono); font-size:12.5px}
+
+.note{
+  border-left:2px solid var(--accent); background:var(--surface);
+  padding:14px 18px; margin:20px 0; border-radius:0 4px 4px 0;
+}
+.note p{margin:0; font-size:15px}
+.note strong{color:var(--ink)}
+
+.steps{list-style:none; margin:18px 0 0; padding:0; display:grid; gap:2px}
+.steps li{
+  display:grid; grid-template-columns:26px 1fr; gap:12px;
+  padding:10px 0; border-bottom:1px solid var(--rule); align-items:start;
+}
+.steps li:last-child{border-bottom:none}
+.steps .n{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  padding-top:3px; font-variant-numeric:tabular-nums;
+}
+.steps .body{font-size:14.5px}
+.steps .body b{color:var(--ink); font-weight:600}
+.steps .body .pred{
+  display:block; font-family:var(--mono); font-size:12.5px; color:var(--accent);
+  margin-top:2px;
+}
+
+footer{border-top:1px solid var(--rule); margin-top:20px; padding-top:22px;
+  font-size:13.5px; color:var(--muted)}
+footer p{max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">The Coco &middot; rungs 2&ndash;4</p>
+  <h1>Seal to Settlement</h1>
+  <p class="standfirst">One payload, traced from a node's hands to a settled verdict &mdash; every
+  proof-of-authority function it passes through, in the order it passes through them. The chain is
+  a knowledge base, a block is a clause, and <strong>every gate below is a Prolog rule a peer can
+  read</strong>.</p>
+</header>
+
+<figure>
+  <div class="figbox">
+  <svg viewBox="0 0 700 640" role="img" aria-label="Five stages: seal, gossip, fork choice, deploy or submit, settle. Each stage shows what data exists after it and which predicates ran.">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+      <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#0D6B65"/>
+      </marker>
+    </defs>
+
+    <line x1="46" y1="52" x2="46" y2="596" stroke="var(--rule)" stroke-width="2"/>
+
+    <!-- stage 1 -->
+    <circle cx="46" cy="52" r="9" fill="var(--accent)"/>
+    <text x="46" y="56" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">1</text>
+    <rect x="86" y="24" width="300" height="58" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="102" y="46" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">SEAL &mdash; one node, one turn</text>
+    <text x="102" y="66" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">payload &rarr; signed block + head mark</text>
+    <text x="416" y="41" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--accent)">ledger_seal/1</text>
+    <text x="416" y="58" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">block_signable/5 &middot; block_hash/5</text>
+    <text x="416" y="74" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">secp256k1_sign/3 &middot; assertz &times;2</text>
+
+    <!-- stage 2 -->
+    <circle cx="46" cy="188" r="9" fill="var(--accent)"/>
+    <text x="46" y="192" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">2</text>
+    <rect x="86" y="160" width="300" height="58" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="102" y="182" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">GOSSIP &mdash; peer to peer</text>
+    <text x="102" y="202" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">peer's blocks, re-verified here</text>
+    <text x="416" y="177" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--accent)">ledger_export/0 &rarr; ledger_sync/1</text>
+    <text x="416" y="194" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">valid_block/6 &middot; extends_known/2</text>
+    <text x="416" y="210" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">maybe_advance/2</text>
+
+    <!-- stage 3 -->
+    <circle cx="46" cy="324" r="9" fill="var(--accent)"/>
+    <text x="46" y="328" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">3</text>
+    <rect x="86" y="296" width="300" height="58" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="102" y="318" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">FORK CHOICE &mdash; on every read</text>
+    <text x="102" y="338" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">many tips &rarr; one agreed head</text>
+    <text x="416" y="313" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--accent)">ledger_head/1</text>
+    <text x="416" y="330" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">chain_from/2 &middot; chain_in_turn/3</text>
+    <text x="416" y="346" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">best_head/2 &middot; better_head/2</text>
+
+    <!-- stage 4 -->
+    <circle cx="46" cy="460" r="9" fill="var(--accent)"/>
+    <text x="46" y="464" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">4</text>
+    <rect x="86" y="432" width="300" height="58" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="102" y="454" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">WHAT THE PAYLOAD WAS</text>
+    <text x="102" y="474" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">contract source, or a submission</text>
+    <text x="416" y="449" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--accent)">install_from_chain/0</text>
+    <text x="416" y="466" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">contract_admit/3 &rarr; contract_install/2</text>
+    <text x="416" y="482" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">submit_ready/2 &middot; param_chunk/3 rows</text>
+
+    <!-- stage 5 -->
+    <circle cx="46" cy="596" r="9" fill="var(--pass)"/>
+    <text x="46" y="600" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">5</text>
+    <rect x="86" y="568" width="300" height="58" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+    <text x="102" y="590" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">SETTLE &mdash; measured, not believed</text>
+    <text x="102" y="610" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">accepted(A) / rejected(Why) + provenance</text>
+    <text x="416" y="585" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--accent)">settle_submissions/0 &rarr; judge/4</text>
+    <text x="416" y="602" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">settle/4 &middot; measure/6 &middot; provenance/1</text>
+
+  </svg>
+  </div>
+  <figcaption>The whole arc. Left of the spine is what exists after each stage; right of it is the
+  predicate that produced it. Stages 1&ndash;3 are the same for every payload; stage 4 is where a
+  payload turns out to have been a contract or a submission, and stage 5 is the only one that
+  measures anything.</figcaption>
+</figure>
+
+<div class="note">
+  <p><strong>The one rule that shapes all of it:</strong> a node is not a process that runs. It is a
+  <code>cocolog</code> invocation that seals or syncs and exits. There is no daemon and no in-memory
+  state anywhere &mdash; everything a node knows is rows, so a node that dies has lost nothing and a
+  node that starts has missed nothing.</p>
+</div>
+
+<!-- ============ ACT 1 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">01</span>
+    <div>
+      <h2>Seal</h2>
+      <p class="act-sub">ledger/node.pl &middot; library(poa)</p>
+    </div>
+  </div>
+
+  <p>A payload becomes a block in one goal, and the goal is one transaction. Nothing here is
+  negotiable with a peer: the node is signing its own work.</p>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 830 470" role="img" aria-label="ledger_seal decomposed: identity and head in, then signable text, hash, signature, and a single atomic commit of block and head mark.">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="40" y="18" width="300" height="60" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="56" y="40" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="currentColor">node_identity/2 &nbsp; ledger_head/1</text>
+      <text x="56" y="60" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">Author, Priv (env) &middot; Prev, H = H0+1</text>
+      <text x="364" y="38" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">The key comes from <tspan font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">NODE_KEY</tspan> in the</text>
+      <text x="364" y="55" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">environment, never a consulted file &mdash;</text>
+      <text x="364" y="72" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">a file becomes clauses, clauses become rows.</text>
+
+      <line x1="190" y1="78" x2="190" y2="106" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="40" y="108" width="300" height="60" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="56" y="130" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--accent)">block_signable/5</text>
+      <text x="56" y="150" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">H | Prev | Author | Payload</text>
+      <text x="364" y="135" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">The separator is load-bearing: without it,</text>
+      <text x="364" y="152" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">height 1 payload &lsquo;23&rsquo; and height 12 payload &lsquo;3&rsquo;</text>
+      <text x="364" y="169" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">hash the same.</text>
+
+      <line x1="190" y1="168" x2="190" y2="196" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="40" y="198" width="300" height="60" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="56" y="220" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--accent)">block_hash/5</text>
+      <text x="56" y="240" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">sha256(Text) &rarr; Hash</text>
+      <text x="364" y="225" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">Covers height, parent, author, payload &mdash;</text>
+      <text x="364" y="242" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">and <tspan font-weight="600" fill="currentColor">not the signature</tspan>, which is why a</text>
+      <text x="364" y="259" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">malleated signature is the same block.</text>
+
+      <line x1="190" y1="258" x2="190" y2="286" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="40" y="288" width="300" height="60" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="56" y="310" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--accent)">secp256k1_sign/3</text>
+      <text x="56" y="330" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">RFC 6979 nonce &middot; low-s &rarr; Sig</text>
+      <text x="364" y="315" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">Deterministic: no entropy source to be wrong,</text>
+      <text x="364" y="332" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">and the nonce never leaves the module &mdash;</text>
+      <text x="364" y="349" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">a nonce in a term is a nonce in a row.</text>
+
+      <line x1="190" y1="348" x2="190" y2="376" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <rect x="40" y="378" width="300" height="76" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+      <line x1="190" y1="404" x2="190" y2="446" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="190" y="396" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="0.08em" fill="var(--accent)">ONE GOAL &mdash; ONE TRANSACTION</text>
+      <text x="115" y="424" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">assertz(</text>
+      <text x="115" y="440" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">block/6)</text>
+      <text x="265" y="424" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">assertz(</text>
+      <text x="265" y="440" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">head_mark/2)</text>
+      <text x="364" y="405" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">They commit together or not at all. A block</text>
+      <text x="364" y="422" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">without its mark is a tip nobody agreed to;</text>
+      <text x="364" y="439" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">a mark without its block is a tip that does</text>
+      <text x="364" y="456" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--muted)">not exist. Neither is reachable.</text>
+    </svg>
+    </div>
+    <figcaption>The atomicity at the bottom is a property of the store, not of care taken in the
+    code: <code>ledger_seal/1</code> puts both asserts in a single goal, and a turn is one
+    transaction.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">02</span>
+    <div>
+      <h2>Gossip, and the four gates</h2>
+      <p class="act-sub">ledger_sync/1 &middot; valid_block/6 &middot; extends_known/2</p>
+    </div>
+  </div>
+
+  <p>There is no message format. A peer's chain is a knowledge base and a knowledge base is already
+  readable, so gossip is one process running <code>ledger_export/0</code> against another's kb and
+  offering the result to its own <code>ledger_sync/1</code>. <strong>Every offered block is
+  re-verified.</strong> A peer's word is a claim.</p>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 800 470" role="img" aria-label="A block offered by a peer passes four gates: hash recomputed, author in federation, signature verifies, parent held. Each gate has a refusal exit to the right.">
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#A8412A"/>
+        </marker>
+      </defs>
+
+      <rect x="150" y="14" width="290" height="46" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="295" y="34" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">a block a peer offers</text>
+      <text x="295" y="51" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">block(H, Prev, Author, Payload, Sig, Hash)</text>
+
+      <line x1="295" y1="60" x2="295" y2="84" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+      <!-- gate 1 -->
+      <rect x="150" y="86" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="166" y="106" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">1 &nbsp;the hash is this block's</text>
+      <text x="166" y="126" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">block_hash/5 &rarr; Recomputed == Hash</text>
+      <line x1="440" y1="112" x2="486" y2="112" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF)"/>
+      <text x="494" y="109" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--fail)">skip</text>
+      <text x="494" y="124" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">tampered payload, forged hash,</text>
+      <text x="494" y="138" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">replayed signature, moved parent</text>
+
+      <line x1="295" y1="138" x2="295" y2="162" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+      <!-- gate 2 -->
+      <rect x="150" y="164" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="166" y="184" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">2 &nbsp;the author is a member</text>
+      <text x="166" y="204" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">authority(Author, Pub)</text>
+      <line x1="440" y1="190" x2="486" y2="190" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF)"/>
+      <text x="494" y="187" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--fail)">skip</text>
+      <text x="494" y="202" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">mallory, holding a real key that</text>
+      <text x="494" y="216" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">is in no federation</text>
+
+      <line x1="295" y1="216" x2="295" y2="240" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+      <!-- gate 3 -->
+      <rect x="150" y="242" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="166" y="262" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">3 &nbsp;the signature is that author's</text>
+      <text x="166" y="282" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">secp256k1_verify(Hash, Sig, Pub)</text>
+      <line x1="440" y1="268" x2="486" y2="268" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF)"/>
+      <text x="494" y="265" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--fail)">skip</text>
+      <text x="494" y="280" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">impersonation &mdash; alice's name on a</text>
+      <text x="494" y="294" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">block mallory signed</text>
+
+      <line x1="295" y1="294" x2="295" y2="318" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+      <!-- gate 4 -->
+      <rect x="150" y="320" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+      <text x="166" y="340" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">4 &nbsp;the parent is one I hold</text>
+      <text x="166" y="360" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">extends_known(H, Prev)</text>
+      <line x1="440" y1="346" x2="486" y2="346" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF)"/>
+      <text x="494" y="343" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--fail)">skip</text>
+      <text x="494" y="358" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">an orphan &mdash; possibly perfectly</text>
+      <text x="494" y="372" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">good, and simply early</text>
+
+      <line x1="295" y1="372" x2="295" y2="396" stroke="var(--pass)" stroke-width="1.5" marker-end="url(#ar3)" color="#2A7551"/>
+
+      <rect x="150" y="398" width="290" height="56" rx="4" fill="var(--pass-soft)" stroke="var(--pass)" stroke-width="1.5"/>
+      <text x="295" y="420" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">adopted</text>
+      <text x="295" y="440" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">assertz(block/6) &middot; maybe_advance/2</text>
+
+      <text x="150" y="14" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)"></text>
+      <text x="20" y="120" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">VALIDITY</text>
+      <line x1="24" y1="130" x2="24" y2="294" stroke="var(--rule)" stroke-width="2"/>
+      <text x="20" y="336" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">POSITION</text>
+      <line x1="24" y1="346" x2="24" y2="372" stroke="var(--rule)" stroke-width="2"/>
+    </svg>
+    </div>
+    <figcaption>Gates 1&ndash;3 are <code>valid_block/6</code> &mdash; is this a well-formed, signed
+    block by a member. Gate 4 is <code>extends_known/2</code> &mdash; does it belong on
+    <em>this</em> chain yet. They are deliberately separate: conflating them is what makes a gossip
+    loop drop blocks it should have kept.</figcaption>
+  </figure>
+
+  <div class="note">
+    <p><strong>One attack passes every gate and gains nothing.</strong> For any ECDSA signature
+    <code>(r, s)</code> the pair <code>(r, n&minus;s)</code> is equally valid and anyone can compute
+    it without the key &mdash; so a malleated signature <em>does</em> verify. It buys nothing,
+    because the block hash covers height, parent, author and payload and not the signature: the
+    malleated block is the same block. Bitcoin's transaction ids covered the signature, and that was
+    transaction malleability.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">03</span>
+    <div>
+      <h2>Fork choice</h2>
+      <p class="act-sub">ledger_head/1 &middot; better_head/2 &middot; in_turn/2</p>
+    </div>
+  </div>
+
+  <p>A head mark is a <strong>candidate, not an answer</strong>. Every accepted block gets one, marks
+  are appended and never removed, and the head is whatever the rule says over the whole set &mdash;
+  asked afresh on every read. That is why a reorg needs no retraction, and why arrival order, the one
+  thing that differs between nodes, cannot change the answer.</p>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 840 330" role="img" aria-label="Two branches at the same height from a common parent; the comparison ladder prefers height, then in-turn count, then the lower hash.">
+      <defs>
+        <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <text x="20" y="26" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">TWO VALID CHAINS, SAME LENGTH</text>
+
+      <rect x="20" y="120" width="62" height="38" rx="3" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="51" y="137" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">genesis</text>
+      <text x="51" y="150" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">00&hellip;00</text>
+
+      <line x1="82" y1="139" x2="100" y2="139" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="102" y="120" width="56" height="38" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="130" y="137" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">h0</text>
+      <text x="130" y="150" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--pass)">alice &#9679;</text>
+
+      <line x1="158" y1="139" x2="176" y2="139" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="178" y="120" width="56" height="38" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="206" y="137" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">h1</text>
+      <text x="206" y="150" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--pass)">bob &#9679;</text>
+
+      <line x1="234" y1="139" x2="252" y2="139" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <rect x="254" y="120" width="56" height="38" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="282" y="137" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">h2</text>
+      <text x="282" y="150" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--pass)">carol &#9679;</text>
+
+      <path d="M310 132 L336 132 L336 74 L356 74" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+      <path d="M310 146 L336 146 L336 204 L356 204" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+
+      <rect x="358" y="54" width="120" height="42" rx="3" fill="var(--pass-soft)" stroke="var(--pass)" stroke-width="1.5"/>
+      <text x="418" y="71" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">h3 &nbsp;alice</text>
+      <text x="418" y="86" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" fill="var(--pass)">&#9679; in turn</text>
+
+      <rect x="358" y="184" width="120" height="42" rx="3" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="418" y="201" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">h3 &nbsp;carol</text>
+      <text x="418" y="216" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">&#9675; out of turn</text>
+
+      <text x="358" y="248" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">both valid, both signed,</text>
+      <text x="358" y="263" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--muted)">both length 4</text>
+
+      <line x1="504" y1="40" x2="504" y2="290" stroke="var(--rule)" stroke-width="1"/>
+
+      <text x="530" y="26" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">better_head/2 &mdash; THREE KEYS, IN ORDER</text>
+
+      <rect x="530" y="46" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="546" y="66" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">1 &nbsp;height</text>
+      <text x="546" y="85" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">3 vs 3 &mdash; tie, fall through</text>
+
+      <line x1="675" y1="98" x2="675" y2="118" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar4)"/>
+
+      <rect x="530" y="120" width="290" height="52" rx="4" fill="var(--pass-soft)" stroke="var(--pass)" stroke-width="1.5"/>
+      <text x="546" y="140" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">2 &nbsp;in-turn count</text>
+      <text x="546" y="159" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--pass)">4 vs 3 &mdash; alice wins here</text>
+
+      <line x1="675" y1="172" x2="675" y2="192" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+      <rect x="530" y="194" width="290" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+      <text x="546" y="214" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--muted)">3 &nbsp;the lower hash</text>
+      <text x="546" y="233" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">never reached in this case</text>
+
+      <text x="546" y="272" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)">A coin toss every node makes the same way, so</text>
+      <text x="546" y="288" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)">two equally good chains never both survive.</text>
+    </svg>
+    </div>
+    <figcaption><code>in_turn/2</code> is round robin over the <em>sorted</em> authority names, so
+    the schedule is a function of height: at every height exactly one authority is in turn, every
+    node computes which, and nobody is told. An out-of-turn block stays valid &mdash; that is what
+    keeps the chain alive when the scheduled authority is down &mdash; it is merely worth
+    less.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">04</span>
+    <div>
+      <h2>What the payload turns out to be</h2>
+      <p class="act-sub">contracts/node.pl &middot; training/worker.pl</p>
+    </div>
+  </div>
+
+  <p>Stages 1&ndash;3 never looked inside the payload. Now two kinds declare themselves, and both got
+  the chain's guarantees for free &mdash; signed by an authority, hash-chained, gossiped, identical
+  on every node &mdash; without either needing a deployment protocol of its own.</p>
+
+  <ol class="steps">
+    <li><span class="n">A1</span><span class="body"><b>A contract</b> is a list of clauses written
+      into a payload. No bytecode, no ABI, no compiler.
+      <span class="pred">contract_deploy_payload/3 &rarr; ledger_seal/1</span></span></li>
+    <li><span class="n">A2</span><span class="body">Each node walks <em>its agreed chain</em> &mdash;
+      not every block it holds, so a contract on a losing fork is never installed.
+      <span class="pred">install_from_chain/0 &rarr; chain_from/2</span></span></li>
+    <li><span class="n">A3</span><span class="body"><b>The fence</b>: every goal in every clause body
+      must be in the vocabulary or defined by the same contract. <code>call/N</code>,
+      <code>=..</code> and a variable in goal position are refused outright, and meta-predicates are
+      recursed into.
+      <span class="pred">contract_admit/3 &rarr; admitted | refused</span></span></li>
+    <li><span class="n">A4</span><span class="body">Calls enter through one door, and writes are
+      <b>staged</b> &mdash; pending until the goal succeeds, dropped on failure or exception, because
+      <code>assertz</code> is not undone by backtracking in any Prolog.
+      <span class="pred">contract_call/2 &rarr; state_put/2 &rarr; flush_pending/1</span></span></li>
+  </ol>
+
+  <ol class="steps" style="margin-top:26px">
+    <li><span class="n">B1</span><span class="body"><b>A worker trains in <code>--local</code></b>
+      with no connection open at all, and prints its weights as facts. Three seconds of gradient
+      descent never sits inside a database turn.
+      <span class="pred">train_and_export/1 &rarr; param_chunk/3 facts + digest</span></span></li>
+    <li><span class="n">B2</span><span class="body">The weights are published as <b>chunked rows</b>
+      &mdash; a row must fit in a page and a model does not &mdash; and the submission is sealed as
+      an ordinary block. The digest is the join.
+      <span class="pred">publish_params/2 &middot; submit_ready/2 &rarr; ledger_seal/1</span></span></li>
+  </ol>
+
+  <div class="note">
+    <p><strong>Two layers, two questions.</strong> In the choreography <em>alice</em> &mdash; a real
+    authority &mdash; deploys a contract that reads <code>NODE_KEY</code> out of the environment. The
+    ledger is content: she is entitled to seal, and the block is valid. The <em>fence</em> refuses
+    it. Who may deploy and what may run are different questions with different answers.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">05</span>
+    <div>
+      <h2>Settlement</h2>
+      <p class="act-sub">settle_submissions/0 &middot; judge/4 &middot; settle/4</p>
+    </div>
+  </div>
+
+  <p>Training is expensive, non-deterministic and unverifiable &mdash; two honest workers with the
+  same data land on different weights, and nobody can audit a gradient step after the fact.
+  Evaluation is none of those things. So settlement never asks <em>did you really train this</em>. It
+  asks the only question with a checkable answer: <strong>does it work</strong>.</p>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 800 500" role="img" aria-label="A submission passes a duplicate check then five settlement gates: digest, holdout commitment, parameter count, architecture fit, and measured accuracy. Each has a refusal exit.">
+      <defs>
+        <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arF2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#A8412A"/>
+        </marker>
+      </defs>
+
+      <rect x="130" y="12" width="300" height="46" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="280" y="32" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">a submission on the chain</text>
+      <text x="280" y="49" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">submission(Task, Worker, Digest, claim(&hellip;), N)</text>
+
+      <line x1="280" y1="58" x2="280" y2="78" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+      <rect x="130" y="80" width="300" height="46" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="146" y="99" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">0 &nbsp;is this digest already accepted?</text>
+      <text x="146" y="117" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">judge/4</text>
+      <line x1="430" y1="103" x2="472" y2="103" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF2)"/>
+      <text x="480" y="100" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">rejected(duplicate)</text>
+      <text x="480" y="115" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">plagiarism &mdash; real weights, someone</text>
+      <text x="480" y="128" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">else's work</text>
+
+      <line x1="280" y1="126" x2="280" y2="146" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+      <rect x="130" y="148" width="300" height="46" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="146" y="167" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">1 &nbsp;do the rows hash to the digest?</text>
+      <text x="146" y="185" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">params_digest/2 over fetch_params/2</text>
+      <line x1="430" y1="171" x2="472" y2="171" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF2)"/>
+      <text x="480" y="168" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">rejected(digest_mismatch)</text>
+      <text x="480" y="183" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">commit one thing, publish another</text>
+
+      <line x1="280" y1="194" x2="280" y2="214" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+      <rect x="130" y="216" width="300" height="46" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="146" y="235" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">2 &nbsp;is the holdout the committed one?</text>
+      <text x="146" y="253" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">holdout_matches/3</text>
+      <line x1="430" y1="239" x2="472" y2="239" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF2)"/>
+      <text x="480" y="236" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">rejected(holdout_moved)</text>
+      <text x="480" y="251" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">the settler moving the goalposts &mdash;</text>
+      <text x="480" y="264" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">the insider attack</text>
+
+      <line x1="280" y1="262" x2="280" y2="282" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+      <rect x="130" y="284" width="300" height="46" rx="4" fill="var(--surface)" stroke="var(--rule)"/>
+      <text x="146" y="303" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">3&ndash;4 &nbsp;count, then architecture</text>
+      <text x="146" y="321" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">length/2 &middot; arch_fits/3</text>
+      <line x1="430" y1="307" x2="472" y2="307" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF2)"/>
+      <text x="480" y="304" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">rejected(shape(&hellip;))</text>
+      <text x="480" y="319" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">weights for a different network</text>
+
+      <line x1="280" y1="330" x2="280" y2="350" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+      <rect x="130" y="352" width="300" height="60" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+      <text x="146" y="372" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">5 &nbsp;what accuracy does it actually reach?</text>
+      <text x="146" y="390" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">measure/6 &mdash; load the weights, evaluate</text>
+      <text x="146" y="406" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">the claim is never consulted</text>
+      <line x1="430" y1="382" x2="472" y2="382" stroke="var(--fail)" stroke-width="1.5" marker-end="url(#arF2)"/>
+      <text x="480" y="379" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--fail)">rejected(accuracy(A))</text>
+      <text x="480" y="394" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">the liar, and untrained junk &mdash; both</text>
+      <text x="480" y="407" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">claimed 0.99</text>
+
+      <line x1="280" y1="412" x2="280" y2="432" stroke="var(--pass)" stroke-width="1.5" marker-end="url(#ar5)" color="#2A7551"/>
+
+      <rect x="130" y="434" width="300" height="56" rx="4" fill="var(--pass-soft)" stroke="var(--pass)" stroke-width="1.5"/>
+      <text x="280" y="456" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--pass)">accepted(Accuracy)</text>
+      <text x="280" y="476" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">provenance/1 &rarr; worker, block, author</text>
+
+      <text x="20" y="200" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">CHEAP</text>
+      <line x1="24" y1="212" x2="24" y2="330" stroke="var(--rule)" stroke-width="2"/>
+      <text x="20" y="376" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing=".08em" fill="var(--muted)">COSTLY</text>
+      <line x1="24" y1="388" x2="24" y2="412" stroke="var(--rule)" stroke-width="2"/>
+    </svg>
+    </div>
+    <figcaption>Cheapest gate first, so a bad submission never gets the expensive work. The worker's
+    own <code>claim(accuracy, C)</code> is read <em>last</em> and only to be reported &mdash; every
+    worker in the suite claims 0.99, and settlement reaches different verdicts because it
+    measures.</figcaption>
+  </figure>
+
+  <h3>And the terminus: where did this model come from</h3>
+  <p>The rung's payload is a query over blocks that are signed, hash-chained and gossiped. A second
+  node that did none of the training settles to the same verdicts, because every step above is
+  deterministic.</p>
+
+<div class="tblwrap">
+<table>
+  <thead><tr><th>model</th><th>worker</th><th>measured</th><th>block</th><th>sealed by</th></tr></thead>
+  <tbody>
+    <tr><td><code>5345773f</code></td><td>alice</td><td><span class="v-pass">1.0000</span></td><td>0</td><td>alice</td></tr>
+    <tr><td><code>5bc06420</code></td><td>bob</td><td><span class="v-pass">1.0000</span></td><td>1</td><td>bob</td></tr>
+    <tr><td><code>dcbe5163</code></td><td>carol</td><td><span class="v-fail">0.3600</span></td><td>2</td><td>carol</td></tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<!-- ============ WHERE ATTACKS DIE ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">&#10006;</span>
+    <div>
+      <h2>Where each attack dies</h2>
+      <p class="act-sub">every refusal, mapped to the gate that makes it</p>
+    </div>
+  </div>
+
+  <p>mallory has been a criminal node, a contract author and a worker. Each attack is stopped at
+  exactly one place, and two are stopped nowhere &mdash; which is the honest part of the table.</p>
+
+<div class="tblwrap">
+<table>
+  <thead><tr><th>attack</th><th>stopped at</th><th>verdict</th></tr></thead>
+  <tbody>
+    <tr><td>seal as a non-member</td><td><code>valid_block/6</code> gate 2</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>alice's name, mallory's key</td><td><code>valid_block/6</code> gate 3</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>tamper with a payload</td><td><code>valid_block/6</code> gate 1</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>forge a hash</td><td><code>valid_block/6</code> gate 1</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>replay a signature elsewhere</td><td><code>valid_block/6</code> gate 1</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>re-point a block's parent</td><td><code>valid_block/6</code> gate 1</td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>offer an orphan</td><td><code>extends_known/2</code></td><td><span class="v-fail">skipped</span></td></tr>
+    <tr><td>malleate a signature</td><td>&mdash; <em>passes every gate</em></td><td><span class="v-pass">same block</span></td></tr>
+    <tr><td>an insider rewrites history</td><td><code>better_head/2</code></td><td><span class="v-pass">outweighed</span></td></tr>
+    <tr><td>contract reads <code>NODE_KEY</code></td><td><code>contract_admit/3</code></td><td><span class="v-fail">refused</span></td></tr>
+    <tr><td>contract asserts a block</td><td><code>contract_admit/3</code></td><td><span class="v-fail">refused</span></td></tr>
+    <tr><td>contract reads another's state</td><td><code>contract_admit/3</code></td><td><span class="v-fail">refused</span></td></tr>
+    <tr><td><code>call/1</code> or <code>=..</code> in a contract</td><td><code>contract_admit/3</code></td><td><span class="v-fail">refused</span></td></tr>
+    <tr><td><code>assertz</code> hidden in <code>findall</code></td><td><code>contract_admit/3</code></td><td><span class="v-fail">refused</span></td></tr>
+    <tr><td>contract that never halts</td><td>gas &mdash; <code>--steps</code></td><td><span class="v-fail">suspends</span></td></tr>
+    <tr><td>claim 0.99, deliver 0.36</td><td><code>settle/4</code> gate 5</td><td><span class="v-fail">rejected</span></td></tr>
+    <tr><td>publish rows &ne; committed digest</td><td><code>settle/4</code> gate 1</td><td><span class="v-fail">rejected</span></td></tr>
+    <tr><td>resubmit an accepted digest</td><td><code>judge/4</code></td><td><span class="v-fail">rejected</span></td></tr>
+    <tr><td>settler moves the holdout</td><td><code>settle/4</code> gate 2</td><td><span class="v-fail">rejected</span></td></tr>
+    <tr><td>train on the held-out points</td><td>&mdash; <em>nothing catches this</em></td><td><span class="v-pass">accepted</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+  <div class="note">
+    <p><strong>The last row is the honest limit.</strong> The commitment stops the settler moving the
+    goalposts and stops a worker knowing the range in advance, but nothing here stops a worker who
+    simply trains on everything. Catching that needs a holdout the worker never sees, or a proof of
+    what it trained on, and neither is on this rung.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Predicate names are as they appear in <code>library/poa.pl</code>,
+  <code>library/contract.pl</code>, <code>library/settle.pl</code>, <code>ledger/node.pl</code> and
+  <code>training/worker.pl</code>. The choreography is <code>ledger/run.sh</code>,
+  <code>contracts/run.sh</code> and <code>training/run.sh</code>; the checked versions are
+  <code>test/ledger.sh</code> (24), <code>test/contracts.sh</code> (27) and
+  <code>test/training.sh</code> (18).</p>
+</footer>
+
+</div>
+</body>
+</html>

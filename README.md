@@ -141,6 +141,8 @@ contracts/        rung 3: a contract is a predicate -- the sources
                   (honest and criminal), the node, the choreography
 training/         rung 4: training as settlement -- the task, the
                   worker, mallory the criminal worker
+docs/             diagrams worth keeping: seal-to-settlement.html traces
+                  one payload through every gate, rungs 2 to 4
 test/             the arrangements that hold it GREEN; config.sh reads
                   coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three
