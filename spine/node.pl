@@ -12,7 +12,7 @@
 %% rows and never need to hear about each other, which is what lets them
 %% run on K machines as easily as in K processes.
 
-:- use_module(library(spine)).
+:- use_module(library(poh)).
 :- use_module(library(lists)).
 
 :- dynamic spine_seg/4.

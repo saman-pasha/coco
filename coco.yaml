@@ -65,7 +65,7 @@ modules:
     - sha256         # Bitcoin's, and half of hash160
     - ripemd160      # the other half
     - blake2b        # Sui, Aptos, Polkadot, Cardano, Zcash
-    - poh            # rung 5: the spine -- iterated sha256, in C
+    - spine          # rung 5: the tick loop -- iterated sha256, in C
 
 # ---- the Prolog libraries --------------------------------------------
 # The other half of the library path: clauses, no build step, loaded by
@@ -87,7 +87,7 @@ libraries:
     - poa            # rung 2: proof of authority, as rules
     - contract       # rung 3: the fence, scoped state, the call door
     - settle         # rung 4: the acceptance predicate over held-out data
-    - spine          # rung 5: segments, parallel verification, the ledger seam
+    - poh            # rung 5: segments, parallel verification, the ledger seam
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.

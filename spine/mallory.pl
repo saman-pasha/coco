@@ -15,7 +15,7 @@
 %% it has no opinion about which of two spines is the real one, because
 %% nothing inside a hash chain can have one.
 
-:- use_module(library(spine)).
+:- use_module(library(poh)).
 :- use_module(library(sha256)).
 
 verdict(G, refused) :- \+ call(G), !.

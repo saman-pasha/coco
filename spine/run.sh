@@ -34,7 +34,7 @@ C="$COCOLOG_BIN"
 BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 120"
 KB="$BASE --kb spine_demo"
 F="$ROOT/spine/node.pl $ROOT/spine/mallory.pl"
-K="use_module(library(spine))"
+K="use_module(library(poh))"
 
 TICKS=${SPINE_TICKS:-32000000}
 PARTS=${SPINE_PARTS:-4}

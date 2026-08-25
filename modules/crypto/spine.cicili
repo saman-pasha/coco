@@ -1,6 +1,12 @@
-;;;; The Coco -- crypto: the proof-of-history spine.
+;;;; The Coco -- crypto: library(spine), the tick loop of a proof of
+;;;; history.
 ;;;;
-;;;; A loadable Cicili module against cocolog's lib/sdk.cicili.
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili. It is the
+;;;; ENGINE; `library(poh)' is the layer above it -- segments, parallel
+;;;; verification, the ledger seam -- and a caller wanting proof of
+;;;; history loads that one. Two names because they are two things, and
+;;;; because cocolog resolves `Name.so' before `Name.pl': one library
+;;;; cannot be both.
 ;;;;
 ;;;;   poh_run(+StartHex, +N, -EndHex)
 ;;;;   poh_mix(+PrevHex, +EventHex, -NextHex)
@@ -23,16 +29,17 @@
 ;;;; seam costs a goal, an atom intern and a 64-character atom -- about
 ;;;; 600 microseconds, measured. In C it is a hash over 32 bytes. The
 ;;;; difference is what makes a spine of any length possible at all, and
-;;;; `library(poh)' keeps the Prolog loop anyway as an ORACLE: the two
-;;;; must agree, and the suite checks that they do.
+;;;; `library(poh)' -- the layer above this one -- keeps the same loop in
+;;;; clauses anyway, as an ORACLE: the two must agree, and the suite
+;;;; checks that they do.
 
-(DEFPARAMETER *poh-predicates*
+(DEFPARAMETER *spine-predicates*
   '(("poh_run"         3 ph_p_run)
     ("poh_mix"         3 ph_p_mix)
     ("poh_verify"      3 ph_p_verify)
     ("poh_checkpoints" 4 ph_p_ckpt)))
 
-(source "poh.c"
+(source "spine.c"
   (make :std #t :compile #f)
 
   (import "./sdk.cicili")
@@ -153,7 +160,7 @@
                 (set ok (coco_m_unify e out lst))
                 (return ok))))))
 
-  (static) (coco-emit-module-dispatch ph_dispatch *poh-predicates*)
-  (coco-deflibrary "poh" ph_dispatch nil)
+  (static) (coco-emit-module-dispatch ph_dispatch *spine-predicates*)
+  (coco-deflibrary "spine" ph_dispatch nil)
 
   ) ; source

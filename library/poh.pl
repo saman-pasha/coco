@@ -1,6 +1,6 @@
-%% library(spine) -- the proof-of-history spine, and what it is worth.
+%% library(poh) -- proof of history: the spine, and what it is worth.
 %%
-%% The raw primitives are `library(poh)', a compiled Cicili module: the
+%% The raw primitives are `library(spine)', a compiled Cicili module: the
 %% tick loop, the event fold, and a segment check. This is the layer
 %% above them -- how a range is split, how it is verified, and where it
 %% meets the ledger. Two names because they are two things, and because
@@ -32,7 +32,7 @@
 %% producer published checkpoints. Work is paid once, in order, by one
 %% producer; it is audited by everybody at once.
 
-:- use_module(library(poh)).
+:- use_module(library(spine)).
 :- use_module(library(sha256)).
 :- use_module(library(lists)).
 

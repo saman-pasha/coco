@@ -191,7 +191,7 @@ ratio is why the loop is Cicili and not clauses, and it is the clearest
 case yet for the second of The Coco's four materials.
 
 **Three implementations, and two of them exist to disagree.**
-`library(spine)` keeps the Prolog loop as `poh_slow_run/3`, roughly four
+`library(poh)` keeps the same loop in clauses as `poh_slow_run/3`, roughly four
 thousand times slower and never used for anything, purely so the suite
 can require the same hash from both. The third check comes from outside
 the project entirely: `sha256` of 32 and of 64 zero bytes are published

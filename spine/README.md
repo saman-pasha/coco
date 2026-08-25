@@ -9,8 +9,8 @@ sh test/spine.sh         # the same thing, checked: 16 checks
 
 | file | what |
 |---|---|
-| `../modules/crypto/poh.cicili` | the tick loop, the event fold, the segment check — in C |
-| `../library/spine.pl` | segments, parallel verification, the ledger seam, the oracle |
+| `../modules/crypto/spine.cicili` | `library(spine)`: the tick loop, the event fold, the segment check — in C |
+| `../library/poh.pl` | `library(poh)`: segments, parallel verification, the ledger seam, the oracle |
 | `node.pl` | produce, verify one segment, anchor a block, read the order |
 | `mallory.pl` | five attacks on a clock |
 | `run.sh` | the choreography |
@@ -52,7 +52,7 @@ A tick through the module seam costs a goal, an atom intern and a
 64-character atom: about **600 µs**, measured. In C it is a hash over 32
 bytes. That difference is what makes a spine of any length possible.
 
-`library(spine)` keeps the Prolog loop anyway, as `poh_slow_run/3`, and
+`library(poh)` keeps the same loop in clauses anyway, as `poh_slow_run/3`, and
 it exists to **disagree**: two implementations of one definition, one in
 C and one in clauses, and the suite requires the same hash from both. A
 third check comes from outside the project entirely — `sha256` of 32 and

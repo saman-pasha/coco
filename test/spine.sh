@@ -29,7 +29,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/config.sh"
 C="$COCOLOG_BIN"
 F="$ROOT/spine/node.pl $ROOT/spine/mallory.pl"
-K="use_module(library(spine))"
+K="use_module(library(poh))"
 Z=0000000000000000000000000000000000000000000000000000000000000000
 
 failures=0
@@ -43,11 +43,11 @@ check() {
 }
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
-if [ ! -f "$COCOLOG_LIBRARY/poh.so" ]; then
+if [ ! -f "$COCOLOG_LIBRARY/spine.so" ]; then
   sh "$ROOT/modules/crypto/build.sh" >/dev/null 2>&1 || true
 fi
-if [ ! -f "$COCOLOG_LIBRARY/poh.so" ]; then
-  echo "SKIP (the poh module would not build -- no sbcl or CICILI)"; exit 0
+if [ ! -f "$COCOLOG_LIBRARY/spine.so" ]; then
+  echo "SKIP (the spine module would not build -- no sbcl or CICILI)"; exit 0
 fi
 
 loc() { timeout 300 "$C" run $F "$K, $1" 2>/dev/null | grep -aoE "$2" | head -1; }

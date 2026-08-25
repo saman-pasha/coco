@@ -25,9 +25,9 @@ there is no test that reads an SVG. The names it uses live in:
     library/settle.pl     settle/4  holdout_matches/3  arch_fits/3  measure/6
     training/worker.pl    train_and_export/1  submit_ready/2  judge/4
                           settle_submissions/0  provenance/1
-    modules/.../poh.cicili poh_run/3  poh_mix/3  poh_verify/3
+    modules/.../spine.cicili  poh_run/3  poh_mix/3  poh_verify/3
                           poh_checkpoints/4
-    library/spine.pl      poh_genesis/1  poh_segments/4  poh_anchor/3
+    library/poh.pl        poh_genesis/1  poh_segments/4  poh_anchor/3
                           poh_verify_segments/1  poh_slow_run/3
     spine/node.pl         spine_produce/2  verify_one/1  spine_sound/0
                           anchor_block/1  anchor_order/1  anchor_genuine/1
