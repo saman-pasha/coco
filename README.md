@@ -150,6 +150,9 @@ votes/            rung 6: PoS and BFT votes -- stake read off the chain,
 hub/              rung 7: the aggregator -- three chains under three
                   regimes, each publishing its own rules as entries on
                   itself, verified by a host that consulted none of them
+bench/            rung 8: the TPS harness -- the lanes, the six rules a
+                  reading must pass to be printed, and mallory attacking
+                  the measurement rather than the rules
 docs/             diagrams worth keeping: seal-to-settlement.html traces
                   one payload through every gate, rungs 2 to 4;
                   tick-to-settlement.html does the same for rung 5,

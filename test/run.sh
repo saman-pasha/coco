@@ -142,6 +142,23 @@ else
   say hub RED; sed 's/^/   /' "$HERE/hub.out"; red=$((red + 1))
 fi
 
+# ---- bench: rung 8 ----------------------------------------------------
+# The TPS harness's RULES, not its timings. A timing is not a pass or a
+# fail, so the numbers live in bench/tps.sh with their arrangement
+# printed beside each of them; what is checkable here is whether the
+# harness would have refused a dishonest reading. mallory attacks the
+# MEASUREMENT, and her eighth attempt -- choosing the workload --
+# succeeds, because it is upstream of every rule a harness can have.
+if sh "$HERE/bench.sh" > "$HERE/bench.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/bench.out"; then
+    say bench "$(head -1 "$HERE/bench.out")"
+  else
+    say bench GREEN
+  fi
+else
+  say bench RED; sed 's/^/   /' "$HERE/bench.out"; red=$((red + 1))
+fi
+
 # ---- wire -----------------------------------------------------------
 W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then

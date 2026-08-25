@@ -2,15 +2,17 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and the first seven rungs: `test/run.sh` GREEN with a server up
-— local, crypto, ledger, contracts, training, spine, votes, hub, wire —
-which is sixty-two crypto checks against numbers published by other
-people, plus a federation ledger, contracts under a fence, settlement
-that measures rather than believes, a proof-of-history spine held to
-constants computed outside this project, a stake-weighted BFT vote whose
-safety arithmetic names the validators who break it, and an aggregator
-that verifies three chains under three regimes by reading each chain's
-own rules off its own blocks. Only rung 8 is aimed, not built.
+assembly and **all eight rungs**: `test/run.sh` GREEN with a server up —
+local, crypto, ledger, contracts, training, spine, votes, hub, bench,
+wire — which is sixty-two crypto checks against numbers published by
+other people, plus a federation ledger, contracts under a fence,
+settlement that measures rather than believes, a proof-of-history spine
+held to constants computed outside this project, a stake-weighted BFT
+vote whose safety arithmetic names the validators who break it, an
+aggregator that verifies three chains under three regimes by reading
+each chain's own rules off its own blocks, and a harness that prints
+transactions per second with the arrangement on every line. The ladder
+is walked; what is left is depth, not rungs.
 The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
@@ -152,19 +154,32 @@ the three pillars used and unmodified.
    aggregator cannot be stronger than what it aggregates. Still ahead:
    nothing decides WHICH chains a hub will admit, and rule upgrades
    across a fork have no written-down answer.
-8. **The TPS harness, from day one.** Two lanes on one engine: a
-   speculative lane at READ_UNCOMMITTED — peers read a block while its
-   turn is still open, pipelining verification ahead of finality, dirty
-   state a hint and never a settlement — and a settlement lane at
-   commit isolation, with the contended few paying SERIALIZABLE through
-   the claim-of-one while single-appender kbs stream uncoordinated,
-   Sui's owned-object fast path as an isolation parameter. The harness
-   prints transactions per second the way cocolog's hunt printed its
-   944ms, and no sentence anywhere says "competes with" until that
-   number is on this page.
+8. **The TPS harness** (`bench/`) — **DONE**, with one part of it
+   redirected and said so. The harness prints transactions per second
+   the way cocolog's hunt printed its 944ms: six rules a reading must
+   pass, the arrangement on every line, twenty-five checks on the rules
+   rather than on the timings, and mallory attacking the MEASUREMENT —
+   seven refused and the eighth, choosing the workload, succeeding
+   because it is upstream of anything a harness can check. **The number
+   is on the page and the sentence still is not written.** What could
+   not be built: the speculative `READ_UNCOMMITTED` lane, because
+   cocolog exposes no isolation-level knob — that is a pillar
+   capability, filed below beside TLS. The two-lane comparison became
+   the one that exists today: disjoint single-appender knowledge bases
+   against one contended base.
 
-One capability on the ladder's path belongs to a pillar, not to this
-repository: **TLS in cocolog's C client**, over Zigurat's own TLS/X509,
+Two capabilities on the ladder's path belong to a pillar, not to this
+repository.
+
+**An isolation level named per turn.** ZiguratIP's store runs the whole
+ladder from READ_UNCOMMITTED to SERIALIZABLE, and cocolog uses it
+internally — the coworker claim is SERIALIZABLE and hands back to READ
+COMMITTED. What a caller cannot do is ask for one: there is no flag, no
+option and no predicate. Rung 8's speculative lane needed exactly that
+and so does not exist. It is cocolog's feature to build in cocolog, and
+the shape is already there.
+
+**TLS in cocolog's C client**, over Zigurat's own TLS/X509,
 so a cocolog node presents its certificate and the permission gate
 covers node-to-node links — a ledger node never listens in the clear,
 because the gate only judges what a TLS port presents. That is
@@ -173,6 +188,81 @@ and until then node-to-node links ride a TLS tunnel that presents the
 certificate.
 
 ## Done here
+
+### The TPS harness: the number, and the six ways it lies
+
+**The number is on the page.** On a 4-core container, against a server
+whose store had been in use all session: `verify` 181/s and `validate`
+181/s with no database in them at all; `seal_batched` 4.4/s;
+`seal_per_turn` 1.2/s; `parallel_own_kbs` 9.0/s; `parallel_one_kb`
+4.3/s. **And the sentence still is not written**, because what those
+lanes measure is that arrangement on that container.
+
+**Five rules live in `harness.pl` and a reading that breaks one prints
+REFUSED and says which.** The count is verified against rows actually in
+the store; a run under a second is not a measurement; the arrangement is
+on every line; the clock is the wall; the first run of every lane is
+discarded. Seven of mallory's eight attacks are one of those rules.
+
+**The sixth rule earned itself in one line.** `seal_batched` and
+`seal_batched_again` are the same lane, the same arrangement, a fresh
+knowledge base each time, minutes apart in one run — and they read
+**4.40/s and 9.34/s**. Neither is wrong. Across three runs the first of
+them read 8.11, 6.02 and 4.40. Meanwhile the two `--local` lanes held at
+181–183/s *every single time*, because nothing they do touches the
+store. cocolog's CLAUDE.md says a slow suite is the store ageing; **a
+slow benchmark is the same thing wearing a number**, and the only
+defence is to run the same lane twice and print both.
+
+**The ceiling is the curve, not the store.** `verify` and `validate` are
+within one per cent of each other: validating a block costs what one
+`secp256k1_verify/3` costs and nothing measurable more. Both include
+~0.42 s of process start-up in the denominator, so they are floors — and
+the harness does not subtract it, because a number you had to adjust is
+a number you have to explain.
+
+**A single averaged rate hid a shape.** Seconds per ten seals rise with
+the chain's length — 0.81 to 5.20 on one run, 7.01 to 11.86 on a later
+one. The baseline moves with the store's age; the growth does not.
+`ledger_head/1` re-derives fork choice from every head mark on every
+seal, and a system that is quick at length zero and unusable at length
+ten thousand has a perfectly respectable average.
+
+**A fix was tried, measured, and reverted.** A mark whose hash is some
+block's parent cannot win fork choice — dropping non-tips is sound and
+changes no answer. It made *no difference at all*: 5.16 s against
+5.17 s at length 40, because `block/6` is not indexed on the parent, so
+the filter costs a scan per mark, exactly what it saves. It was reverted
+rather than shipped. **An optimisation nobody measured is a claim**, and
+this rung is the one about not making those.
+
+**And the most honest line in the file is a rate that passed every
+rule.** The contended lane put all sixty blocks in the store, so rule 1
+passed and 4.31/s is real. It is also nearly worthless: four writers
+each read the head independently, so they sealed the *same* heights —
+sixty blocks at **fifteen distinct heights**, a bush four wide rather
+than a chain sixty long, and fork choice will discard three in four. **A
+verified count is not a useful count**, and no rule in a harness can
+tell you that. Only the arrangement can, which is why rule 3 exists.
+
+**One attack succeeds, and it closes the ladder the way the others
+did.** Every reading mallory picks from is honest and passes every rule;
+she publishes the largest. The spread is **250/s down to 1.48/s** — a
+hundred and sixty-nine-fold, all of it true. A benchmark is only ever a
+statement about the workload it ran, and choosing the workload is
+upstream of every rule a harness can have. The only defence is the one
+this repository already uses everywhere: print the whole table, name the
+arrangement on every line, and do not write the sentence.
+
+**What could not be built, and where it belongs.** The ladder aimed at a
+speculative `READ_UNCOMMITTED` lane pipelining verification ahead of
+finality, against a settlement lane at commit isolation. **cocolog
+exposes no isolation-level knob**, so that lane does not exist here.
+Naming an isolation level per turn is a cocolog capability and belongs
+in cocolog, exactly as TLS in its C client does — and the two-lane
+comparison became the one available today: disjoint single-appender
+knowledge bases against one contended base, 9.0/s against 4.3/s, with
+the contended one writing a bush.
 
 ### The aggregator: the chain carries its own light client
 

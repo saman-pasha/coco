@@ -106,3 +106,4 @@ suite:
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality
     - hub            # rung 7: many chains, one node, none known in advance
+    - bench          # rung 8: the harness's rules -- not its timings
