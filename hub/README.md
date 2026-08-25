@@ -15,6 +15,10 @@ sh test/hub.sh           # the same rules, checked: 41 checks
 | `mallory.pl` | eight attacks on a host that runs code it did not write |
 | `run.sh` | the choreography |
 
+`../docs/rules-to-settlement.html` is the flowchart: the same arc as a
+diagram, stage by stage, with the choreography written out invocation by
+invocation and the process that runs each step named beside it.
+
 ## The chain carries its own light client
 
 A chain is a knowledge base, so one node hosts many of them the way one

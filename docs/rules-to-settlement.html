@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rules to Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+/* Volume five, on the series tokens. One is new: --foreign, for code
+   that came off somebody else's chain. Teal is the host's own
+   machinery, and the whole of this rung is the distance between the
+   two -- so the distinction is worth a colour and nothing else here is.
+   (--weight and --work, from the two earlier rung pages, do not appear:
+   this page has no stake bars and no sequential lane.) */
+:root{
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F1;
+  --ink:#0F1D1C; --ink-2:#3A4A48; --muted:#6B7C7A; --rule:#D9E3E1;
+  --accent:#0D6B65; --accent-soft:#D5E7E5;
+  --pass:#2A7551; --pass-soft:#DBEBE1;
+  --fail:#A8412A; --fail-soft:#F3E1DB;
+  --foreign:#33578A; --foreign-soft:#DEE7F2;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+    --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+    --accent:#4EBDB1; --accent-soft:#10302D;
+    --pass:#5FC08E; --pass-soft:#0F2A1F;
+    --fail:#E08466; --fail-soft:#301810;
+    --foreign:#83AAD8; --foreign-soft:#151F2E;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+  --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+  --accent:#4EBDB1; --accent-soft:#10302D;
+  --pass:#5FC08E; --pass-soft:#0F2A1F;
+  --fail:#E08466; --fail-soft:#301810;
+  --foreign:#83AAD8; --foreign-soft:#151F2E;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink-2);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:56px 28px 96px}
+
+header.top{border-bottom:1px solid var(--rule); padding-bottom:28px; margin-bottom:44px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 14px
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(30px,5vw,46px);
+  line-height:1.1; color:var(--ink); margin:0 0 14px; text-wrap:balance;
+}
+.standfirst{font-size:17px; max-width:62ch; margin:0}
+.standfirst strong{color:var(--ink); font-weight:600}
+
+h2{font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.2;
+  color:var(--ink); margin:0 0 6px; text-wrap:balance}
+h3{font-family:var(--sans); font-weight:600; font-size:15px; color:var(--ink);
+  margin:24px 0 8px}
+p{margin:0 0 14px; max-width:66ch}
+a{color:var(--accent)}
+
+section.act{margin:0 0 60px; padding-top:34px; border-top:1px solid var(--rule)}
+section.act:first-of-type{border-top:none; padding-top:0}
+.act-head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.act-no{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:3px; padding:3px 8px;
+  letter-spacing:.06em; flex:none;
+}
+.act-sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0}
+
+figure{margin:26px 0 22px; padding:0}
+.figbox{background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:22px 20px; overflow-x:auto}
+svg{display:block; max-width:100%; height:auto; margin:0 auto; color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--muted); margin-top:12px; max-width:70ch}
+figcaption code{font-size:12.5px}
+figcaption b{color:var(--ink-2); font-weight:600}
+
+code{font-family:var(--mono); font-size:13.5px; color:var(--ink);
+  background:var(--surface-2); padding:1px 5px; border-radius:3px}
+
+table{border-collapse:collapse; width:100%; margin:20px 0; font-size:14px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--ink-2)}
+td code{background:none; padding:0; font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px;
+  background:var(--surface); padding:2px 14px}
+.who-m{color:var(--foreign); font-weight:600; font-family:var(--mono); font-size:12px}
+.who-h{color:var(--accent); font-weight:600; font-family:var(--mono); font-size:12px}
+.v-pass{color:var(--pass); font-weight:600; font-family:var(--mono); font-size:12.5px}
+.v-fail{color:var(--fail); font-weight:600; font-family:var(--mono); font-size:12.5px}
+
+.note{border-left:2px solid var(--accent); background:var(--surface);
+  padding:14px 18px; margin:20px 0; border-radius:0 4px 4px 0}
+.note p{margin:0; font-size:15px}
+.note p + p{margin-top:10px}
+.note strong{color:var(--ink)}
+.note.alien{border-left-color:var(--foreign)}
+.note.hard{border-left-color:var(--fail)}
+
+.steps{list-style:none; margin:18px 0 0; padding:0; display:grid; gap:2px}
+.steps li{display:grid; grid-template-columns:26px 1fr; gap:12px;
+  padding:10px 0; border-bottom:1px solid var(--rule); align-items:start}
+.steps li:last-child{border-bottom:none}
+.steps .n{font-family:var(--mono); font-size:11px; color:var(--muted);
+  padding-top:3px; font-variant-numeric:tabular-nums}
+.steps .body{font-size:14.5px}
+.steps .body b{color:var(--ink); font-weight:600}
+.steps .body .pred{display:block; font-family:var(--mono); font-size:12.5px;
+  color:var(--accent); margin-top:2px}
+
+.chain{display:flex; flex-wrap:nowrap; align-items:stretch; gap:0;
+  margin:22px 0 8px; overflow-x:auto}
+.chain .link{flex:1 1 150px; min-width:150px; background:var(--surface);
+  border:1px solid var(--rule); border-radius:5px; padding:12px 14px}
+.chain .link.far{border-color:var(--foreign); background:var(--foreign-soft)}
+.chain .link.done{border-color:var(--pass); background:var(--pass-soft)}
+.chain .link .who{font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px}
+.chain .link .what{font-size:13.5px; color:var(--ink); font-weight:600; display:block}
+.chain .link .pred{font-family:var(--mono); font-size:11.5px; color:var(--accent);
+  display:block; margin-top:5px}
+.chain .arrow{flex:0 0 30px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-family:var(--mono); font-size:15px}
+
+footer{border-top:1px solid var(--rule); margin-top:20px; padding-top:22px;
+  font-size:13.5px; color:var(--muted)}
+footer p{max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">The Coco &middot; rung 7</p>
+  <h1>Rules to Settlement</h1>
+  <p class="standfirst">A chain's own validity rule, traced from the block it was sealed in to the
+  verdict it settles &mdash; every aggregator function it passes through, which process runs which
+  goal, and what each step leaves behind. <strong>The host was never told what any of these chains
+  are</strong>: it reads their rules off their blocks and runs them, under the same fence contracts
+  run under.</p>
+</header>
+
+<figure>
+  <div class="figbox">
+  <svg viewBox="0 0 720 700" role="img" aria-label="Ten stages from publishing a chain's rules to settlement: publish, gossip, read, fence, install, judge, choose, checkpoint, bridge, settle. Each stage names which process runs it, the rows it leaves behind, and the predicates involved.">
+    <text x="86" y="14" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="0.1em" fill="var(--muted)">WHO RUNS IT</text>
+    <line x1="46" y1="52" x2="46" y2="646" stroke="var(--rule)" stroke-width="2"/>
+
+    <!-- 1 publish -->
+    <circle cx="46" cy="52" r="9" fill="var(--foreign)"/>
+    <text x="46" y="56" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">1</text>
+    <text x="86" y="42" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--foreign)">the member chain</text>
+    <rect x="86" y="48" width="316" height="46" rx="4" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+    <text x="100" y="67" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">PUBLISH &mdash; a chain seals its own rules</text>
+    <text x="100" y="84" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">payload rules(zeta, [ &hellip;6 clauses&hellip; ])</text>
+    <text x="418" y="66" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">rules_payload/3 &rarr; ledger_seal/1</text>
+    <text x="418" y="82" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">no new mechanism: rung 2 seals</text>
+
+    <!-- 2 gossip -->
+    <circle cx="46" cy="118" r="9" fill="var(--foreign)"/>
+    <text x="46" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">2</text>
+    <rect x="86" y="114" width="316" height="46" rx="4" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+    <text x="100" y="133" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">GOSSIP &mdash; the host fetches the blocks</text>
+    <text x="100" y="150" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">re-verified on arrival, like any other block</text>
+    <text x="418" y="132" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">ledger_export/0 &rarr; ledger_sync/1</text>
+    <text x="418" y="148" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">valid_block/6 &middot; assertz block/6</text>
+
+    <!-- 3 read -->
+    <circle cx="46" cy="184" r="9" fill="var(--accent)"/>
+    <text x="46" y="188" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">3</text>
+    <text x="86" y="178" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">the host</text>
+    <rect x="86" y="180" width="316" height="46" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="199" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">READ &mdash; the payload is clauses again</text>
+    <text x="100" y="216" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">a VARIANT: same structure, fresh variables</text>
+    <text x="418" y="198" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">latest_rules/2 &middot; rules_of_payload/3</text>
+    <text x="418" y="214" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">rules_at/3 for a block at a height</text>
+
+    <!-- 4 fence -->
+    <circle cx="46" cy="250" r="9" fill="var(--fail)"/>
+    <text x="46" y="254" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">4</text>
+    <rect x="86" y="246" width="316" height="46" rx="4" fill="var(--fail-soft)" stroke="var(--fail)"/>
+    <text x="100" y="265" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">FENCE &mdash; untrusted code, checked once</text>
+    <text x="100" y="282" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">refused here means: a chain this node cannot verify</text>
+    <text x="418" y="264" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">rules_admit/3 &rarr; contract_admit/3</text>
+    <text x="418" y="280" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">+ rules_scoped/2, the namespace</text>
+
+    <!-- 5 install -->
+    <circle cx="46" cy="316" r="9" fill="var(--accent)"/>
+    <text x="46" y="320" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">5</text>
+    <rect x="86" y="312" width="316" height="46" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="331" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">INSTALL &mdash; the light client, compiled</text>
+    <text x="100" y="348" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">zeta_valid/1 and zeta_better/2 now exist here</text>
+    <text x="418" y="330" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">learn_rules/1 &rarr; contract_install/2</text>
+    <text x="418" y="346" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">assertz contract_clause/2 &middot; rules_installed/1</text>
+
+    <!-- 6 judge -->
+    <circle cx="46" cy="382" r="9" fill="var(--accent)"/>
+    <text x="46" y="386" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">6</text>
+    <rect x="86" y="378" width="316" height="46" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="397" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">JUDGE &mdash; by the foreign chain's rule</text>
+    <text x="100" y="414" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">and by the rules in force AT THAT HEIGHT</text>
+    <text x="418" y="396" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">verify_foreign/2 &rarr; zeta_valid/1</text>
+    <text x="418" y="412" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">block_hash/5 &middot; secp256k1_verify/3</text>
+
+    <!-- 7 choose -->
+    <circle cx="46" cy="448" r="9" fill="var(--accent)"/>
+    <text x="46" y="452" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">7</text>
+    <rect x="86" y="444" width="316" height="46" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="463" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">CHOOSE &mdash; by the foreign fork choice</text>
+    <text x="100" y="480" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">two chains, one list of heads, opposite answers</text>
+    <text x="418" y="462" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">best_foreign/3 &rarr; zeta_better/2</text>
+    <text x="418" y="478" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">&hellip; or omega_better/2, same code path</text>
+
+    <!-- 8 checkpoint -->
+    <circle cx="46" cy="514" r="9" fill="var(--accent)"/>
+    <text x="46" y="518" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">8</text>
+    <rect x="86" y="510" width="316" height="46" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+    <text x="100" y="529" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">CHECKPOINT &mdash; one hash, whole federation</text>
+    <text x="100" y="546" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">sealed onto the anchor chain as a payload</text>
+    <text x="418" y="528" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">take_checkpoint/1 &rarr; merkle_root/2</text>
+    <text x="418" y="544" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">checkpoint_leaf/4 &middot; checkpoint_proof/5</text>
+
+    <!-- 9 bridge -->
+    <circle cx="46" cy="580" r="9" fill="var(--accent)"/>
+    <text x="46" y="584" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">9</text>
+    <rect x="86" y="576" width="316" height="46" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="100" y="595" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">BRIDGE &mdash; frozen until a proof arrives</text>
+    <text x="100" y="612" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">guard first, then the chain's OWN finality rule</text>
+    <text x="418" y="594" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">bridge_release/2 &rarr; bridge_ready/3</text>
+    <text x="418" y="610" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">verify_final/1 &rarr; omega_final/2</text>
+
+    <!-- 10 settle -->
+    <circle cx="46" cy="646" r="9" fill="var(--pass)"/>
+    <text x="46" y="650" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="var(--surface)">10</text>
+    <rect x="86" y="642" width="316" height="46" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+    <text x="100" y="661" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">SETTLE &mdash; across chains, as one query</text>
+    <text x="100" y="678" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">trained on zeta, paid on omega, joined on the digest</text>
+    <text x="418" y="660" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">provenance_across/2 &rarr; settle/4</text>
+    <text x="418" y="676" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">import/2 &middot; judge/4 &middot; measure/6</text>
+  </svg>
+  </div>
+  <figcaption>The whole arc, with the process that runs each stage on the left. <b>Blue is
+  foreign</b> &mdash; a member chain's own work, and the code that came off it. Stage 4 is the only
+  red one because it is the only place the host says no to something it was handed.</figcaption>
+</figure>
+
+<div class="note alien">
+  <p><strong>The claim in one line:</strong> in the choreography the aggregator consults a ledger
+  node and an aggregator node and <em>never consults <code>hub/chains.pl</code></em>. Everything it
+  knows about zeta, omega and psi &mdash; what a valid block is, which head is better, what counts
+  as final &mdash; it read off their blocks.</p>
+</div>
+
+<!-- ============ ACT 1 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">01</span>
+    <div>
+      <h2>Rules travel the way data travels</h2>
+      <p class="act-sub">rules_payload/3 &rarr; ledger_seal/1 &rarr; ledger_sync/1 &rarr; rules_of_payload/3</p>
+    </div>
+  </div>
+
+  <p>A chain's rules are a <b>block payload</b>. That one decision is the rung: the rules are
+  hash-committed, signed by whoever was entitled to seal, gossiped like anything else and identical
+  on every node that holds the block &mdash; and none of it needed a mechanism, because rung 2
+  already does all of that for payloads.</p>
+
+  <ol class="steps">
+    <li><span class="n">1</span><span class="body"><b>The chain seals its own rules.</b> Six
+      clauses for zeta: a validity rule, two authority keys, two fork-choice clauses and a finality
+      rule.
+      <span class="pred">rules_payload(zeta, Clauses, P), ledger_seal(P)</span></span></li>
+    <li><span class="n">2</span><span class="body"><b>The host fetches and re-verifies.</b> A rules
+      block is not a special kind of block and is not treated as one &mdash; same hash check, same
+      author check, same signature.
+      <span class="pred">ledger_export/0 &rarr; ledger_sync/1 &rarr; valid_block/6</span></span></li>
+    <li><span class="n">3</span><span class="body"><b>It reads the newest one, or the one in force
+      at a height.</b> A payload that is not rules is skipped, because the chain carries contracts
+      and submissions too.
+      <span class="pred">latest_rules/2 &middot; rules_at/3</span></span></li>
+  </ol>
+
+  <div class="note">
+    <p><strong>What comes back is a variant, not the identical term.</strong> A payload is text and
+    a clause's variables are local to the clause, so reading it makes fresh ones. That is right
+    rather than a defect &mdash; two nodes reading the same payload get clauses that <em>mean</em>
+    the same thing, which is the only sense in which rules can be &ldquo;the same&rdquo; across
+    processes.</p>
+    <p>It also broke the obvious test. Comparing the terms with <code>==</code> reported MANGLED on
+    a perfectly good round trip; the check that replaced it <em>installs what came back and asks it
+    about a real signed block</em>. A term comparison would have been testing the writer.</p>
+  </div>
+
+  <div class="note hard">
+    <p><strong>And this is where the rung's worst bug lived.</strong>
+    <code>ledger_export/0</code> wrapped payloads in hand-written quotes around <code>~w</code>
+    instead of using <code>~q</code>. A payload containing a quote therefore came out malformed, the
+    receiving reader stopped early, and <em>blocks vanished with nothing logged</em>.</p>
+    <p>Rung 2's payloads were prose and never showed it. Rung 7's are <b>source code</b> &mdash; a
+    chain publishing its own rules is full of quoted keys &mdash; and the first one broke every
+    gossip hop in the aggregator. The symptom, three layers away, was a host that reported having
+    learned <code>chains 0 []</code>.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">02</span>
+    <div>
+      <h2>The fence, unchanged, plus one rule</h2>
+      <p class="act-sub">rules_admit/3 = contract_admit/3 + rules_scoped/2</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 300" role="img" aria-label="A contract from rung three and a chain's rules from rung seven both enter the same fence. The fence's vocabulary and its three outright refusals are unchanged; a second gate, the namespace check, applies only to rules.">
+      <rect x="20" y="52" width="150" height="54" rx="5" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="95" y="74" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">a contract</text>
+      <text x="95" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">rung 3</text>
+
+      <rect x="20" y="152" width="150" height="54" rx="5" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+      <text x="95" y="174" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">a chain's rules</text>
+      <text x="95" y="192" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--foreign)">rung 7</text>
+
+      <line x1="170" y1="79" x2="222" y2="110" stroke="var(--muted)" stroke-width="1.5"/>
+      <path d="M216,105 L226,113 L217,113 z" fill="var(--muted)"/>
+      <line x1="170" y1="179" x2="222" y2="148" stroke="var(--foreign)" stroke-width="1.5"/>
+      <path d="M216,153 L226,145 L217,145 z" fill="var(--foreign)"/>
+
+      <rect x="230" y="88" width="230" height="82" rx="5" fill="var(--surface)" stroke="var(--fail)" stroke-width="1.8"/>
+      <text x="345" y="110" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">contract_admit/3</text>
+      <text x="345" y="128" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">one vocabulary, unchanged</text>
+      <text x="345" y="144" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">three outright refusals</text>
+      <text x="345" y="160" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">meta-predicates recursed into</text>
+
+      <line x1="460" y1="129" x2="502" y2="129" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <path d="M502,125 L510,129 L502,133 z" fill="var(--muted)"/>
+
+      <rect x="510" y="100" width="190" height="58" rx="5" fill="var(--foreign-soft)" stroke="var(--foreign)" stroke-dasharray="5 4"/>
+      <text x="605" y="122" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">rules_scoped/2</text>
+      <text x="605" y="139" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--foreign)">rules only &mdash; the namespace</text>
+      <text x="605" y="152" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">zeta may define zeta_*, nothing else</text>
+
+      <line x1="20" y1="228" x2="700" y2="228" stroke="var(--rule)"/>
+      <text x="20" y="250" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">ALREADY IN:  sha256  keccak256  secp256k1_verify/3  ed25519_verify/3  block_hash/5</text>
+      <text x="20" y="266" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">             valid_block/6  in_turn/2  member/2  sort/2  atomic_list_concat/3  is/2</text>
+      <text x="20" y="288" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">ALREADY OUT: assertz  retract  getenv  open  the clock  call/1..8  =../2  a var in goal position</text>
+    </svg>
+    </div>
+    <figcaption>The vocabulary fits a validity rule <b>without alteration</b>. That is not luck: a
+    validity rule and a contract are the same kind of thing &mdash; a function of the chain &mdash;
+    so what one may touch is what the other may touch.</figcaption>
+  </figure>
+
+  <h3>The one rule a contract fence never needed</h3>
+  <p>A contract is alone in its own state. <b>A chain is not.</b> So every predicate a chain defines
+  must be named for that chain: <code>zeta</code> may define <code>zeta_valid/1</code> and nothing
+  else.</p>
+
+  <p>Without it, two chains would both define <code>valid/1</code> and whichever installed second
+  would answer for both. Worse, a hostile chain could define <code>zeta_valid/1</code>
+  <em>on purpose</em> and become the authority on somebody else's chain &mdash; which is
+  <code>attack_namespace_squat</code>, refused here rather than noticed later.</p>
+
+  <div class="note">
+    <p><strong>The namespace check is also where a pillar gap surfaced.</strong> &ldquo;Does this
+    atom start with that one&rdquo; is written <code>atom_concat(Prefix, _, Name)</code> by anyone,
+    and cocolog raised <code>instantiation_error</code> instead of answering: only the concatenating
+    mode existed, and the two splitting modes ISO 8.16.6 requires were unreachable. Fixed in
+    cocolog on its own merits, with seven regression checks &mdash; including that a wrong prefix
+    now <em>fails</em> rather than raising, because guessing wrong about an atom's shape is an
+    ordinary answer.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">03</span>
+    <div>
+      <h2>Two regimes, one host, opposite answers</h2>
+      <p class="act-sub">best_foreign/3 &mdash; one code path, two chains</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 250" role="img" aria-label="One list of two heads goes into two different fork-choice rules. Zeta, which prefers the longest, picks height nine. Omega, which prefers the heaviest, picks height four.">
+      <rect x="255" y="24" width="210" height="52" rx="5" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="360" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">head(9, aaa, 10)</text>
+      <text x="360" y="62" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">head(4, bbb, 90)</text>
+      <text x="360" y="16" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="0.1em" fill="var(--muted)">ONE LIST</text>
+
+      <path d="M290,76 C250,100 200,104 176,110" fill="none" stroke="var(--foreign)" stroke-width="1.5"/>
+      <path d="M182,105 L170,112 L181,114 z" fill="var(--foreign)"/>
+      <path d="M430,76 C470,100 520,104 544,110" fill="none" stroke="var(--foreign)" stroke-width="1.5"/>
+      <path d="M538,105 L550,112 L539,114 z" fill="var(--foreign)"/>
+
+      <rect x="20" y="116" width="290" height="58" rx="5" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+      <text x="36" y="137" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">zeta &mdash; proof of authority</text>
+      <text x="36" y="156" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">zeta_better(head(HA,_,_), head(HB,_,_)) :- HA &gt; HB</text>
+      <text x="36" y="168" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--foreign)">the longest wins</text>
+
+      <rect x="410" y="116" width="290" height="58" rx="5" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+      <text x="426" y="137" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">omega &mdash; stake-weighted</text>
+      <text x="426" y="156" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">omega_better(head(_,_,SA), head(_,_,SB)) :- SA &gt; SB</text>
+      <text x="426" y="168" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--foreign)">the heaviest wins</text>
+
+      <line x1="165" y1="174" x2="165" y2="196" stroke="var(--pass)" stroke-width="1.5"/>
+      <path d="M161,196 L165,204 L169,196 z" fill="var(--pass)"/>
+      <line x1="555" y1="174" x2="555" y2="196" stroke="var(--pass)" stroke-width="1.5"/>
+      <path d="M551,196 L555,204 L559,196 z" fill="var(--pass)"/>
+
+      <rect x="90" y="206" width="150" height="30" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="165" y="226" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="currentColor">height 9</text>
+      <rect x="480" y="206" width="150" height="30" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="555" y="226" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="currentColor">height 4</text>
+
+      <text x="360" y="226" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent)">best_foreign/3, both times</text>
+    </svg>
+    </div>
+    <figcaption>Same list, same node, same code path, opposite answers. Neither chain has to be
+    persuaded that the other is wrong, and the host has no opinion at all &mdash; <b>the difference
+    between the two chains is data</b>.</figcaption>
+  </figure>
+
+  <h3>And the rules are pinned to a height</h3>
+  <p>A block at height 4 is judged by the rules that were on the chain at height 4, never by the
+  rules published at height 9. That is the difference between a chain that may <b>change</b> its
+  rules &mdash; which any chain may &mdash; and one that may <b>rewrite what its old blocks
+  meant</b>, which none may. Both readings are defensible until somebody writes one down;
+  <code>rules_at/3</code> is the one written down.</p>
+
+  <h3>The choreography, invocation by invocation</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>step</th><th>who</th><th>goal</th><th>rows written</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>publish</td><td><span class="who-m">member</span></td><td><code>publish_rules(zeta)</code></td><td><code>block/6</code> + <code>head_mark/2</code></td></tr>
+      <tr><td>fetch</td><td><span class="who-h">host</span></td><td><code>ledger_export/0</code> on the member &rarr; <code>ledger_sync([&hellip;])</code> here</td><td>the member's blocks, re-verified</td></tr>
+      <tr><td>learn</td><td><span class="who-h">host</span></td><td><code>learn_rules(zeta)</code></td><td><code>contract_clause/2</code>, <code>rules_installed/1</code>, and the chain's own clauses</td></tr>
+      <tr><td>judge</td><td><span class="who-h">host</span></td><td><code>verify_foreign(zeta, block(&hellip;))</code></td><td>nothing</td></tr>
+      <tr><td>choose</td><td><span class="who-h">host</span></td><td><code>best_foreign(omega, Heads, Best)</code></td><td>nothing</td></tr>
+      <tr><td>checkpoint</td><td><span class="who-h">host</span></td><td><code>take_checkpoint(R), ledger_seal(&hellip;R&hellip;)</code></td><td><code>block/6</code> on the anchor chain</td></tr>
+      <tr><td>bridge</td><td><span class="who-h">host</span></td><td><code>--steps 300 start bridge1 "bridge_wait(b1)"</code></td><td>a frozen machine</td></tr>
+      <tr><td>release</td><td><span class="who-h">host</span></td><td><code>bridge_release(bridge(&hellip;), proof(&hellip;))</code></td><td><code>bridge_open/1</code></td></tr>
+      <tr><td>join</td><td><span class="who-h">host</span></td><td><code>provenance_across(d1, Rows)</code></td><td>nothing</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">04</span>
+    <div>
+      <h2>One hash for the whole federation</h2>
+      <p class="act-sub">merkle_root/2 &middot; merkle_path/3 &middot; merkle_verify/4</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 280" role="img" aria-label="A Merkle tree over three member heads. Omega and psi pair into an inner node; zeta is promoted to the next level; the root is the hash of the inner node and zeta. Zeta's inclusion proof is a single sibling.">
+      <text x="20" y="20" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">the leaves are sorted, so two nodes taking the same checkpoint get the same root</text>
+
+      <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+        <rect x="40" y="196" width="150" height="42" rx="4" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+        <text x="115" y="214" text-anchor="middle" fill="currentColor">omega  height 0</text>
+        <text x="115" y="230" text-anchor="middle" fill="var(--muted)">7cba556c&hellip;</text>
+
+        <rect x="210" y="196" width="150" height="42" rx="4" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+        <text x="285" y="214" text-anchor="middle" fill="currentColor">psi  height 0</text>
+        <text x="285" y="230" text-anchor="middle" fill="var(--muted)">f2ee3e2b&hellip;</text>
+
+        <rect x="470" y="196" width="150" height="42" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="545" y="214" text-anchor="middle" fill="currentColor">zeta  height 1</text>
+        <text x="545" y="230" text-anchor="middle" fill="var(--muted)">4d30b858&hellip;</text>
+      </g>
+
+      <line x1="115" y1="196" x2="185" y2="150" stroke="var(--muted)" stroke-width="1.4"/>
+      <line x1="285" y1="196" x2="215" y2="150" stroke="var(--muted)" stroke-width="1.4"/>
+      <rect x="120" y="112" width="160" height="34" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="200" y="134" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">sha256(omega | psi)</text>
+
+      <line x1="545" y1="196" x2="545" y2="150" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <text x="556" y="176" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">promoted, not duplicated</text>
+
+      <line x1="200" y1="112" x2="330" y2="72" stroke="var(--muted)" stroke-width="1.4"/>
+      <line x1="545" y1="150" x2="410" y2="72" stroke="var(--accent)" stroke-width="1.4"/>
+      <rect x="270" y="34" width="200" height="36" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="370" y="57" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">root  cec7985c376bc528&hellip;</text>
+
+      <rect x="470" y="112" width="230" height="34" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="484" y="134" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">zeta's proof: one sibling, l(&hellip;)</text>
+
+      <line x1="20" y1="256" x2="700" y2="256" stroke="var(--rule)"/>
+      <text x="20" y="274" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">each leaf carries its CHAIN NAME, so a checkpoint for zeta at height 4 is not one for omega at height 4</text>
+    </svg>
+    </div>
+    <figcaption>A fold would be shorter and give the same root. What it would not give is an
+    <b>inclusion proof</b>: with a fold, showing one member's head is in the root means handing over
+    every other member's head, and a checkpoint that can only be verified by replaying the whole
+    federation is one nobody will verify.</figcaption>
+  </figure>
+
+  <p>An odd level <b>promotes</b> its last leaf rather than duplicating it. The duplicate is the
+  classic Bitcoin flaw &mdash; two different leaf lists hashing to one root &mdash; and it costs
+  nothing to not have.</p>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">05</span>
+    <div>
+      <h2>The bridge is a frozen machine</h2>
+      <p class="act-sub">rung 3's gas, doing a job it was not built for</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 250" role="img" aria-label="A timeline of the bridge: started, suspended at 301 inferences, a proof arrives and is checked in three stages, then the machine finishes after 306 inferences and is dropped.">
+      <line x1="60" y1="86" x2="660" y2="86" stroke="var(--rule)" stroke-width="2"/>
+
+      <circle cx="90" cy="86" r="6" fill="var(--accent)"/>
+      <text x="90" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">start</text>
+      <text x="90" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">bridge_wait(b1)</text>
+
+      <circle cx="240" cy="86" r="6" fill="var(--accent)"/>
+      <text x="240" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">step</text>
+      <text x="240" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor">suspended at 301</text>
+      <text x="240" y="126" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">inference(s), 0 answers</text>
+
+      <circle cx="420" cy="86" r="6" fill="var(--foreign)"/>
+      <text x="420" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--foreign)">a proof arrives</text>
+      <text x="420" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--foreign)">proof(omega, 4, ok, cert(70,100))</text>
+
+      <circle cx="570" cy="86" r="7" fill="var(--pass)"/>
+      <text x="570" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--pass)">step</text>
+      <text x="570" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor">finished after 306</text>
+      <text x="570" y="126" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">inference(s), 1 answer</text>
+
+      <circle cx="650" cy="86" r="6" fill="var(--muted)"/>
+      <text x="650" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">drop</text>
+
+      <text x="60" y="172" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="0.08em" fill="var(--accent)">AND THE GUARD RUNS BEFORE THE CHAIN'S OWN RULE:</text>
+      <rect x="60" y="182" width="186" height="30" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="74" y="202" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">1. the right chain?</text>
+      <rect x="256" y="182" width="186" height="30" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="270" y="202" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">2. the right height and block?</text>
+      <rect x="452" y="182" width="208" height="30" rx="4" fill="var(--foreign-soft)" stroke="var(--foreign)"/>
+      <text x="466" y="202" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">3. omega_final/2 &mdash; omega's rule</text>
+      <text x="60" y="232" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">a perfectly good proof for the WRONG chain fails at step 1 -- which is the shape of a real bridge hack</text>
+    </svg>
+    </div>
+    <figcaption>Between the <code>step</code>s the bridge is not a process, not a timer and not a
+    poll loop &mdash; it is a few hundred bytes in a table, and any node at all can thaw it and go
+    on. What counts as <em>final</em> is the foreign chain's business, so it supplies its own goal:
+    zeta counts depth, omega counts stake, and the host does not have to know which.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ ACT 6 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">06</span>
+    <div>
+      <h2>mallory, against a host that runs code it did not write</h2>
+      <p class="act-sub">hub/mallory.pl &mdash; seven refused, one accepted</p>
+    </div>
+  </div>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>attack</th><th>what she tries</th><th>what answers it</th><th>outcome</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>attack_rules_read_key</code></td><td>rules whose body reads <code>NODE_KEY</code></td><td>the vocabulary, unchanged from rung 3</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_rules_assert</code></td><td>rules that write onto the host</td><td>the same &mdash; no <code>assertz</code> in it</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_rules_call</code></td><td>rules that build a goal at run time</td><td><code>call/1..8</code> refused outright</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_namespace_squat</code></td><td>publish rules named for another chain</td><td><code>rules_scoped/2</code></td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_rules_swap</code></td><td>new rules, applied to old blocks</td><td><code>rules_at/3</code> pins by height</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_wrong_chain</code></td><td>a real proof at the wrong bridge</td><td><code>bridge_ready/3</code>'s first clause</td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_anchor_swap</code></td><td>a head moved after the checkpoint</td><td><code>merkle_verify/4</code></td><td><span class="v-pass">refused</span></td></tr>
+      <tr><td><code>attack_captured_chain</code></td><td><b>own every validator on her own chain</b></td><td>nothing here, and nothing can</td><td><span class="v-fail">ACCEPTED</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note hard">
+    <p><strong>The last one is the most important line in this rung.</strong> psi's published rules
+    are impeccable: they pass the fence, they are correctly namespaced, the signature check is real,
+    and the finality threshold is the same two-thirds rung 6 uses. The host reads them, admits them,
+    installs them and runs them exactly as it runs zeta's.</p>
+    <p>And every validator on psi is mallory. So a block she signed is a valid block, a head she
+    alone voted for carries all of psi's stake, psi's own <code>psi_final/2</code> says it is final,
+    and the bridge thaws.</p>
+    <p><strong>Nothing went wrong.</strong> The host verified correctly, under the correct rules,
+    and reached the correct answer to the question it was asked &mdash; which was <em>is this final
+    on psi</em>, not <em>is psi honest</em>. <strong>An aggregator cannot be stronger than the
+    chains it aggregates</strong>, and every bridge that has ever been drained was drained through
+    this door rather than through a broken signature check. Saying so is worth more than one more
+    refusal.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 7 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">07</span>
+    <div>
+      <h2>Till settlement complete</h2>
+      <p class="act-sub">provenance_across/2 &mdash; and unification is the translation layer</p>
+    </div>
+  </div>
+
+  <p>A fact imported from a chain keeps the chain's name beside it, and asking where something came
+  from is one <code>findall</code> whose shared variable does the joining:</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead><tr><th>chain</th><th>fact</th><th>says</th></tr></thead>
+    <tbody>
+      <tr><td><span class="who-m">zeta</span></td><td><code>trained(d1, alice, 0.99)</code></td><td>a model with digest <code>d1</code> was trained and settled</td></tr>
+      <tr><td><span class="who-m">omega</span></td><td><code>paid(d1, carol, 100)</code></td><td>and somebody paid for it, on a different chain, under a different consensus</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p><b>No schema mapping and no adapter.</b> Two facts that mention the same digest already agree
+  about it, so the join is the query &mdash; which is what the ladder meant by <em>unification is
+  the translation layer</em>.</p>
+
+  <div class="chain">
+    <div class="link far"><span class="who">the member</span><span class="what">publishes its rules</span><span class="pred">rules_payload/3 &rarr; ledger_seal/1</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link"><span class="who">the host</span><span class="what">fences and installs them</span><span class="pred">rules_admit/3 &rarr; contract_install/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link"><span class="who">the host</span><span class="what">judges by that chain's rule</span><span class="pred">verify_foreign/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">the host</span><span class="what">joins across chains</span><span class="pred">provenance_across/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 4</span><span class="what">measured, and settled</span><span class="pred">settle_submissions/0 &rarr; judge/4</span></div>
+  </div>
+
+  <p>Settlement never changed shape. It still asks the only question with a checkable answer &mdash;
+  <b>does it work</b> &mdash; and answers it by re-measuring on the committed holdout. What this
+  rung adds is that the evidence no longer has to live on one chain: <b>a verdict on one chain and
+  a payment on another are one query</b>, and the host that answers it was never told what either
+  chain was.</p>
+
+  <h3>What this rung does not add</h3>
+  <div class="tblwrap">
+  <table>
+    <thead><tr><th>not this</th><th>why</th></tr></thead>
+    <tbody>
+      <tr><td>a rule for admitting a member</td><td>any chain whose rules pass the fence can be learned. Which chains a hub is <em>willing</em> to aggregate is a policy question &mdash; a certificate, a stake bond, a governance vote &mdash; and <code>attack_captured_chain</code> is exactly why that decision matters and exactly why it is not a technical one.</td></tr>
+      <tr><td>rule upgrades across a fork</td><td><code>rules_at/3</code> pins by height on one chain. Which rules apply to a block on a chain that forked <em>at</em> a rules change has more than one defensible answer, and none of them is written down here.</td></tr>
+      <tr><td>moving anything</td><td>the bridge thaws. What an escrow releases, to whom, and what happens if the source chain later reorganises below its finalised block are asset questions; this rung is about the proof.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <p>Every predicate name on this page is taken from the source rather than from memory:
+  <code>library/hub.pl</code>, <code>hub/node.pl</code>, <code>hub/chains.pl</code>,
+  <code>hub/mallory.pl</code>, with <code>library/contract.pl</code>, <code>library/poa.pl</code>
+  and <code>ledger/node.pl</code> underneath. The hashes, the inference counts and the fork-choice
+  answers are printed by <code>hub/run.sh</code>; the rules are checked by <code>test/hub.sh</code>,
+  41 checks. The companion pages are <i>Seal to Settlement</i> (rungs 2&ndash;4),
+  <i>Tick to Settlement</i> (rung 5), and <i>Stake to Settlement</i> and
+  <i>Vote to Settlement</i> (rung 6, from two sides).</p>
+</footer>
+
+</div>
+</body>
+</html>

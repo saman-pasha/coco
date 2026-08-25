@@ -155,7 +155,7 @@ docs/             diagrams worth keeping: seal-to-settlement.html traces
                   tick-to-settlement.html does the same for rung 5,
                   and rung 6 twice over -- stake-to-settlement.html from
                   the stake's side, vote-to-settlement.html from the
-                  vote's
+                  vote's; rules-to-settlement.html for rung 7
 test/             the arrangements that hold it GREEN; config.sh reads
                   coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three

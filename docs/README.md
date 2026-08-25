@@ -7,6 +7,7 @@ Diagrams and explainers that are worth keeping but are not code.
 | `seal-to-settlement.html` | the whole arc, rungs 2&ndash;4: one payload traced from a node's hands to a settled verdict, with every PoA function, gossip hop, fork-choice key and settlement gate in the order it is reached |
 | `tick-to-settlement.html` | rung 5: a spine traced from thirty-two zero bytes to a settled verdict, with every PoH function, the choreography invocation by invocation, and the measured sequential/parallel asymmetry |
 | `stake-to-settlement.html` | rung 6 from the stake's side: a staked token traced to a settled verdict, with every PoS and BFT function, the choreography invocation by invocation, the weighted draw, and the quorum arithmetic that names its own traitors |
+| `rules-to-settlement.html` | rung 7: a chain's own validity rule traced from the block it was sealed in to the verdict it settles, with every aggregator function, the choreography invocation by invocation, the reused fence, the Merkle checkpoint, and the bridge as a frozen machine |
 | `vote-to-settlement.html` | rung 6 from the vote's side: the message flow between four validators as a swimlane, the anatomy of the signed text, every check a vote survives in the order the code applies them, the rows it leaves behind &mdash; and the liveness half that is not built |
 
 Open either from a checkout &mdash; they are standalone documents with no build step
@@ -33,6 +34,14 @@ there is no test that reads an SVG. The names it uses live in:
                           poh_verify_segments/1  poh_slow_run/3
     spine/node.pl         spine_produce/2  verify_one/1  spine_sound/0
                           anchor_block/1  anchor_order/1  anchor_genuine/1
+    library/hub.pl        rules_payload/3  rules_admit/3  rules_scoped/2
+                          merkle_root/2  merkle_path/3  merkle_verify/4
+                          checkpoint_leaf/4  bridge_ready/3
+    hub/node.pl           publish_rules/1  learn_rules/1  rules_at/3
+                          verify_foreign/2  best_foreign/3  final_foreign/3
+                          take_checkpoint/1  checkpoint_proof/5
+                          bridge_wait/1  bridge_release/2
+                          import/2  provenance_across/2
     library/pos.pl        stake_of/2  stake_table/1  total_stake/1
                           quorum/2  fault_bound/2  leader/3  draw_index/3
     library/bft.pl        cast/6  valid_vote/1  qc_valid/1  qc_stake/2
