@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vote to Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+/* Volume four, on the series tokens. --weight carries over from
+   stake-to-settlement because quorums are still counted in tokens; the
+   new material here is the MESSAGE, and it is carried by the swimlane
+   rather than by a colour. Adding a fourth accent for its own sake
+   would be decoration. */
+:root{
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F1;
+  --ink:#0F1D1C; --ink-2:#3A4A48; --muted:#6B7C7A; --rule:#D9E3E1;
+  --accent:#0D6B65; --accent-soft:#D5E7E5;
+  --pass:#2A7551; --pass-soft:#DBEBE1;
+  --fail:#A8412A; --fail-soft:#F3E1DB;
+  --weight:#54459B; --weight-soft:#E3DFF3;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+    --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+    --accent:#4EBDB1; --accent-soft:#10302D;
+    --pass:#5FC08E; --pass-soft:#0F2A1F;
+    --fail:#E08466; --fail-soft:#301810;
+    --weight:#A093DE; --weight-soft:#211B3B;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1413; --surface:#132120; --surface-2:#0F1B1A;
+  --ink:#E9F1EF; --ink-2:#BDCCC9; --muted:#879996; --rule:#223735;
+  --accent:#4EBDB1; --accent-soft:#10302D;
+  --pass:#5FC08E; --pass-soft:#0F2A1F;
+  --fail:#E08466; --fail-soft:#301810;
+  --weight:#A093DE; --weight-soft:#211B3B;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink-2);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:56px 28px 96px}
+
+header.top{border-bottom:1px solid var(--rule); padding-bottom:28px; margin-bottom:44px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 14px
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(30px,5vw,46px);
+  line-height:1.1; color:var(--ink); margin:0 0 14px; text-wrap:balance;
+}
+.standfirst{font-size:17px; max-width:62ch; margin:0}
+.standfirst strong{color:var(--ink); font-weight:600}
+
+h2{
+  font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.2;
+  color:var(--ink); margin:0 0 6px; text-wrap:balance;
+}
+h3{
+  font-family:var(--sans); font-weight:600; font-size:15px; color:var(--ink);
+  margin:24px 0 8px;
+}
+p{margin:0 0 14px; max-width:66ch}
+a{color:var(--accent)}
+
+section.act{margin:0 0 60px; padding-top:34px; border-top:1px solid var(--rule)}
+section.act:first-of-type{border-top:none; padding-top:0}
+.act-head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.act-no{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:3px; padding:3px 8px;
+  letter-spacing:.06em; flex:none;
+}
+.act-sub{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0}
+
+figure{margin:26px 0 22px; padding:0}
+.figbox{
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:22px 20px; overflow-x:auto;
+}
+svg{display:block; max-width:100%; height:auto; margin:0 auto; color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--muted); margin-top:12px; max-width:70ch}
+figcaption code{font-size:12.5px}
+figcaption b{color:var(--ink-2); font-weight:600}
+
+code{font-family:var(--mono); font-size:13.5px; color:var(--ink);
+  background:var(--surface-2); padding:1px 5px; border-radius:3px}
+
+table{border-collapse:collapse; width:100%; margin:20px 0; font-size:14px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--ink-2);
+}
+td code{background:none; padding:0; font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto; border:1px solid var(--rule); border-radius:6px;
+  background:var(--surface); padding:2px 14px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:13px; text-align:right}
+th.num{text-align:right}
+.v-pass{color:var(--pass); font-weight:600; font-family:var(--mono); font-size:12.5px}
+.v-fail{color:var(--fail); font-weight:600; font-family:var(--mono); font-size:12.5px}
+
+.note{
+  border-left:2px solid var(--accent); background:var(--surface);
+  padding:14px 18px; margin:20px 0; border-radius:0 4px 4px 0;
+}
+.note p{margin:0; font-size:15px}
+.note p + p{margin-top:10px}
+.note strong{color:var(--ink)}
+.note.gap{border-left-color:var(--fail)}
+
+.split{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin:22px 0}
+.pane{background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:16px 18px}
+.pane.safe{border-color:var(--pass)}
+.pane.open{border-color:var(--fail)}
+.pane h4{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+  margin:0 0 10px; color:var(--muted);
+}
+.pane.safe h4{color:var(--pass)}
+.pane.open h4{color:var(--fail)}
+.pane ul{margin:0; padding-left:18px; font-size:14.5px}
+.pane li{margin-bottom:7px}
+.pane li:last-child{margin-bottom:0}
+.pane li b{color:var(--ink); font-weight:600}
+
+.chain{display:flex; flex-wrap:nowrap; align-items:stretch; gap:0;
+  margin:22px 0 8px; overflow-x:auto}
+.chain .link{
+  flex:1 1 150px; min-width:150px; background:var(--surface);
+  border:1px solid var(--rule); border-radius:5px; padding:12px 14px;
+}
+.chain .link.votes{border-color:var(--accent); background:var(--accent-soft)}
+.chain .link.done{border-color:var(--pass); background:var(--pass-soft)}
+.chain .link .who{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px;
+}
+.chain .link .what{font-size:13.5px; color:var(--ink); font-weight:600; display:block}
+.chain .link .pred{
+  font-family:var(--mono); font-size:11.5px; color:var(--accent);
+  display:block; margin-top:5px;
+}
+.chain .arrow{
+  flex:0 0 30px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-family:var(--mono); font-size:15px;
+}
+
+footer{border-top:1px solid var(--rule); margin-top:20px; padding-top:22px;
+  font-size:13.5px; color:var(--muted)}
+footer p{max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">The Coco &middot; rung 6, from the vote's side</p>
+  <h1>Vote to Settlement</h1>
+  <p class="standfirst">One vote, traced from the text that gets signed to the verdict it settles
+  &mdash; who sends it to whom, every check it survives on the way, and what it leaves behind in
+  each validator's rows. <strong>There is no round timer, no leader announcement and no daemon</strong>:
+  a validator is an invocation that reads rows, casts one vote and exits.</p>
+</header>
+
+<figure>
+  <div class="figbox">
+  <svg viewBox="0 0 720 400" role="img" aria-label="A swimlane diagram of four validators across five phases: seal, prevote, polka, precommit, finalise. Alice, bob and carol exchange votes and reach finality; mallory is below a partition line, casts only her own precommits, and finalises nothing.">
+    <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)" text-anchor="middle">
+      <text x="150" y="30">SEAL</text>
+      <text x="280" y="30">PREVOTE</text>
+      <text x="400" y="30">POLKA</text>
+      <text x="520" y="30">PRECOMMIT</text>
+      <text x="640" y="30">FINALISE</text>
+    </g>
+    <g stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4">
+      <line x1="215" y1="42" x2="215" y2="286"/>
+      <line x1="340" y1="42" x2="340" y2="286"/>
+      <line x1="460" y1="42" x2="460" y2="286"/>
+      <line x1="580" y1="42" x2="580" y2="286"/>
+    </g>
+
+    <!-- lanes -->
+    <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" text-anchor="end">
+      <text x="78" y="88">alice</text>
+      <text x="78" y="138">bob</text>
+      <text x="78" y="188">carol</text>
+      <text x="78" y="270">mallory</text>
+    </g>
+    <g stroke="var(--rule)" stroke-width="1.5">
+      <line x1="90" y1="84" x2="700" y2="84"/>
+      <line x1="90" y1="134" x2="700" y2="134"/>
+      <line x1="90" y1="184" x2="700" y2="184"/>
+    </g>
+    <line x1="90" y1="266" x2="700" y2="266" stroke="var(--fail)" stroke-width="1.5" stroke-opacity="0.5"/>
+
+    <!-- the partition -->
+    <line x1="90" y1="222" x2="700" y2="222" stroke="var(--fail)" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="96" y="216" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--fail)">no gossip crosses here &mdash; which is all a partition is</text>
+
+    <!-- seal -->
+    <circle cx="150" cy="84" r="6.5" fill="var(--accent)"/>
+    <text x="150" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">drawn leader</text>
+    <circle cx="150" cy="266" r="6.5" fill="var(--fail)"/>
+    <text x="150" y="292" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--fail)">her own block, same height</text>
+
+    <!-- prevote -->
+    <circle cx="280" cy="84" r="6.5" fill="var(--accent)"/>
+    <circle cx="280" cy="134" r="6.5" fill="var(--accent)"/>
+    <circle cx="280" cy="184" r="6.5" fill="var(--accent)"/>
+
+    <!-- polka -->
+    <circle cx="400" cy="84" r="6.5" fill="var(--accent)"/>
+    <text x="400" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)">85 of 100</text>
+
+    <!-- precommit -->
+    <circle cx="520" cy="84" r="6.5" fill="var(--accent)"/>
+    <circle cx="520" cy="134" r="6.5" fill="var(--accent)"/>
+    <circle cx="520" cy="184" r="6.5" fill="var(--accent)"/>
+    <circle cx="520" cy="266" r="6.5" fill="var(--fail)"/>
+
+    <!-- finalise -->
+    <circle cx="640" cy="84" r="7.5" fill="var(--pass)"/>
+    <text x="640" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--pass)">final/2</text>
+    <g stroke="var(--fail)" stroke-width="1.8">
+      <line x1="634" y1="260" x2="646" y2="272"/>
+      <line x1="646" y1="260" x2="634" y2="272"/>
+    </g>
+    <text x="640" y="292" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--fail)">nothing to finalise</text>
+
+    <!-- gossip -->
+    <g stroke="var(--accent)" stroke-width="1.4">
+      <line x1="215" y1="92" x2="215" y2="176"/>
+      <line x1="340" y1="92" x2="340" y2="176"/>
+      <line x1="580" y1="92" x2="580" y2="176"/>
+    </g>
+    <g fill="var(--accent)">
+      <path d="M211,92 L215,84 L219,92 z"/><path d="M211,176 L215,184 L219,176 z"/>
+      <path d="M336,92 L340,84 L344,92 z"/><path d="M336,176 L340,184 L344,176 z"/>
+      <path d="M576,92 L580,84 L584,92 z"/><path d="M576,176 L580,184 L584,176 z"/>
+    </g>
+    <text x="222" y="136" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">ledger_sync/1</text>
+    <text x="347" y="136" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">votes_sync/1</text>
+    <text x="587" y="136" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">votes_sync/1</text>
+
+    <line x1="90" y1="318" x2="700" y2="318" stroke="var(--rule)"/>
+    <text x="90" y="340" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">every arrow is one node READING another's rows and offering them; the receiver re-verifies</text>
+    <text x="90" y="356" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">each one with valid_vote/1 before it becomes a row. There is no message format, because a</text>
+    <text x="90" y="372" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">knowledge base is already readable &mdash; votes_export/0 prints terms, votes_sync/1 takes them.</text>
+    <text x="90" y="392" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">Nothing on this diagram is a timer. Every dot is somebody running one goal and exiting.</text>
+  </svg>
+  </div>
+  <figcaption>The choreography as it actually ran. mallory is below the line not because she is
+  excluded by a rule but because <b>nobody gossiped to her</b> &mdash; and the consequence is
+  visible in her rows rather than announced: she holds two of her own precommits, no proof of lock
+  change, and nothing final.</figcaption>
+</figure>
+
+<div class="note">
+  <p><strong>A validator is not a process that runs.</strong> It is a <code>cocolog</code>
+  invocation that reads rows, casts one vote and exits. What another validator has voted is a row
+  it can read &mdash; which is why a certificate can be assembled by <em>anyone at all</em>, why
+  there is no aggregator role, and why two nodes holding the same votes build the same
+  certificate.</p>
+</div>
+
+<!-- ============ ACT 1 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">01</span>
+    <div>
+      <h2>What a vote is</h2>
+      <p class="act-sub">vote_signable/5 &rarr; vote_hash/5 &rarr; cast/6</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 170" role="img" aria-label="The signed text of a vote, in five fields: the literal word vote, the kind, the height, the round, and the block hash, joined by pipes.">
+      <text x="60" y="40" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">what secp256k1 actually signs is the sha256 of this text, and nothing else:</text>
+
+      <rect x="60"  y="60" width="66"  height="36" rx="4" fill="var(--surface-2)" stroke="var(--rule)"/>
+      <text x="93"  y="83" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">vote</text>
+      <rect x="130" y="60" width="116" height="36" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="188" y="83" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">precommit</text>
+      <rect x="250" y="60" width="46"  height="36" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="273" y="83" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">4</text>
+      <rect x="300" y="60" width="46"  height="36" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="323" y="83" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">0</text>
+      <rect x="350" y="60" width="196" height="36" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="448" y="83" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">d728c530ee3640be&hellip;</text>
+
+      <g font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--muted)" text-anchor="middle">
+        <text x="128" y="83">|</text><text x="248" y="83">|</text>
+        <text x="298" y="83">|</text><text x="348" y="83">|</text>
+      </g>
+
+      <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)" text-anchor="middle">
+        <text x="93"  y="52">literal</text>
+        <text x="188" y="52">kind</text>
+        <text x="273" y="52">height</text>
+        <text x="323" y="52">round</text>
+        <text x="448" y="52">block hash</text>
+      </g>
+
+      <text x="562" y="83" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--accent)">&rarr; sha256 &rarr; sign</text>
+
+      <line x1="60" y1="118" x2="660" y2="118" stroke="var(--rule)"/>
+      <text x="60" y="140" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">Every field is in there because leaving it out is an attack, and each of those attacks</text>
+      <text x="60" y="156" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">is in votes/mallory.pl with a name.</text>
+    </svg>
+    </div>
+    <figcaption>The separator is the same discipline as <code>block_signable/5</code> one rung down:
+    without it, height 1 round 23 and height 12 round 3 would hash the same.</figcaption>
+  </figure>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>field</th><th>what it stops</th><th>the attack, by name</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>vote</code></td><td>a vote hash colliding with a block hash &mdash; domain separation between two things both signed by the same key</td><td>&mdash;</td></tr>
+      <tr><td>kind</td><td>a prevote (&ldquo;I would accept&rdquo;) presented as a precommit (&ldquo;I am bound&rdquo;)</td><td><code>attack_replay_phase</code></td></tr>
+      <tr><td>height, round</td><td>a genuine vote moved to a height or round it was never cast at</td><td>&mdash;</td></tr>
+      <tr><td>block hash</td><td>a signature over block A relabelled as a vote for block B</td><td><code>attack_forge_vote</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The signature itself is deterministic: <code>library(secp256k1)</code> derives the nonce with
+  RFC 6979 from the key and the hash, so <b>two validators signing the same vote produce the same
+  signature</b> and there is no entropy source to be wrong.</p>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">02</span>
+    <div>
+      <h2>Every check a vote survives</h2>
+      <p class="act-sub">valid_vote/1, then qc_valid/1 &mdash; in the order the code applies them</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 380" role="img" aria-label="Seven gates in order. Three apply to each vote on its own: has stake, a key in the roster, a verifying signature. Four apply to the list as a whole: not empty, all votes match, distinct voters, and enough stake.">
+      <text x="90" y="32" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="0.08em" fill="var(--accent)">VALID_VOTE/1 &mdash; EACH VOTE, ON ITS OWN</text>
+
+      <rect x="90" y="44" width="370" height="30" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="104" y="64" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">has_stake(Who)</text>
+      <text x="476" y="64" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">a stranger &mdash; before the curve is paid for</text>
+
+      <rect x="90" y="82" width="370" height="30" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="104" y="102" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">validator_key(Who, Pub)</text>
+      <text x="476" y="102" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">a name with no key in the roster</text>
+
+      <rect x="90" y="120" width="370" height="30" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="104" y="140" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">secp256k1_verify(Hash, Sig, Pub)</text>
+      <text x="476" y="140" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">a signature over any other text</text>
+
+      <text x="90" y="186" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="0.08em" fill="var(--weight)">QC_VALID/1 &mdash; THE LIST AS A WHOLE</text>
+
+      <rect x="90" y="198" width="370" height="30" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+      <text x="104" y="218" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">Votes \== []</text>
+      <text x="476" y="218" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">an empty certificate</text>
+
+      <rect x="90" y="236" width="370" height="30" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+      <text x="104" y="256" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">forall vote_matches/5</text>
+      <text x="476" y="256" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">votes for four different blocks</text>
+
+      <rect x="90" y="274" width="370" height="30" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+      <text x="104" y="294" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">distinct voters = votes</text>
+      <text x="476" y="294" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">one vote, repeated four times</text>
+
+      <rect x="90" y="312" width="370" height="30" rx="4" fill="var(--weight-soft)" stroke="var(--weight)"/>
+      <text x="104" y="332" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">qc_stake(Votes, S), S &gt;= Q</text>
+      <text x="476" y="332" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--fail)">many names holding little weight</text>
+
+      <rect x="90" y="350" width="370" height="26" rx="4" fill="var(--pass-soft)" stroke="var(--pass)"/>
+      <text x="104" y="368" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--pass)">counted</text>
+      <text x="476" y="368" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">and only now is it a quorum</text>
+    </svg>
+    </div>
+    <figcaption>Order is not cosmetic: <b>stake is checked before the signature</b>, because a row
+    lookup is cheap and an elliptic curve operation is not. A vote from a stranger is refused
+    without paying for the curve.</figcaption>
+  </figure>
+
+  <p>The same gauntlet runs in three places, and that is the point of it being a predicate rather
+  than a step in a protocol: when a validator receives gossip
+  (<code>votes_sync/1</code>), when it verifies a prevote quorum before changing a lock
+  (<code>learn_pol/3</code>), and when anyone at all assembles a certificate
+  (<code>gather/5</code> &rarr; <code>qc_valid/1</code>).</p>
+
+  <div class="note">
+    <p><strong>A peer's word that a signature is good is a claim.</strong> <code>votes_sync/1</code>
+    re-verifies every offered vote before it becomes a row &mdash; and skips the ones that fail
+    rather than refusing the batch, because a batch containing one bad vote is not a bad batch.</p>
+  </div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">03</span>
+    <div>
+      <h2>What a vote leaves behind</h2>
+      <p class="act-sub">the two vote books, as they actually stood</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="figbox">
+    <svg viewBox="0 0 720 280" role="img" aria-label="A paired bar chart of the rows held by alice and by mallory after the run: six votes against two, one lock against two, one polka against none, one finalised block against none, four stake entries each, and nine blocks against eight.">
+      <rect x="120" y="14" width="12" height="12" fill="var(--accent)"/>
+      <text x="140" y="25" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">alice</text>
+      <rect x="200" y="14" width="12" height="12" fill="var(--fail)"/>
+      <text x="220" y="25" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">mallory</text>
+      <text x="300" y="25" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">rows in each knowledge base after votes/run.sh</text>
+
+      <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" text-anchor="end">
+        <text x="108" y="61">vote/6</text>
+        <text x="108" y="97">lock_row/3</text>
+        <text x="108" y="133">pol_row/3</text>
+        <text x="108" y="169">final/2</text>
+        <text x="108" y="205">stake_entry/2</text>
+        <text x="108" y="241">block/6</text>
+      </g>
+
+      <g fill="var(--accent)">
+        <rect x="120" y="44" width="216" height="12"/>
+        <rect x="120" y="80" width="36"  height="12"/>
+        <rect x="120" y="116" width="36" height="12"/>
+        <rect x="120" y="152" width="36" height="12"/>
+        <rect x="120" y="188" width="144" height="12"/>
+        <rect x="120" y="224" width="324" height="12"/>
+      </g>
+      <g fill="var(--fail)">
+        <rect x="120" y="58" width="72"  height="12"/>
+        <rect x="120" y="94" width="72"  height="12"/>
+        <rect x="120" y="130" width="1"  height="12"/>
+        <rect x="120" y="166" width="1"  height="12"/>
+        <rect x="120" y="200" width="144" height="12"/>
+        <rect x="120" y="236" width="288" height="12"/>
+      </g>
+
+      <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">
+        <text x="344" y="54">6</text>   <text x="200" y="68">2</text>
+        <text x="164" y="90">1</text>   <text x="200" y="104">2</text>
+        <text x="164" y="126">1</text>  <text x="130" y="140">0</text>
+        <text x="164" y="162">1</text>  <text x="130" y="176">0</text>
+        <text x="272" y="198">4</text>  <text x="272" y="212">4</text>
+        <text x="452" y="234">9</text>  <text x="416" y="248">8</text>
+      </g>
+
+      <line x1="120" y1="262" x2="660" y2="262" stroke="var(--rule)"/>
+      <text x="120" y="276" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">alice: 3 prevotes and 3 precommits, from alice, bob and carol. mallory: 2 precommits, both her own.</text>
+    </svg>
+    </div>
+    <figcaption>Two rows tell the whole story of the partition. mallory holds <b>no
+    <code>pol_row/3</code> and no <code>final/2</code></b> &mdash; not because a rule shut her out,
+    but because she never received anyone's votes, so no certificate could be assembled from what
+    she has. Her two locks are the same block at two rounds, which the lock rule allows.</figcaption>
+  </figure>
+
+  <p>There is <b>no in-memory state anywhere</b>. Everything a validator knows about a consensus in
+  progress is these five row types, so a validator that dies has lost nothing and one that starts
+  has missed nothing &mdash; the family's whole claim, arriving in a place where most systems keep
+  a state machine in RAM.</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>row</th><th>written by</th><th>says</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>stake_entry/2</code>, <code>stake_seen/1</code></td><td><code>learn_stake/1</code>, once per block</td><td>who may vote and how much they weigh</td></tr>
+      <tr><td><code>vote/6</code></td><td><code>do_prevote/3</code>, <code>do_precommit/3</code>, <code>votes_sync/1</code></td><td>somebody voted, and here is the signature</td></tr>
+      <tr><td><code>lock_row/3</code></td><td><code>do_precommit/3</code> &mdash; same goal as the vote</td><td>this validator is bound to a block at a height</td></tr>
+      <tr><td><code>pol_row/3</code></td><td><code>learn_pol/3</code>, after verifying the certificate</td><td>a prevote quorum this validator checked itself</td></tr>
+      <tr><td><code>final/2</code></td><td><code>finalize/3</code></td><td>a precommit quorum exists; this block is settled</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The lock is <b>append-only like everything else</b>: a released lock is replaced by a new row
+  at a higher round rather than by an edit, so what a validator was bound to and when is still on
+  the record. <code>current_lock/2</code> takes the highest round at that height.</p>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">04</span>
+    <div>
+      <h2>Safety and liveness are not the same property</h2>
+      <p class="act-sub">and only one of them is built</p>
+    </div>
+  </div>
+
+  <p>Safety is <em>nothing bad happens</em>: no two conflicting blocks are ever both finalised, and
+  if they somehow were, the validators responsible are named. Liveness is <em>something good
+  eventually happens</em>: the chain keeps making progress. They are answered by different
+  mechanisms and this rung answers one of them.</p>
+
+  <div class="split">
+    <div class="pane safe">
+      <h4>Safety &mdash; built and checked</h4>
+      <ul>
+        <li><b>The lock.</b> A precommitted validator is bound until a <em>later</em> prevote quorum releases it &mdash; <code>locked_ok/5</code>, five clauses, six checks in the suite.</li>
+        <li><b>The threshold.</b> <code>Q = 2T/3 + 1</code>, so two quorums share more than <code>T/3</code>. Not a convention: arithmetic.</li>
+        <li><b>Accountability.</b> <code>culprits/3</code> names the overlap; <code>equivocation/3</code> returns the two documents one key signed.</li>
+        <li><b>Finality.</b> <code>extends_final/1</code> &mdash; a chain omitting a finalised block is not a candidate at any length.</li>
+        <li><b>Atomicity.</b> The vote and the lock are one goal, so one transaction.</li>
+      </ul>
+    </div>
+    <div class="pane open">
+      <h4>Liveness &mdash; not built, and not pretended</h4>
+      <ul>
+        <li><b>No round timer.</b> Rounds advance because the choreography advances them. Nothing decides that a proposer is late.</li>
+        <li><b>No round advance.</b> There is no goal that moves a validator from round <em>R</em> to <em>R+1</em>; the round is an argument the caller passes.</li>
+        <li><b>No nil vote.</b> A validator that will not vote for a proposal simply does not vote, so a failed round is indistinguishable from a slow one.</li>
+        <li><b>Leader down &rArr; nothing happens.</b> Nobody proposes, <code>proposal_ok/2</code> fails for everyone, no quorum forms, nothing is finalised &mdash; and <em>nothing is wrong</em>, which is exactly the problem.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note gap">
+    <p><strong>The honest form of a clock here is rung 5's spine, not wall time.</strong> Deciding
+    that a proposer is late needs a measure of elapsed <em>work</em> that every validator computes
+    the same way, and a wall clock is not one &mdash; two validators disagreeing about the time is
+    how a timeout becomes a fork. <code>poh_anchor/3</code> is the seam that would carry it, and
+    joining the two is a rung that has not been built.</p>
+  </div>
+
+  <h3>What the rung does when things go wrong</h3>
+  <div class="tblwrap">
+  <table>
+    <thead>
+      <tr><th>what happens</th><th>what the rules do</th><th>answered?</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>two blocks at one height, nobody aware</td><td>one side reaches a quorum and finalises; the other is a fork that <code>extends_final/1</code> discards, however long it grows</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>a validator signs two blocks at one height</td><td><code>equivocation/3</code> returns her name and both documents; nothing to corroborate, nobody to believe</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>a coalition over a third of the stake signs both sides</td><td>both certificates are real; <code>culprits/3</code> names every validator in the overlap and its weight exceeds the fault bound</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>a validator is cut off from the gossip</td><td>it assembles no certificate and finalises nothing &mdash; visible in its rows, and it cannot be fooled into thinking otherwise</td><td><span class="v-pass">yes</span></td></tr>
+      <tr><td>the drawn leader never proposes</td><td>nothing. No block, no votes, no quorum, no progress &mdash; and no rule notices</td><td><span class="v-fail">no</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act">
+  <div class="act-head">
+    <span class="act-no">05</span>
+    <div>
+      <h2>Till settlement complete</h2>
+      <p class="act-sub">what a vote is finally worth</p>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="link"><span class="who">rung 2 &middot; ledger</span><span class="what">a block is sealed</span><span class="pred">ledger_seal/1</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link votes"><span class="who">rung 6 &middot; the vote</span><span class="what">signed, gossiped, re-verified</span><span class="pred">cast/6 &rarr; votes_sync/1</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link votes"><span class="who">rung 6 &middot; the count</span><span class="what">two quorums, and a lock</span><span class="pred">qc_valid/1 &middot; locked_ok/5</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 6 &middot; finality</span><span class="what">settled, not merely deepest</span><span class="pred">finalize/3 &rarr; final/2</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="link done"><span class="who">rung 4 &middot; settlement</span><span class="what">measured, and settled</span><span class="pred">settle_submissions/0 &rarr; judge/4</span></div>
+  </div>
+
+  <p>Settlement never changed shape. It still asks the only question with a checkable answer &mdash;
+  <b>does it work</b> &mdash; and answers it by re-measuring on the committed holdout, never by
+  believing a worker's claim.</p>
+
+  <p>What the vote buys it is one thing: the chain it reads is no longer merely the deepest one
+  anybody happened to see. <b>&ldquo;This submission was on the chain&rdquo; stops being a fact that
+  can be revised</b>, so a verdict computed over a finalised prefix does not have to be recomputed
+  when a longer fork turns up next week &mdash; which, as the swimlane shows, it will.</p>
+
+  <div class="note">
+    <p><strong>And the vote itself is a row.</strong> Not a message that was consumed, not an event
+    that was processed &mdash; a clause, sitting in a knowledge base, still readable and still
+    checkable by anybody who wants to re-run <code>qc_valid/1</code> over it a year from now. The
+    audit is not a log of what the system decided; it is <em>the same data the decision was made
+    from</em>.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Every predicate name on this page is taken from the source rather than from memory:
+  <code>library/bft.pl</code>, <code>library/pos.pl</code>, <code>votes/node.pl</code>,
+  <code>votes/mallory.pl</code>. The row counts are read from the <code>votes_alice</code> and
+  <code>votes_mallory</code> knowledge bases after <code>votes/run.sh</code>; the thresholds and
+  the eight attacks are checked by <code>test/votes.sh</code>, 37 checks. The companion pages are
+  <i>Seal to Settlement</i> (rungs 2&ndash;4), <i>Tick to Settlement</i> (rung 5) and
+  <i>Stake to Settlement</i>, which traces this same rung from the stake's side rather than the
+  vote's.</p>
+</footer>
+
+</div>
+</body>
+</html>

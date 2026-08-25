@@ -6,7 +6,8 @@ Diagrams and explainers that are worth keeping but are not code.
 |---|---|
 | `seal-to-settlement.html` | the whole arc, rungs 2&ndash;4: one payload traced from a node's hands to a settled verdict, with every PoA function, gossip hop, fork-choice key and settlement gate in the order it is reached |
 | `tick-to-settlement.html` | rung 5: a spine traced from thirty-two zero bytes to a settled verdict, with every PoH function, the choreography invocation by invocation, and the measured sequential/parallel asymmetry |
-| `stake-to-settlement.html` | rung 6: a staked token traced to a settled verdict, with every PoS and BFT function, the choreography invocation by invocation, the weighted draw, and the quorum arithmetic that names its own traitors |
+| `stake-to-settlement.html` | rung 6 from the stake's side: a staked token traced to a settled verdict, with every PoS and BFT function, the choreography invocation by invocation, the weighted draw, and the quorum arithmetic that names its own traitors |
+| `vote-to-settlement.html` | rung 6 from the vote's side: the message flow between four validators as a swimlane, the anatomy of the signed text, every check a vote survives in the order the code applies them, the rows it leaves behind &mdash; and the liveness half that is not built |
 
 Open either from a checkout &mdash; they are standalone documents with no build step
 and no local assets. The only thing they fetch is the webfont; without a network it

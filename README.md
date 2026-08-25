@@ -150,7 +150,9 @@ votes/            rung 6: PoS and BFT votes -- stake read off the chain,
 docs/             diagrams worth keeping: seal-to-settlement.html traces
                   one payload through every gate, rungs 2 to 4;
                   tick-to-settlement.html does the same for rung 5,
-                  stake-to-settlement.html for rung 6
+                  and rung 6 twice over -- stake-to-settlement.html from
+                  the stake's side, vote-to-settlement.html from the
+                  vote's
 test/             the arrangements that hold it GREEN; config.sh reads
                   coco.yaml and is sourced, not run
 art/              the banner -- Coco, the engineer, one of the three

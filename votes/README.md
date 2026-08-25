@@ -17,9 +17,12 @@ sh test/votes.sh         # the same rules, checked: 37 checks
 | `mallory.pl` | eight attacks from inside the validator set |
 | `run.sh` | the choreography |
 
-`../docs/stake-to-settlement.html` is the flowchart: the same arc as a
-diagram, stage by stage, with the choreography written out invocation by
-invocation.
+Two flowcharts, because there are two ways through this rung.
+`../docs/stake-to-settlement.html` follows the STAKE: where weight comes
+from, the draw, and the arc down to settlement.
+`../docs/vote-to-settlement.html` follows the VOTE: who sends what to
+whom, every check it survives, the rows it leaves behind, and the
+liveness half that is not built.
 
 ## What this rung adds to the ledger under it
 
