@@ -14,7 +14,11 @@ sh test/contracts.sh      # the same thing, checked: 27 checks
 | `sources.pl` | the contracts — honest and criminal, side by side |
 | `node.pl` | deploy, install from the chain, report |
 | `run.sh` | the choreography |
-| `dex/uniswap.pl` | constant-product pools: the quote, the invariant |
+| `token/fungible.pl` | ERC-20's shape: balances, allowances, conservation |
+| `token/nonfungible.pl` | ERC-721's: one owner per id, and who may move it |
+| `dex/uniswap.pl` | v2: constant-product pools, the quote, the invariant |
+| `dex/uniswap-v3.pl` | v3: ranges, positions as NFTs, tick crossing, fee growth |
+| `lending/aave.pl` | a pot lent against collateral, priced by an oracle |
 
 ## Contracts live here, categorised — and not in `library/`
 
@@ -24,12 +28,48 @@ type `library(u256)`, the encodings. Anything may load one, by name.
 A **contract** is a thing deployed on a chain. It holds state, it is
 called through `contract_call/2`, and its source is what a block's
 payload carries. Contracts go under this directory, one subdirectory per
-category (`dex/` so far), and they are reached **by path** rather than by
-`library(Name)` — a node should not be able to pick up a pool by name
-without having been given it.
+category — `token/`, `dex/`, `lending/` — and they are reached **by path**
+rather than by `library(Name)`: a node should not be able to pick up a
+pool by name without having been given it.
 
 `coco.yaml` lists them under `contracts:`, by category, the same way it
 lists modules and libraries: one declaration, and the suite reads it.
+
+## A refusal must leave nothing behind
+
+Every contract here writes with `assertz` and `retract`, and **Prolog
+backtracking does not undo a write**. So the dangerous shape is an
+operation that writes first and checks afterwards: when the check
+refuses, the write is already on the ground and only an explicit undo
+takes it back — and an undo is code, which can be wrong, skipped, or
+retried.
+
+Two of these contracts failed that test, and both failures were found by
+an invariant rather than by reading the code:
+
+* **`dex/uniswap-v3.pl`** moved the ticks, the pool's active liquidity
+  and the position NFT into place and *paid for them afterwards*. A mint
+  nobody could fund therefore raised the pool's depth to 1e18 with no
+  position backing it, and every later swap priced itself off liquidity
+  that did not exist. `v3_liquidity_agrees/1` — the pool's own
+  liquidity against the sum of the positions spanning the price — said
+  `drifted`. The fix is an ordering: **the money moves first**, so an
+  unfundable operation dies at the ledger before it has touched
+  anything.
+* **`lending/aave.pl`** granted a loan its own loan-to-value rule
+  refused. What is checked now is the ceiling itself, at the wei — 7500
+  granted, 7501 refused — and, separately, that the refusal left no
+  debt, no payout and no drift in the pot.
+
+Both suites carry a section called *a refused operation leaves NOTHING
+behind*, and each check there was run against the unfixed contract
+first: two of the v3 ones fail on it. **A regression test that passes on
+the broken code is not a regression test**, and the only way to know
+which kind you have written is to break the code again and watch.
+
+Where an operation genuinely must write, check and reverse itself, it
+ends its refusal with a cut. That is not tidiness: a refusal is an
+answer, not a branch to be retried.
 
 ## Deployment needed no mechanism
 

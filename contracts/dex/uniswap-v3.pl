@@ -254,12 +254,13 @@ v3_collect(Id, Caller, F0, F1) :-
     nft_may_move(Pool, Caller, Id),
     v3_fees_owed(Id, F0, F1),
     v3_fee_growth_inside(Pool, Lo, Hi, In0, In1),
-    retract(v3_pos(Id, Pool, Lo, Hi, L, _, _, _, _)),
-    assertz(v3_pos(Id, Pool, Lo, Hi, L, In0, In1, '0', '0')),
     v3_pool(Pool, Token0, Token1, _),
     v3_account(Pool, Acct),
     ( u256_cmp(F0, '0', '>') -> ft_transfer(Token0, Acct, Caller, F0) ; true ),
-    ( u256_cmp(F1, '0', '>') -> ft_transfer(Token1, Acct, Caller, F1) ; true ).
+    ( u256_cmp(F1, '0', '>') -> ft_transfer(Token1, Acct, Caller, F1) ; true ),
+    retract(v3_pos(Id, Pool, Lo, Hi, L, _, _, _, _)),
+    assertz(v3_pos(Id, Pool, Lo, Hi, L, In0, In1, '0', '0')),
+    !.
 
 %% ---- positions -------------------------------------------------------
 
@@ -283,6 +284,17 @@ v3_mint(Pool, Owner, Lower, Upper, Liquidity, Id, Amount0, Amount1) :-
     u256_cmp(Liquidity, '0', '>'),
     v3_price(Pool, Sqrt, Tick),
     v3_amounts(Sqrt, Tick, Lower, Upper, Liquidity, Amount0, Amount1),
+    %% THE MONEY MOVES FIRST, and the order is the correctness. This
+    %% used to happen last, after the ticks were touched, the liquidity
+    %% bumped and the position's NFT minted -- so a provider who could
+    %% not fund the deposit left all of that behind and the pool carried
+    %% liquidity no position owned. v3_liquidity_agrees/1 caught it, the
+    %% invariant earning its keep on the first day it was asked. A
+    %% deposit that cannot be paid for must fail before anything moves.
+    v3_pool(Pool, Token0, Token1, _),
+    v3_account(Pool, Acct),
+    ( u256_cmp(Amount0, '0', '>') -> ft_transfer(Token0, Owner, Acct, Amount0) ; true ),
+    ( u256_cmp(Amount1, '0', '>') -> ft_transfer(Token1, Owner, Acct, Amount1) ; true ),
     v3_touch_tick(Pool, Lower, Liquidity, starts),
     v3_touch_tick(Pool, Upper, Liquidity, ends),
     (   Lower =< Tick, Tick < Upper
@@ -295,16 +307,11 @@ v3_mint(Pool, Owner, Lower, Upper, Liquidity, Id, Amount0, Amount1) :-
     assertz(v3_next_id(Pool, N2)),
     u256_dec(N, Id),
     nft_mint(Pool, Owner, Id),
-    %% the deposit is a real transfer, out of a balance the provider
-    %% must actually have
-    v3_pool(Pool, Token0, Token1, _),
-    v3_account(Pool, Acct),
-    ( u256_cmp(Amount0, '0', '>') -> ft_transfer(Token0, Owner, Acct, Amount0) ; true ),
-    ( u256_cmp(Amount1, '0', '>') -> ft_transfer(Token1, Owner, Acct, Amount1) ; true ),
     %% THE BASELINE IS TAKEN NOW, after the ticks exist, so the position
     %% earns from this moment and not from the pool's beginning.
     v3_fee_growth_inside(Pool, Lower, Upper, In0, In1),
-    assertz(v3_pos(Id, Pool, Lower, Upper, Liquidity, In0, In1, '0', '0')).
+    assertz(v3_pos(Id, Pool, Lower, Upper, Liquidity, In0, In1, '0', '0')),
+    !.
 
 v3_position(Id, Pool, Owner, Lower, Upper, Liquidity) :-
     v3_pos(Id, Pool, Lower, Upper, Liquidity, _, _, _, _),
@@ -323,16 +330,20 @@ v3_burn(Pool, Caller, Id, Amount0, Amount1, Fees0, Fees1) :-
         assertz(v3_liq(Pool, L1))
     ;   true
     ),
-    retract(v3_pos(Id, Pool, _, _, _, _, _, _, _)),
-    nft_burn(Pool, Id),
-    %% the range and the fees it earned both come back as real tokens
+    %% and the same rule the other way: the range and its fees are paid
+    %% out BEFORE the position is destroyed, so a pool that could not
+    %% cover them leaves the position standing rather than cancelled and
+    %% unpaid.
     v3_pool(Pool, Token0, Token1, _),
     v3_account(Pool, Acct),
     nft_owner_or(Pool, Id, Caller, To),
     u256_add(Amount0, Fees0, Pay0),
     u256_add(Amount1, Fees1, Pay1),
     ( u256_cmp(Pay0, '0', '>') -> ft_transfer(Token0, Acct, To, Pay0) ; true ),
-    ( u256_cmp(Pay1, '0', '>') -> ft_transfer(Token1, Acct, To, Pay1) ; true ).
+    ( u256_cmp(Pay1, '0', '>') -> ft_transfer(Token1, Acct, To, Pay1) ; true ),
+    retract(v3_pos(Id, Pool, _, _, _, _, _, _, _)),
+    nft_burn(Pool, Id),
+    !.
 
 %% Whoever closes it is paid, which is the caller -- the token said they
 %% were allowed, and an approved spender closing on the owner's behalf

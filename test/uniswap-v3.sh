@@ -290,6 +290,37 @@ check "and after the fees are taken out of it" \
         v3_collect(A,alice,_,_), v3_collect(B,bob,_,_), \
         ( v3_backed(p) -> write(answer(backed)) ; write(answer(short)) ), nl")" "backed"
 
+
+echo "-- a refused operation leaves NOTHING behind"
+# THIS SECTION EXISTS BECAUSE THE POOL FAILED IT. v3_mint used to move
+# the ticks, the pool's liquidity and the NFT into place and pay for
+# them afterwards, so a mint nobody could fund raised the pool's active
+# liquidity to 1e18 with no position anywhere backing it -- and every
+# later swap priced itself off depth that did not exist. The invariant
+# that caught it is v3_liquidity_agrees/1: the pool's own liquidity
+# against the sum of the positions that span the current price. A
+# contract is not "safe because the operation was refused"; it is safe
+# because the refusal left the state where it found it.
+#
+# The refused goal is wrapped so its failure does not end the
+# conjunction -- what is under test is what comes AFTER the refusal.
+check "a mint nobody can fund does not raise the depth" \
+  "$(v "$MK, ( v3_mint(p,dave,-60,60,'1000000000000000000',_,_,_) -> true ; true ), \
+        v3_state(p,_,_,L), write(answer(L)), nl")" "1000000000000000000"
+check "and the liquidity still agrees with the positions" \
+  "$(v "$MK, ( v3_mint(p,dave,-60,60,'1000000000000000000',_,_,_) -> true ; true ), \
+        ( v3_liquidity_agrees(p) -> write(answer(agrees)) ; write(answer(drifted)) ), nl")" \
+  "agrees"
+check "and no position was minted for the payer who could not pay" \
+  "$(no "$MK, ( v3_mint(p,dave,-60,60,'1000000000000000000',_,_,_) -> true ; true ), \
+         v3_position(_,_,dave,_,_,_), write(answer(found)), nl")" "refused"
+check "a swap nobody can fund does not move the price" \
+  "$(v "$MK, v3_state(p,S0,_,_), ( v3_swap(p,dave,weth,'1000',_,_) -> true ; true ), \
+        v3_state(p,S1,_,_), ( S0 == S1 -> write(answer(still)) ; write(answer(moved)) ), nl")" \
+  "still"
+check "and the pool is still backed after the refusal" \
+  "$(v "$MK, ( v3_mint(p,dave,-60,60,'1000000000000000000',_,_,_) -> true ; true ), \
+        ( v3_backed(p) -> write(answer(backed)) ; write(answer(short)) ), nl")" "backed"
 echo
 if [ "$failures" -eq 0 ]; then
   echo "GREEN: 0 failure(s)"; exit 0

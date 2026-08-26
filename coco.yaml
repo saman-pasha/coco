@@ -118,6 +118,8 @@ contracts:
   dex:
     - uniswap        # v2: constant-product pools, the quote, the invariant
     - uniswap-v3     # v3: concentrated liquidity, positions as NFTs
+  lending:
+    - aave           # a pot lent against collateral, priced by an oracle
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -137,4 +139,5 @@ suite:
     - token          # the two standards: conservation, one owner, and the thefts
     - uniswap        # v2: the quote, the invariant, and mallory at it
     - uniswap-v3     # v3: the tick axis, positions as NFTs, the honest refusal
+    - lending        # aave: the rate curve, the index, health, liquidation
     - bench          # rung 8: the harness's rules -- not its timings

@@ -197,9 +197,10 @@ fi
 # a position that is an NFT because two providers in one pool no longer
 # own the same thing. The tick constants are Uniswap's own and the
 # suite pins them against the three values TickMath.sol publishes. A
-# swap that would cross a tick boundary is REFUSED rather than
-# approximated: crossing is not implemented, and saying so is cheaper
-# than mispricing the far side of it.
+# swap CROSSES: it is split at each initialised tick, the depth changes
+# there, and the fees earned on each leg land only on the positions
+# that were in range for it -- checked against an independent SwapMath
+# reference, and summing to exactly the 0.3% charged.
 if sh "$HERE/uniswap-v3.sh" > "$HERE/uniswap-v3.out" 2>&1; then
   if grep -q '^SKIP' "$HERE/uniswap-v3.out"; then
     say uniswap-v3 "$(head -1 "$HERE/uniswap-v3.out")"
@@ -208,6 +209,24 @@ if sh "$HERE/uniswap-v3.sh" > "$HERE/uniswap-v3.out" 2>&1; then
   fi
 else
   say uniswap-v3 RED; sed 's/^/   /' "$HERE/uniswap-v3.out"; red=$((red + 1))
+fi
+
+# ---- lending: a pot lent against collateral ---------------------------
+# contracts/lending/aave.pl -- the other half of a chain's economy, and
+# the one that needs a PRICE. A pool pays out only what the curve and
+# the collateral allow, and the moment an oracle moves the same
+# position stops being safe: nothing changed but a number somebody
+# asserted, and the suite shows that rather than hiding it. Interest
+# is a moving index against scaled balances, so a year passes and
+# every balance moves without a single account being written.
+if sh "$HERE/lending.sh" > "$HERE/lending.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/lending.out"; then
+    say lending "$(head -1 "$HERE/lending.out")"
+  else
+    say lending GREEN
+  fi
+else
+  say lending RED; sed 's/^/   /' "$HERE/lending.out"; red=$((red + 1))
 fi
 
 # ---- bench: rung 8 ----------------------------------------------------
