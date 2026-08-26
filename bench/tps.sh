@@ -158,7 +158,7 @@ echo "       rule in the harness can tell you that -- only the arrangement can."
 echo
 echo "== the speculative lane: verification pipelined ahead of finality"
 echo "   the lane the ladder aimed at and could not build until cocolog"
-echo "   grew library(zigurat): one writer seals 40 blocks in ONE open"
+echo "   grew library(zigurat): one writer seals 100 blocks in ONE open"
 echo "   transaction; while it is STILL UNCOMMITTED, a reader that named"
 echo "   READ_UNCOMMITTED audits the staged chain -- every hash, every"
 echo "   signature, every parent link -- and a reader at the default"
@@ -166,9 +166,19 @@ echo "   commit isolation, polled at the same moments, sees no chain at"
 echo "   all. Speculation is a per-turn choice now, and finality is not"
 echo "   what it costs."
 fresh bench_spec
-( seal_n bench_spec 40 ) &
+# 100 blocks, not fewer: incremental fork choice made sealing fast
+# enough that a 40-block window closed before one poll pair -- a spawn,
+# a module load and a full crypto audit -- could land inside it. The
+# window has to outlast the reader, or every poll is rightly discarded.
+( seal_n bench_spec 100 ) &
 WPID=$!
-SPEC_H=-1; SPEC_AUD=none; COMM_H=-1; PAIRS=0
+# The record kept is the highest height whose audit came back OK --
+# that is the lane's claim, a staged block fully verified before the
+# commit. A poll can also catch the writer mid-edit: READ_UNCOMMITTED
+# promises exactly that possibility, the audit says `broken' for that
+# torn instant, and the next poll passes again. Torn polls are counted
+# and printed, never folded into the claim in either direction.
+SPEC_H=-1; SPEC_AUD=none; COMM_H=-1; PAIRS=0; TORN=0
 t0=$(now)
 while kill -0 $WPID 2>/dev/null && [ $PAIRS -lt 30 ]; do
   out=$(timeout 60 "$C" $B --kb bench_spec query \
@@ -178,7 +188,10 @@ while kill -0 $WPID 2>/dev/null && [ $PAIRS -lt 30 ]; do
     "$K, ledger_height(H), write(H), nl" 2>/dev/null | grep -aoE '^-?[0-9]+$' | head -1)
   if kill -0 $WPID 2>/dev/null; then
     h=${out% *}; a=${out#* }
-    if [ -n "$out" ] && [ "$h" -gt "$SPEC_H" ] 2>/dev/null; then SPEC_H=$h; SPEC_AUD=$a; fi
+    if [ -n "$out" ] && [ "$a" = ok ] && [ "$h" -gt "$SPEC_H" ] 2>/dev/null; then
+      SPEC_H=$h; SPEC_AUD=ok
+    fi
+    [ -n "$out" ] && [ "$a" = broken ] && TORN=$((TORN+1))
     if [ -n "$cout" ] && [ "$cout" -gt "$COMM_H" ] 2>/dev/null; then COMM_H=$cout; fi
   fi
   PAIRS=$((PAIRS+1))
@@ -188,9 +201,14 @@ t1=$(now)
 AHEAD=$((SPEC_H + 1))
 printf '  %-22s %9s      %-34s staged height %s, audit %s\n' \
   spec_read_ahead "$AHEAD blk" server_1kb_READ_UNCOMMITTED_reader "$SPEC_H" "$SPEC_AUD"
+if [ "$TORN" -gt 0 ]; then
+  printf '     %s poll(s) caught the writer mid-edit and audited broken --\n' "$TORN"
+  printf '     the price READ_UNCOMMITTED names up front; the claim above is\n'
+  printf '     the highest poll whose audit came back whole.\n'
+fi
 printf '  %-22s %9s      %-34s height %s the whole open window\n' \
   committed_beside_it "$((COMM_H + 1)) blk" server_1kb_default_isolation_reader "$COMM_H"
-printf '     the writer'"'"'s one transaction held %s blocks staged for %ss; the\n' 40 "$(secs $t0 $t1)"
+printf '     the writer'"'"'s one transaction held %s blocks staged for %ss; the\n' 100 "$(secs $t0 $t1)"
 printf '     speculative reader audited %s of them BEFORE the commit landed,\n' "$AHEAD"
 printf '     the committed reader saw none of them, and after the commit the\n'
 printf '     store answers %s blocks -- rule 1, on the lane'"'"'s own terms.\n' "$(count_blocks bench_spec)"
