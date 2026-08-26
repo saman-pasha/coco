@@ -16,18 +16,49 @@ sh test/bench.sh         # the harness's RULES, checked: 25 checks
 
 ## The number is on the page
 
-One run, on a 4-core Linux container, against a Zigurat server whose
-store had been in use all session:
+One run, on a 4-core Linux container, against a Zigurat server on a
+FRESH store -- the server running the Cicili MVCCS engine, which
+replaced the C++ one:
 
 | lane | rate | arrangement |
 |---|---:|---|
-| `verify` | **181/s** | `local_no_database` |
-| `validate` | **181/s** | `local_no_database` |
-| `seal_batched` | **4.4/s** | `server_one_kb_ONE_TURN` |
-| `seal_per_turn` | **1.2/s** | `server_one_kb_per_turn` |
-| `parallel_own_kbs` | **9.0/s** | `server_4_kbs_ONE_TURN_each` |
-| `parallel_one_kb` | **4.3/s** | `server_1_kb_4_writers` |
-| `seal_batched_again` | **9.3/s** | `server_one_kb_ONE_TURN` |
+| `verify` | **140/s** | `local_no_database` |
+| `validate` | **138/s** | `local_no_database` |
+| `seal_batched` | **11.1/s** | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | **1.3/s** | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | **17.5/s** | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | **13.6/s** | `server_1_kb_4_writers` |
+| `seal_batched_again` | **8.4/s** | `server_one_kb_ONE_TURN` |
+
+The run before it, same container, same session, on a store aged by a
+whole day's suites, read 9.55 / 1.13 / 17.84 / 7.67 -- and the
+contended lane was REFUSED under rule 2, because all sixty committed
+blocks landed in under one second. The prior recording below is the
+same lanes against the C++ engine this one replaced, on a store that
+had been in use all session; rule 6 says the two tables are different
+runs and stay different claims, so both stand and neither line says
+more than its arrangement:
+
+| lane | rate | arrangement (C++ engine, prior recording) |
+|---|---:|---|
+| `verify` | 181/s | `local_no_database` |
+| `validate` | 181/s | `local_no_database` |
+| `seal_batched` | 4.4/s | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | 1.2/s | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | 9.0/s | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | 4.3/s | `server_1_kb_4_writers` |
+| `seal_batched_again` | 9.3/s | `server_one_kb_ONE_TURN` |
+
+What moved and what did not, by the lanes' own mechanics: the store
+lanes carry the engine, and the parallel ones carry its locking -- an
+owned-object writer per knowledge base doubled, and four writers
+through ONE knowledge base went from 4.3/s to 13.6/s, the one lane
+whose whole cost is contention. `seal_per_turn` did not move because
+~0.42s of process start-up times ten IS that lane; the two `--local`
+lanes never touch the store, so the engine cannot move them and did
+not (their drift is the container's); and the scaling shape further
+down survives untouched, because fork choice re-derived per seal is
+the ledger's cost, not the store's.
 
 **And no sentence here says "competes with".** The ladder set that
 condition before the number existed; the number exists now and the
