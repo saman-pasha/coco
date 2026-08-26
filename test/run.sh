@@ -192,6 +192,24 @@ else
   say uniswap RED; sed 's/^/   /' "$HERE/uniswap.out"; red=$((red + 1))
 fi
 
+# ---- uniswap-v3: concentrated liquidity -------------------------------
+# contracts/dex/uniswap-v3.pl -- ranges instead of the whole curve, and
+# a position that is an NFT because two providers in one pool no longer
+# own the same thing. The tick constants are Uniswap's own and the
+# suite pins them against the three values TickMath.sol publishes. A
+# swap that would cross a tick boundary is REFUSED rather than
+# approximated: crossing is not implemented, and saying so is cheaper
+# than mispricing the far side of it.
+if sh "$HERE/uniswap-v3.sh" > "$HERE/uniswap-v3.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/uniswap-v3.out"; then
+    say uniswap-v3 "$(head -1 "$HERE/uniswap-v3.out")"
+  else
+    say uniswap-v3 GREEN
+  fi
+else
+  say uniswap-v3 RED; sed 's/^/   /' "$HERE/uniswap-v3.out"; red=$((red + 1))
+fi
+
 # ---- bench: rung 8 ----------------------------------------------------
 # The TPS harness's RULES, not its timings. A timing is not a pass or a
 # fail, so the numbers live in bench/tps.sh with their arrangement
