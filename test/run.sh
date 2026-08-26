@@ -22,7 +22,8 @@ HOST=$ZIGURAT_HOST
 PORT=$ZIGURAT_PORT
 
 red=0
-say() { printf '%-10s %s\n' "$1" "$2"; }
+ran=""
+say() { ran="$ran $1"; printf '%-10s %s\n' "$1" "$2"; }
 
 if [ ! -x "$C" ]; then
   echo "no cocolog binary at $C -- build cocolog first (or set COCOLOG)"; exit 1
@@ -37,6 +38,21 @@ if [ "$got" = "$want" ]; then
   say local GREEN
 else
   say local "RED: got [$got]"; red=$((red + 1))
+fi
+
+# ---- math: the width an exchange needs --------------------------------
+# library(u256): 256-bit integers that REFUSE rather than wrap. The case
+# opens by pinning the wrong answer cocolog's own 64-bit is/2 gives for
+# the first product a swap computes, because that is why the module
+# exists.
+if sh "$HERE/math.sh" > "$HERE/math.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/math.out"; then
+    say math "$(head -1 "$HERE/math.out")"
+  else
+    say math GREEN
+  fi
+else
+  say math RED; sed 's/^/   /' "$HERE/math.out"; red=$((red + 1))
 fi
 
 # ---- crypto: the chains' primitives -----------------------------------
@@ -142,6 +158,22 @@ else
   say hub RED; sed 's/^/   /' "$HERE/hub.out"; red=$((red + 1))
 fi
 
+# ---- uniswap: a pool as rules -----------------------------------------
+# A constant-product exchange over library(bigint): the quote is
+# Uniswap's own (996006981039903216 for one token into a 1000/1000 pool,
+# a number from the world), the invariant is CHECKED on the reserves
+# that landed rather than trusted to the formula, and mallory tries to
+# drain it.
+if sh "$HERE/uniswap.sh" > "$HERE/uniswap.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/uniswap.out"; then
+    say uniswap "$(head -1 "$HERE/uniswap.out")"
+  else
+    say uniswap GREEN
+  fi
+else
+  say uniswap RED; sed 's/^/   /' "$HERE/uniswap.out"; red=$((red + 1))
+fi
+
 # ---- bench: rung 8 ----------------------------------------------------
 # The TPS harness's RULES, not its timings. A timing is not a pass or a
 # fail, so the numbers live in bench/tps.sh with their arrangement
@@ -173,6 +205,23 @@ if timeout 20 "$C" $W list >/dev/null 2>&1; then
   timeout 60 "$C" $W forget >/dev/null 2>&1
 else
   say wire "SKIP no Zigurat server at $HOST:$PORT"
+fi
+
+# EVERY DECLARED CASE MUST HAVE RUN. coco.yaml calls itself the one
+# declaration, but this file kept its own copy of the case list -- so a
+# case added to the file was declared, listed, documented, and never
+# run. It happened: `math' sat in coco.yaml through a green run that
+# never executed it. The lists are still two, because each case here
+# carries its own narration and a generic loop would lose that; what is
+# no longer possible is the SILENT half of the drift.
+missing=""
+for c in $COCO_SUITE_CASES; do
+  case " $ran " in *" $c "*) ;; *) missing="$missing $c" ;; esac
+done
+if [ -n "$missing" ]; then
+  echo
+  echo "DECLARED IN coco.yaml BUT NEVER RUN:$missing"
+  red=$((red + 1))
 fi
 
 echo

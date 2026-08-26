@@ -99,6 +99,7 @@ libraries:
     - pos            # rung 6: weight as a query, and the leader draw
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
     - hub            # rung 7: rules as entries, the namespace, the anchor, the bridge
+    - uniswap        # a constant-product pool as rules, over library(bigint)
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.
@@ -115,4 +116,5 @@ suite:
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality
     - hub            # rung 7: many chains, one node, none known in advance
+    - uniswap        # the pool: the quote, the invariant, and mallory at it
     - bench          # rung 8: the harness's rules -- not its timings

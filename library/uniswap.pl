@@ -1,0 +1,204 @@
+%% library(uniswap) -- Uniswap v2, as rules over arbitrary-precision integers.
+%%
+%%   uni_create(+T0, +T1)                     a pool, empty
+%%   uni_reserves(+T0, +T1, -R0, -R1)         what it holds
+%%   uni_supply(+T0, +T1, -Total)             LP tokens outstanding
+%%   uni_mint(+T0, +T1, +A0, +A1, -Liquidity) deposit, and be owed a share
+%%   uni_burn(+T0, +T1, +Liquidity, -A0, -A1) hand the share back
+%%   uni_swap(+TIn, +TOut, +AmountIn, -AmountOut)
+%%   uni_amount_out(+AmountIn, +RIn, +ROut, -AmountOut)    the quote, pure
+%%   uni_amount_in(+AmountOut, +RIn, +ROut, -AmountIn)     and its inverse
+%%   uni_k(+T0, +T1, -K)                      the invariant, as a number
+%%
+%% THE WHOLE THING IS THE INVARIANT. A constant-product pool promises
+%% one thing: x*y does not go down. Everything else -- the price, the
+%% slippage, the fee, the depth -- is a consequence of that sentence, and
+%% `uni_swap/4' REFUSES any swap that would break it rather than trusting
+%% the formula that produced the number. The formula is right; the check
+%% is what makes it checkable by someone who does not believe the
+%% formula, which is the only kind of check worth having on a chain.
+%%
+%% ARITHMETIC IS library(bigint), NEVER `is/2'. This is not a stylistic
+%% preference. cocolog's integers are 64 bits and they wrap in silence:
+%%
+%%     ?- X is 1000000000000000000 * 997.
+%%     X = 875820019684212736.
+%%
+%% That is the FIRST product a swap computes, at the scale every ERC-20
+%% token uses (one token is 10^18), and it is simply not the answer. A
+%% pool built on `is/2' would quote wrong prices confidently and its
+%% invariant check would pass on the wrong numbers. So every amount here
+%% is an atom of decimal digits and every operation is a bigint one.
+%%
+%% AMOUNTS ARE ATOMS. '1000000000000000000' is one token. Small numbers
+%% may be written as plain integers -- bigint takes either -- but what
+%% comes back is always an atom, because that is the only spelling that
+%% survives the range.
+%%
+%% WHAT IS FAITHFUL TO v2 AND WHAT IS NOT. The fee is 0.3%, taken on the
+%% way in, exactly as v2 takes it: 997/1000 of the input joins the pool
+%% and the whole input stays. The first deposit mints sqrt(a0*a1) minus
+%% MINIMUM_LIQUIDITY, and those 1000 units are burned to nobody, so a
+%% pool can never be emptied to the point where one unit of liquidity is
+%% worth the entire reserve -- the donation attack v2 closed this way.
+%% Later deposits mint the SMALLER of the two proportional shares, which
+%% is what makes depositing off-ratio cost the depositor rather than
+%% everyone else.
+%%
+%% What is not here: the protocol fee (v2's feeTo, off by default and
+%% off here), the price accumulators for the TWAP oracle, flash swaps,
+%% and the periphery's router. Those are additions to this, not
+%% corrections of it.
+
+:- use_module(library(bigint)).
+:- use_module(library(lists)).
+
+:- dynamic uni_pool/4.          % uni_pool(T0, T1, R0, R1)
+:- dynamic uni_total/3.         % uni_total(T0, T1, TotalSupply)
+
+%% MINIMUM_LIQUIDITY, v2's own constant.
+uni_minimum_liquidity('1000').
+
+%% ---- the pair --------------------------------------------------------
+%%
+%% A pair is UNORDERED, and stored under the sorted order, so that
+%% `uni_swap(dai, weth, ...)' and `uni_swap(weth, dai, ...)' reach the
+%% same pool. v2 does this by address; here by the standard order of
+%% terms, which is the same idea and needs no addresses.
+uni_key(A, B, A, B) :- A @< B, !.
+uni_key(A, B, B, A).
+
+uni_create(A, B) :-
+    uni_key(A, B, T0, T1),
+    \+ uni_pool(T0, T1, _, _),
+    assertz(uni_pool(T0, T1, '0', '0')),
+    assertz(uni_total(T0, T1, '0')).
+
+uni_reserves(A, B, R0, R1) :-
+    uni_key(A, B, T0, T1),
+    uni_pool(T0, T1, R0, R1).
+
+uni_supply(A, B, Total) :-
+    uni_key(A, B, T0, T1),
+    uni_total(T0, T1, Total).
+
+uni_k(A, B, K) :-
+    uni_reserves(A, B, R0, R1),
+    bigint_mul(R0, R1, K).
+
+uni_set_reserves(T0, T1, R0, R1) :-
+    retract(uni_pool(T0, T1, _, _)),
+    assertz(uni_pool(T0, T1, R0, R1)).
+
+uni_set_total(T0, T1, Total) :-
+    retract(uni_total(T0, T1, _)),
+    assertz(uni_total(T0, T1, Total)).
+
+%% ---- the quote, which is pure ---------------------------------------
+%%
+%% amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
+%%
+%% Written exactly as v2 writes it, including WHERE THE FLOOR FALLS.
+%% Integer division truncates, and the truncation always favours the
+%% pool -- which is why the invariant holds strictly rather than by
+%% luck, and why a formula rearranged to look tidier is a different
+%% formula.
+uni_amount_out(AmountIn, RIn, ROut, AmountOut) :-
+    bigint_cmp(AmountIn, '0', '>'),
+    bigint_cmp(RIn, '0', '>'),
+    bigint_cmp(ROut, '0', '>'),
+    bigint_mul(AmountIn, '997', WithFee),
+    bigint_mul(WithFee, ROut, Numerator),
+    bigint_mul(RIn, '1000', Scaled),
+    bigint_add(Scaled, WithFee, Denominator),
+    bigint_div(Numerator, Denominator, AmountOut).
+
+%% The other direction: what must go in for a wanted output. The `+1' is
+%% v2's, and it is not a rounding error -- it is the pool refusing to be
+%% short-changed by the division that truncated.
+uni_amount_in(AmountOut, RIn, ROut, AmountIn) :-
+    bigint_cmp(AmountOut, '0', '>'),
+    bigint_cmp(ROut, AmountOut, '>'),
+    bigint_mul(RIn, AmountOut, N0),
+    bigint_mul(N0, '1000', Numerator),
+    bigint_sub(ROut, AmountOut, Left),
+    bigint_mul(Left, '997', Denominator),
+    bigint_div(Numerator, Denominator, Q),
+    bigint_add(Q, '1', AmountIn).
+
+%% ---- swapping --------------------------------------------------------
+%%
+%% The quote is computed, the reserves are moved, AND THEN THE INVARIANT
+%% IS CHECKED AGAINST THE NUMBERS THAT ACTUALLY LANDED. If k went down
+%% the swap does not happen -- no state is written, because the write is
+%% the last thing and a failed check never reaches it.
+uni_swap(TIn, TOut, AmountIn, AmountOut) :-
+    uni_key(TIn, TOut, T0, T1),
+    uni_pool(T0, T1, R0, R1),
+    (   TIn == T0
+    ->  RIn = R0, ROut = R1
+    ;   RIn = R1, ROut = R0
+    ),
+    uni_amount_out(AmountIn, RIn, ROut, AmountOut),
+    bigint_cmp(ROut, AmountOut, '>'),
+    bigint_add(RIn, AmountIn, RIn2),
+    bigint_sub(ROut, AmountOut, ROut2),
+    %% k, before and after, on the reserves themselves
+    bigint_mul(RIn, ROut, KBefore),
+    bigint_mul(RIn2, ROut2, KAfter),
+    \+ bigint_cmp(KAfter, KBefore, '<'),
+    (   TIn == T0
+    ->  uni_set_reserves(T0, T1, RIn2, ROut2)
+    ;   uni_set_reserves(T0, T1, ROut2, RIn2)
+    ).
+
+%% ---- liquidity -------------------------------------------------------
+%%
+%% The first deposit sets the price, so there is no ratio to hold it to
+%% and the share is the geometric mean of what arrived. MINIMUM_LIQUIDITY
+%% is subtracted from what the depositor gets and added to the supply
+%% anyway -- burned to nobody. That is v2's answer to the donation
+%% attack: with a permanent thousand units outstanding, the value of one
+%% unit of liquidity cannot be inflated by emptying the pool.
+uni_mint(A, B, A0, A1, Liquidity) :-
+    uni_key(A, B, T0, T1),
+    uni_pool(T0, T1, R0, R1),
+    uni_total(T0, T1, Total),
+    (   A == T0 -> Amt0 = A0, Amt1 = A1 ; Amt0 = A1, Amt1 = A0 ),
+    bigint_cmp(Amt0, '0', '>'),
+    bigint_cmp(Amt1, '0', '>'),
+    (   bigint_cmp(Total, '0', '=')
+    ->  uni_minimum_liquidity(Min),
+        bigint_mul(Amt0, Amt1, Product),
+        bigint_sqrt(Product, Root),
+        bigint_cmp(Root, Min, '>'),
+        bigint_sub(Root, Min, Liquidity),
+        bigint_add(Liquidity, Min, NewTotal)
+    ;   bigint_mul(Amt0, Total, X0), bigint_div(X0, R0, L0),
+        bigint_mul(Amt1, Total, X1), bigint_div(X1, R1, L1),
+        (   bigint_cmp(L0, L1, '<') -> Liquidity = L0 ; Liquidity = L1 ),
+        bigint_cmp(Liquidity, '0', '>'),
+        bigint_add(Total, Liquidity, NewTotal)
+    ),
+    bigint_add(R0, Amt0, NR0),
+    bigint_add(R1, Amt1, NR1),
+    uni_set_reserves(T0, T1, NR0, NR1),
+    uni_set_total(T0, T1, NewTotal).
+
+%% And back out, in proportion. The division floors, so what comes out
+%% is never more than the share is worth -- the remainder stays with the
+%% pool, which is where every rounding in this file goes.
+uni_burn(A, B, Liquidity, Out0, Out1) :-
+    uni_key(A, B, T0, T1),
+    uni_pool(T0, T1, R0, R1),
+    uni_total(T0, T1, Total),
+    bigint_cmp(Liquidity, '0', '>'),
+    \+ bigint_cmp(Liquidity, Total, '>'),
+    bigint_mul(Liquidity, R0, P0), bigint_div(P0, Total, B0),
+    bigint_mul(Liquidity, R1, P1), bigint_div(P1, Total, B1),
+    bigint_sub(R0, B0, NR0),
+    bigint_sub(R1, B1, NR1),
+    bigint_sub(Total, Liquidity, NewTotal),
+    uni_set_reserves(T0, T1, NR0, NR1),
+    uni_set_total(T0, T1, NewTotal),
+    (   A == T0 -> Out0 = B0, Out1 = B1 ; Out0 = B1, Out1 = B0 ).
