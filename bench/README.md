@@ -39,6 +39,53 @@ a walk of every chain from every mark:
 | `spec_read_ahead` | **88 blk** | `server_1kb_READ_UNCOMMITTED_reader` |
 | `committed_beside_it` | **0 blk** | `server_1kb_default_isolation_reader` |
 
+## Re-measured after the path fix, and the surprise is in the LOCAL lanes
+
+`libMVCCS.so` was rebuilt when ZiguratIP's 51 absolute paths came out,
+and The Coco's own modules were rebuilt when `--release` was added to
+their Cicili step, so the table above stopped describing the tree. Two
+runs, minutes apart, same machine, same server, every bench knowledge
+base vacuumed first (the lanes `forget` but never reclaim, and this
+store had run two full suites that day):
+
+| lane | recorded above | today, run 1 | today, run 2 | arrangement |
+|---|---:|---:|---:|---|
+| `verify` | 168/s | — | **233/s** | `local_no_database` |
+| `validate` | 160/s | — | **249/s** | `local_no_database` |
+| `seal_batched` | 15.5/s | — | 7.6/s | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | 1.5/s | — | 1.2/s | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | 22.1/s | — | 13.5/s | `server_4_kbs_ONE_TURN_each` |
+| `seal_batched_again` | 11.1/s | 12.2/s | 7.2/s | `server_one_kb_ONE_TURN` |
+
+**Neither direction is the code, and the local lanes are the ones that
+prove it.** `--release` was added to `modules/crypto/build.sh` and
+`modules/math/build.sh` on the day of this run, which is exactly the
+kind of change a 168-to-233 jump invites you to credit. It gets no
+credit: the emitted `.c` is byte-identical with and without the flag,
+and so is the `.so` — same md5 for a module built each way and for the
+one actually installed. Cicili's `--release` governs how *Cicili*
+compiles and links, and that script never uses Cicili's compile step;
+the `-O3` that matters is on its own `gcc` line and has always been
+there. The flag is passed now so nobody has to measure that again.
+
+So a 39% and a 56% rise in two lanes that execute **identical machine
+code** is the machine: this container's spare CPU, on that afternoon.
+
+**Which corrects a claim made further down this file.** The note under
+the third table says the two `--local` lanes "held at 181-183/s every
+single time, because nothing they do touches the store". The first half
+of that is now false — 233 and 249 are not 181-183, from the same
+bytes. The second half still stands and is the useful part: those lanes
+do not touch the store, so they are immune to *ageing*. Immune to
+ageing is not the same as invariant, and this run is what showed the
+difference.
+
+The store lanes moving the other way needs no new explanation: 7.6/s
+sits inside the spread this file already records for that lane across
+runs (8.11, 6.02, 4.40), and `seal_batched_again` reading 12.2 and then
+7.2 in two runs an hour apart is rule 6 restated. **Rule 6 applies to
+every lane, not only the ones that write.**
+
 The REFUSED is rule 1 doing its job. All four contended writers are
 the same author sealing the same fifteen heights, so identical blocks
 race for the same rows, a writer's whole transaction can lose the

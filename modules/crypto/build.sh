@@ -20,7 +20,14 @@ OUT="$COCOLOG_LIBRARY"
 mkdir -p "$OUT"
 
 for mod in $COCO_MODULES_CRYPTO; do
-  ( cd "$CICILI" && sbcl --script cicili.lisp "$HERE/$mod.cicili" )
+  # --release, for the same reason every other build in these three
+  # repositories passes it. It changes NOTHING here and that was
+  # measured -- the emitted .c is byte-identical either way, and the
+  # optimisation that matters is the -O3 on the gcc line below, which
+  # is what actually produces the .so. It is passed anyway because a
+  # reader comparing build scripts should not have to measure that to
+  # know these modules are release-built. The question was asked.
+  ( cd "$CICILI" && sbcl --script cicili.lisp --release "$HERE/$mod.cicili" )
   gcc -shared -fPIC -O3 -o "$OUT/$mod.so" "$HERE/$mod.c"
   echo "built $OUT/$mod.so"
 done
