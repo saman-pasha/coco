@@ -57,6 +57,14 @@ arrangement:
 # written. Each is modules/crypto/<name>.cicili and becomes
 # <library>/<name>.so.
 modules:
+  # The width an exchange needs. cocolog's integers are 64 bits and they
+  # WRAP IN SILENCE -- 1000000000000000000 * 997 answers
+  # 875820019684212736 -- so the first product a Uniswap swap computes at
+  # ordinary token scale is already a wrong number nobody was told about.
+  # These are 256-bit and nothing in them wraps: an operation that cannot
+  # represent its answer raises instead.
+  math:
+    - u256           # add, sub, mul, div, mod, muldiv, sqrt -- none wrapping
   crypto:
     - keccak         # Ethereum's, with the 0x01 pad -- not NIST SHA3
     - secp256k1      # the curve: derive, verify, recover
@@ -98,6 +106,7 @@ libraries:
 suite:
   cases:
     - local          # the binary consults a .pl and answers
+    - math           # library(u256): the width an exchange needs, and its refusals
     - crypto         # the primitives, against published vectors
     - wire           # one process writes, a second reads it back
     - ledger         # rung 2: the PoA federation, and mallory attacking it

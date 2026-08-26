@@ -1,0 +1,487 @@
+;;;; The Coco -- math: u256, the width a decentralised exchange needs.
+;;;;
+;;;; A loadable Cicili module against cocolog's lib/sdk.cicili, built by
+;;;; modules/math/build.sh and reached by `use_module(library(u256))'.
+;;;; No cocolog source is touched.
+;;;;
+;;;; WHY THIS EXISTS, MEASURED RATHER THAN ASSUMED. cocolog's integers
+;;;; are 64 bits and they WRAP IN SILENCE. Asked for the first product a
+;;;; Uniswap swap computes, at the scale every ERC-20 token actually
+;;;; uses (18 decimals, so one token is 10^18):
+;;;;
+;;;;   ?- X is 1000000000000000000 * 997.
+;;;;   X = 875820019684212736.
+;;;;
+;;;; That is not an approximation, a rounding, or an overflow anyone was
+;;;; told about. It is a wrong number, returned confidently, and every
+;;;; price computed from it would be wrong the same way. An exchange
+;;;; whose arithmetic lies cannot be audited by anyone, which is the one
+;;;; thing this repository is for.
+;;;;
+;;;; So: 256-bit unsigned integers, and NOTHING HERE WRAPS. Every
+;;;; operation that cannot represent its answer raises an error instead
+;;;; -- the same choice Solidity 0.8 made when it made overflow revert,
+;;;; and for the same reason. A refused transaction is a fact; a wrapped
+;;;; balance is a lie that spends.
+;;;;
+;;;;   u256_add(+A, +B, -Sum)          errors rather than wrapping
+;;;;   u256_sub(+A, +B, -Difference)   errors rather than going negative
+;;;;   u256_mul(+A, +B, -Product)      errors rather than truncating
+;;;;   u256_div(+A, +B, -Quotient)     floor; errors on a zero divisor
+;;;;   u256_mod(+A, +B, -Remainder)
+;;;;   u256_muldiv(+A, +B, +C, -D)     floor(A*B/C), FULL 512-bit middle
+;;;;   u256_cmp(+A, +B, -Order)        <, = or >
+;;;;   u256_sqrt(+A, -Root)            floor of the square root
+;;;;   u256_dec(+A, -Decimal)          canonical decimal digits
+;;;;   u256_hex(+A, -Hex)              64 hex digits, lower case
+;;;;   u256_int(+A, -Integer)          a cocolog integer, or an error
+;;;;
+;;;; MULDIV IS THE ONE THAT MATTERS. Every constant-product exchange
+;;;; computes floor(a*b/c) where a*b overflows the word but the quotient
+;;;; does not: the swap output, the share of a pool, the price. Doing it
+;;;; as (a*b) then (/c) fails on the first step even at 256 bits, so the
+;;;; product is kept at its true 512-bit width and divided from there.
+;;;; This is what Uniswap's FullMath is for, and why it exists there too.
+;;;;
+;;;; WHAT A NUMBER LOOKS LIKE. In, either a cocolog integer (which must
+;;;; be non-negative) or an atom: decimal digits, or `0x' and hex. Out,
+;;;; an atom of decimal digits with no leading zero, because token
+;;;; amounts are read in decimal by everyone who reads them. `u256_hex'
+;;;; is there for the places a chain speaks hex, and the two round-trip.
+;;;;
+;;;; HOW IT IS BUILT. Eight 32-bit limbs, least significant first, with
+;;;; 64-bit intermediates -- no compiler extension and no 128-bit type,
+;;;; the same shape modules/crypto/secp256k1.cicili proved on this
+;;;; curve's field arithmetic. Division is honest binary long division:
+;;;; 512 shift-and-subtract steps, no reciprocal and no Knuth D. That is
+;;;; slower than a tuned bignum by a wide margin and exactly as correct,
+;;;; which is the right trade for arithmetic a chain has to agree on. If
+;;;; it ever stops being the right trade, the number goes on the page
+;;;; before the complaint.
+
+(DEFPARAMETER *u256-predicates*
+  '(("u256_add"    3 u_p_add)
+    ("u256_sub"    3 u_p_sub)
+    ("u256_mul"    3 u_p_mul)
+    ("u256_div"    3 u_p_div)
+    ("u256_mod"    3 u_p_mod)
+    ("u256_muldiv" 4 u_p_muldiv)
+    ("u256_cmp"    3 u_p_cmp)
+    ("u256_sqrt"   2 u_p_sqrt)
+    ("u256_dec"    2 u_p_dec)
+    ("u256_hex"    2 u_p_hex)
+    ("u256_int"    2 u_p_int)))
+
+(source "u256.c"
+  (make :std #t :compile #f)
+
+  (import "./sdk.cicili")
+  (coco-sdk)
+
+  ;;; ---- eight limbs, least significant first ---------------------------
+
+  (static) (func u_set0 ((u32 * a)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i a) 0)))
+
+  (static) (func u_set1 ((u32 * a) (u32 v)) (out void)
+        (u_set0 a) (set (nth 0 a) v))
+
+  (static) (func u_cpy ((u32 * d) (const u32 * s)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i d) (nth i s))))
+
+  (static) (func u_zero_p ((const u32 * a)) (out int)
+        (for ((int i . 0)) (< i 8) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  (static) (func u_cmp ((const u32 * a) (const u32 * b)) (out int)
+        (for ((int i . 7)) (>= i 0) ((-- i))
+          (if (> (nth i a) (nth i b)) (return 1))
+          (if (< (nth i a) (nth i b)) (return -1)))
+        (return 0))
+
+  ;;; The carry comes BACK rather than being dropped: every caller here
+  ;;; treats a carry as an error, which is the whole point of the module.
+  (static) (func u_add ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((u64 c . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set c (+ c (+ (cast u64 (nth i a)) (cast u64 (nth i b)))))
+            (set (nth i r) (cast u32 c))
+            (set c (>> c 32)))
+          (return (cast u32 c))))
+
+  ;;; And so does the borrow: a borrow out means A was smaller than B,
+  ;;; and an unsigned difference that went negative is not a number.
+  (static) (func u_sub ((u32 * r) (const u32 * a) (const u32 * b)) (out u32)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (let ((i64 d . #'(- (- (cast i64 (nth i a)) (cast i64 (nth i b))) br)))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))
+          (return (cast u32 br))))
+
+  ;;; The full 512-bit product, sixteen limbs, never truncated here --
+  ;;; whether it FITS is the caller's question, and muldiv's answer is
+  ;;; that it does not have to. Every intermediate fits a u64 exactly:
+  ;;; (2^32-1)^2 + 2*(2^32-1) is 2^64-1 and not a bit more.
+  (static) (func u_mul512 ((u32 * r) (const u32 * a) (const u32 * b)) (out void)
+        (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i r) 0))
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (let ((u64 c . 0))
+            (for ((int j . 0)) (< j 8) ((++ j))
+              (set c (+ (+ c (cast u64 (nth (+ i j) r)))
+                        (* (cast u64 (nth i a)) (cast u64 (nth j b)))))
+              (set (nth (+ i j) r) (cast u32 c))
+              (set c (>> c 32)))
+            (let ((int k . #'(+ i 8)))
+              (while (and (!= c 0) (< k 16))
+                (set c (+ c (cast u64 (nth k r))))
+                (set (nth k r) (cast u32 c))
+                (set c (>> c 32))
+                (set k (+ k 1)))))))
+
+  (static) (func u_top_zero ((const u32 * a)) (out int)
+        (for ((int i . 8)) (< i 16) ((++ i)) (if (!= (nth i a) 0) (return 0)))
+        (return 1))
+
+  ;;; ---- division, the long way -----------------------------------------
+  ;;;
+  ;;; The running remainder needs NINE limbs, not eight: it is always
+  ;;; below the divisor, but the shift that brings the next bit down
+  ;;; happens before the subtract that brings it back under, and in
+  ;;; between it can be one bit wider than a 256-bit number.
+
+  (static) (func u_cmp9 ((const u32 * r) (const u32 * m)) (out int)
+        (if (!= (nth 8 r) 0) (return 1))
+        (return (u_cmp r m)))
+
+  (static) (func u_sub9 ((u32 * r) (const u32 * m)) (out void)
+        (let ((i64 br . 0))
+          (for ((int i . 0)) (< i 9) ((++ i))
+            (let ((i64 mv . #'(? (< i 8) (cast i64 (nth i m)) 0))
+                  (i64 d . 0))
+              (set d (- (- (cast i64 (nth i r)) mv) br))
+              (if (< d 0) (block (set d (+ d 4294967296)) (set br 1)) (set br 0))
+              (set (nth i r) (cast u32 d))))))
+
+  ;;; A (sixteen limbs) divided by M (eight): quotient into Q (sixteen,
+  ;;; so that an answer too wide to be a u256 can be SEEN rather than
+  ;;; silently cut), remainder into R (eight). Answers 0 when M is zero.
+  (static) (func u_divmod ((const u32 * a) (const u32 * m) (u32 * q) (u32 * r))
+        (out int)
+        (if (u_zero_p m) (return 0))
+        (let ((u32 rem [9]))
+          (for ((int i . 0)) (< i 9) ((++ i)) (set (nth i rem) 0))
+          (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i q) 0))
+          (for ((int i . 511)) (>= i 0) ((-- i))
+            ;; rem <<= 1, then bring down bit i of a
+            (let ((u32 carry . 0))
+              (for ((int j . 0)) (< j 9) ((++ j))
+                (let ((u32 nc . #'(>> (nth j rem) 31)))
+                  (set (nth j rem) (bitor (<< (nth j rem) 1) carry))
+                  (set carry nc))))
+            (set (nth 0 rem)
+                 (bitor (nth 0 rem)
+                        (bitand (>> (nth (>> i 5) a) (bitand i 31)) 1)))
+            (if (>= (u_cmp9 rem m) 0)
+                (block
+                 (u_sub9 rem m)
+                 (set (nth (>> i 5) q)
+                      (bitor (nth (>> i 5) q) (<< (cast u32 1) (bitand i 31)))))))
+          (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i r) (nth i rem))))
+        (return 1))
+
+  ;;; Eight limbs over eight, which is the same division with the top
+  ;;; half of the dividend empty.
+  (static) (func u_divmod8 ((const u32 * a) (const u32 * m) (u32 * q) (u32 * r))
+        (out int)
+        (let ((u32 wide [16]) (u32 qw [16]))
+          (for ((int i . 0)) (< i 16) ((++ i)) (set (nth i wide) 0))
+          (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i wide) (nth i a)))
+          (if (not (u_divmod wide m qw r)) (return 0))
+          (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i q) (nth i qw))))
+        (return 1))
+
+  ;;; Dividing by a SMALL number needs none of that: one pass, most
+  ;;; significant limb first, carrying the remainder down. This is what
+  ;;; printing a number in decimal is made of.
+  (static) (func u_divmod_small ((u32 * q) (const u32 * a) (u32 d)) (out u32)
+        (let ((u64 r . 0))
+          (for ((int i . 7)) (>= i 0) ((-- i))
+            (let ((u64 cur . #'(bitor (<< r 32) (cast u64 (nth i a)))))
+              (set (nth i q) (cast u32 (/ cur (cast u64 d))))
+              (set r (% cur (cast u64 d)))))
+          (return (cast u32 r))))
+
+  ;;; A = A*mul + add, with the carry out -- reading a decimal number,
+  ;;; one digit at a time. A carry here is a number too big to exist.
+  (static) (func u_mul_small_add ((u32 * a) (u32 mul) (u32 add)) (out u32)
+        (let ((u64 c . #'(cast u64 add)))
+          (for ((int i . 0)) (< i 8) ((++ i))
+            (set c (+ c (* (cast u64 (nth i a)) (cast u64 mul))))
+            (set (nth i a) (cast u32 c))
+            (set c (>> c 32)))
+          (return (cast u32 c))))
+
+  ;;; ---- the square root -------------------------------------------------
+  ;;;
+  ;;; Newton's, which needs a division per step and therefore wants a
+  ;;; starting point close enough to converge in a handful: 2^(bits/2+1)
+  ;;; is always above the root and never far above it. Starting from A
+  ;;; itself would be correct and would pay for a hundred divisions.
+
+  (static) (func u_bits ((const u32 * a)) (out int)
+        (for ((int i . 7)) (>= i 0) ((-- i))
+          (if (!= (nth i a) 0)
+              (block
+               (for ((int b . 31)) (>= b 0) ((-- b))
+                 (if (!= 0 (bitand (>> (nth i a) b) 1))
+                     (return (+ (* i 32) (+ b 1))))))))
+        (return 0))
+
+  (static) (func u_shr1 ((u32 * a)) (out void)
+        (for ((int i . 0)) (< i 8) ((++ i))
+          (set (nth i a)
+               (bitor (>> (nth i a) 1)
+                      (? (< i 7) (<< (bitand (nth (+ i 1) a) 1) 31) 0)))))
+
+  (static) (func u_sqrt ((u32 * r) (const u32 * a)) (out void)
+        (if (u_zero_p a) (block (u_set0 r) (return)))
+        (let ((int n . #'(u_bits a)))
+          (if (<= n 1) (block (u_set1 r 1) (return)))
+          (let ((u32 x [8]) (u32 y [8]) (u32 q [8]) (u32 rem [8]) (int p . 0))
+            ;; x = 2^(n/2 + 1), comfortably above the root
+            (set p (+ (/ n 2) 1))
+            (if (> p 255) (set p 255))
+            (u_set0 x)
+            (set (nth (>> p 5) x) (<< (cast u32 1) (bitand p 31)))
+            (while 1
+              ;; y = (x + a/x) / 2
+              (if (not (u_divmod8 a x q rem)) (block (u_set0 r) (return)))
+              (if (!= 0 (u_add y x q)) (block (u_shr1 y) (set (nth 7 y) (bitor (nth 7 y) 0x80000000)))
+                (u_shr1 y))
+              ;; Newton descends to the root and then oscillates by one;
+              ;; stopping the moment it stops decreasing is what leaves
+              ;; the FLOOR rather than one past it.
+              (if (>= (u_cmp y x) 0) (block (u_cpy r x) (return)))
+              (u_cpy x y)))))
+
+  ;;; ---- text ------------------------------------------------------------
+
+  (static) (func u_nib ((char c)) (out int)
+        (if (and (>= c (cast char 48)) (<= c (cast char 57)))
+            (return (- (cast int c) 48)))
+        (if (and (>= c (cast char 97)) (<= c (cast char 102)))
+            (return (+ 10 (- (cast int c) 97))))
+        (if (and (>= c (cast char 65)) (<= c (cast char 70)))
+            (return (+ 10 (- (cast int c) 65))))
+        (return -1))
+
+  (static) (func u_hex_in ((const char * s) (size_t len) (u32 * out)) (out int)
+        (u_set0 out)
+        (if (or (== len 0) (> len 64)) (return 0))
+        (for ((size_t k . 0)) (< k len) ((++ k))
+          (let ((int v . #'(u_nib (nth (- (- len 1) k) s))))
+            (if (< v 0) (return 0))
+            (set (nth (>> k 3) out)
+                 (bitor (nth (>> k 3) out)
+                        (<< (cast u32 v) (* 4 (cast int (bitand k 7))))))))
+        (return 1))
+
+  (static) (func u_hex_out ((const u32 * a) (char * hex)) (out void)
+        (let ((const char * hx . "0123456789abcdef"))
+          (for ((int i . 0)) (< i 32) ((++ i))
+            (let ((int b . #'(bitand (cast int (>> (nth (- 7 (>> i 2)) a)
+                                                   (* 8 (- 3 (bitand i 3)))))
+                                     255)))
+              (set (nth (* 2 i) hex) (nth (bitand (>> b 4) 15) hx))
+              (set (nth (+ (* 2 i) 1) hex) (nth (bitand b 15) hx))))
+          (set (nth 64 hex) (cast char 0))))
+
+  ;;; Decimal in. Answers 0 on a non-digit and -1 when the digits name a
+  ;;; number above 2^256-1, so the caller can say which of the two it was.
+  (static) (func u_dec_in ((const char * s) (u32 * out)) (out int)
+        (u_set0 out)
+        (let ((size_t len . #'(strlen s)))
+          (if (== len 0) (return 0))
+          (for ((size_t k . 0)) (< k len) ((++ k))
+            (let ((char c . #'(nth k s)))
+              (if (or (< c (cast char 48)) (> c (cast char 57))) (return 0))
+              (if (!= 0 (u_mul_small_add out 10 (cast u32 (- (cast int c) 48))))
+                  (return -1)))))
+        (return 1))
+
+  ;;; Decimal out: divide by ten until nothing is left. 2^256-1 is 78
+  ;;; digits, and a buffer of 80 is the whole of the arithmetic here.
+  (static) (func u_dec_out ((const u32 * a) (char * dec)) (out void)
+        (if (u_zero_p a)
+            (block (set (nth 0 dec) (cast char 48)) (set (nth 1 dec) (cast char 0)) (return)))
+        (let ((char tmp [80]) (int n . 0) (u32 cur [8]) (u32 q [8]))
+          (u_cpy cur a)
+          (while (not (u_zero_p cur))
+            (let ((u32 d . #'(u_divmod_small q cur 10)))
+              (set (nth n tmp) (cast char (+ 48 (cast int d))))
+              (set n (+ n 1))
+              (u_cpy cur q)))
+          (for ((int i . 0)) (< i n) ((++ i))
+            (set (nth i dec) (nth (- (- n 1) i) tmp)))
+          (set (nth n dec) (cast char 0))))
+
+  ;;; ---- an argument, whatever it is spelled as --------------------------
+  ;;;
+  ;;; A cocolog integer (which must not be negative -- there are no
+  ;;; negative numbers here and pretending otherwise is how a balance
+  ;;; goes wrong), or an atom: decimal digits, or `0x' and hex digits.
+  ;;; Answers 0 having already raised the error.
+  (static) (func u_in ((coco_engine * e) (size_t slot) (u32 * out)) (out int)
+        (let ((i64 iv . 0) (char buf [128]))
+          (if (coco_m_int e slot (aof iv))
+              (block
+               (if (< iv 0)
+                   (return (coco_m_domain_error e "a non-negative integer" slot)))
+               (u_set0 out)
+               (set (nth 0 out) (cast u32 (bitand iv 4294967295)))
+               (set (nth 1 out) (cast u32 (bitand (>> iv 32) 4294967295)))
+               (return 1)))
+          (if (not (coco_m_text e slot buf 128))
+              (return (coco_m_type_error e "an integer or a numeric atom" slot)))
+          (if (and (== (nth 0 buf) (cast char 48))
+                   (or (== (nth 1 buf) (cast char 120))
+                       (== (nth 1 buf) (cast char 88))))
+              (block
+               (if (not (u_hex_in (aof (nth 2 buf)) (- (strlen buf) 2) out))
+                   (return (coco_m_domain_error e "at most 64 hexadecimal digits" slot)))
+               (return 1)))
+          (let ((int ok . #'(u_dec_in buf out)))
+            (if (== ok -1)
+                (return (coco_m_error e "u256 overflow" "a decimal above 2^256-1")))
+            (if (== ok 0)
+                (return (coco_m_domain_error e "decimal digits or 0x hexadecimal" slot))))
+          (return 1)))
+
+  ;;; Every answer leaves as decimal, which is how a token amount is read.
+  (static) (func u_out ((coco_engine * e) (size_t slot) (const u32 * v)) (out int)
+        (let ((char dec [96]))
+          (u_dec_out v dec)
+          (return (coco_m_unify_atom e slot dec))))
+
+  ;;; ---- the predicates --------------------------------------------------
+
+  (func u_p_add ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]) (u32 r [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (if (!= 0 (u_add r a b))
+                (return (coco_m_error e "u256 overflow" "the sum is above 2^256-1")))
+            (return (u_out e rout r)))))
+
+  ;;; A - B when B is the larger is not a big negative number, it is a
+  ;;; mistake -- and in an exchange it is the mistake that drains a pool.
+  (func u_p_sub ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]) (u32 r [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (if (!= 0 (u_sub r a b))
+                (return (coco_m_error e "u256 underflow" "the difference is below zero")))
+            (return (u_out e rout r)))))
+
+  (func u_p_mul ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]) (u32 w [16]) (u32 r [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (u_mul512 w a b)
+            (if (not (u_top_zero w))
+                (return (coco_m_error e "u256 overflow" "the product is above 2^256-1")))
+            (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i r) (nth i w)))
+            (return (u_out e rout r)))))
+
+  (func u_p_div ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]) (u32 q [8]) (u32 rem [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (if (not (u_divmod8 a b q rem))
+                (return (coco_m_error e "u256 division by zero" "the divisor is zero")))
+            (return (u_out e rout q)))))
+
+  (func u_p_mod ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]) (u32 q [8]) (u32 rem [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (if (not (u_divmod8 a b q rem))
+                (return (coco_m_error e "u256 division by zero" "the divisor is zero")))
+            (return (u_out e rout rem)))))
+
+  ;;; floor(A*B/C), and THE PRODUCT IS NEVER NARROWED ON THE WAY. This is
+  ;;; the predicate an exchange is built out of: the swap output, the
+  ;;; share of a pool, the price -- every one of them a*b/c where a*b
+  ;;; does not fit and the answer does.
+  (func u_p_muldiv ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (cin 2) (rout 3))
+          (let ((u32 a [8]) (u32 b [8]) (u32 c [8])
+                (u32 w [16]) (u32 q [16]) (u32 rem [8]) (u32 r [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (if (not (u_in e cin c)) (return 0))
+            (u_mul512 w a b)
+            (if (not (u_divmod w c q rem))
+                (return (coco_m_error e "u256 division by zero" "the divisor is zero")))
+            (if (not (u_top_zero q))
+                (return (coco_m_error e "u256 overflow" "the quotient is above 2^256-1")))
+            (for ((int i . 0)) (< i 8) ((++ i)) (set (nth i r) (nth i q)))
+            (return (u_out e rout r)))))
+
+  (func u_p_cmp ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (bin 1) (rout 2))
+          (let ((u32 a [8]) (u32 b [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (if (not (u_in e bin b)) (return 0))
+            (let ((int c . #'(u_cmp a b)))
+              (return (coco_m_unify_atom e rout
+                        (? (< c 0) "<" (? (> c 0) ">" "="))))))))
+
+  (func u_p_sqrt ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (rout 1))
+          (let ((u32 a [8]) (u32 r [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (u_sqrt r a)
+            (return (u_out e rout r)))))
+
+  (func u_p_dec ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (rout 1))
+          (let ((u32 a [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (return (u_out e rout a)))))
+
+  (func u_p_hex ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (rout 1))
+          (let ((u32 a [8]) (char hex [70]))
+            (if (not (u_in e ain a)) (return 0))
+            (u_hex_out a hex)
+            (return (coco_m_unify_atom e rout hex)))))
+
+  ;;; Back to a cocolog integer -- WHICH IS 64 BITS, and refusing to
+  ;;; answer is the only honest thing to do about the rest. The whole
+  ;;; module exists because the silent version of this is what cocolog's
+  ;;; own arithmetic does.
+  (func u_p_int ((coco_engine * e) (size_t g)) (out int)
+        (coco-mod-args e g ((ain 0) (rout 1))
+          (let ((u32 a [8]))
+            (if (not (u_in e ain a)) (return 0))
+            (for ((int i . 2)) (< i 8) ((++ i))
+              (if (!= (nth i a) 0)
+                  (return (coco_m_error e "u256 does not fit an integer"
+                                        "above 2^63-1, so it would wrap"))))
+            (if (!= 0 (bitand (nth 1 a) 0x80000000))
+                (return (coco_m_error e "u256 does not fit an integer"
+                                      "above 2^63-1, so it would wrap")))
+            (let ((i64 v . #'(bitor (<< (cast i64 (nth 1 a)) 32) (cast i64 (nth 0 a)))))
+              (return (coco_m_unify_int e rout v))))))
+
+  (static) (coco-emit-module-dispatch u_dispatch *u256-predicates*)
+  (coco-deflibrary "u256" u_dispatch nil)
+
+  ) ; source
