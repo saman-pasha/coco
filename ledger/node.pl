@@ -23,6 +23,8 @@
 :- use_module(library(lists)).
 
 :- dynamic block/6.
+:- dynamic head_mark/3.
+%% the pre-upgrade mark shape, still readable -- see ledger_head/1
 :- dynamic head_mark/2.
 
 %% ---- reading the chain ----------------------------------------------
@@ -37,12 +39,25 @@
 %% same answer. Nothing is retracted, so what this node believed and when
 %% is still on the record, and two nodes that hold the same blocks agree
 %% on the head no matter what order the blocks arrived in.
+%%
+%% THE MARK CARRIES ITS CHAIN'S WEIGHT. head_mark(H, Hash, T) records
+%% the in-turn count of the chain ending at Hash, computed at the one
+%% moment it is cheap -- when the block is accepted, as the parent's
+%% count plus this block's own turn -- so fork choice reads the set of
+%% marks in ONE pass instead of walking every chain from every mark on
+%% every seal. That walk was the bench's documented curve: cost per
+%% block rising with the length of the chain. The record only gains by
+%% this: what the node believed, when, and what it weighed. Marks made
+%% before the count existed (head_mark/2) are still candidates, judged
+%% by the old walk.
 ledger_head(Best) :-
+    findall(head(H, Hash, T), head_mark(H, Hash, T), New),
     findall(head(H, Hash, T),
             ( head_mark(H, Hash),
               chain_from(Hash, Blocks),
               chain_in_turn(Blocks, 0, T) ),
-            Cands),
+            Old),
+    append(New, Old, Cands),
     Cands \== [],
     !,
     best_head(Cands, Best).
@@ -75,14 +90,17 @@ node_identity(Name, Priv) :-
 
 ledger_seal(Payload) :-
     node_identity(Name, Priv),
-    ledger_head(head(H0, PrevHash, _)),
+    ledger_head(head(H0, PrevHash, T0)),
     H is H0 + 1,
     ( H0 < 0 -> genesis_prev(Prev) ; Prev = PrevHash ),
     seal(Priv, H, Prev, Name, Payload, Sig, Hash),
+    %% the new chain's weight is the head it extends plus this block --
+    %% the incremental step that keeps fork choice a read, not a walk
+    ( in_turn(H, Name) -> T is T0 + 1 ; T = T0 ),
     %% ONE GOAL, so one transaction: the block and the mark that says it
     %% is the tip commit together.
     ( assertz(block(H, Prev, Name, Payload, Sig, Hash)),
-      assertz(head_mark(H, Hash)) ).
+      assertz(head_mark(H, Hash, T)) ).
 
 %% ---- adopting a peer's blocks ----------------------------------------
 %%
@@ -101,7 +119,7 @@ ledger_sync([block(H, Prev, A, P, S, Hash)|T]) :-
     ;   valid_block(H, Prev, A, P, S, Hash),
         extends_known(H, Prev)
     ->  assertz(block(H, Prev, A, P, S, Hash)),
-        maybe_advance(H, Hash)
+        maybe_advance(H, Prev, A, Hash)
     ;   true                                   % invalid or orphan: skip
     ),
     ledger_sync(T).
@@ -119,7 +137,22 @@ extends_known(H, Prev) :-
 %% the rule, over the whole set, every time. Deciding at adoption time
 %% would make the answer depend on arrival order, which is exactly what
 %% differs between nodes and exactly what fork choice exists to remove.
-maybe_advance(H, Hash) :- assertz(head_mark(H, Hash)).
+%%
+%% The mark's weight comes from the parent's mark -- every accepted
+%% block has one -- or, for a parent marked before the count existed,
+%% from the one walk the old shape always paid.
+maybe_advance(0, _, A, Hash) :-
+    !,
+    ( in_turn(0, A) -> T = 1 ; T = 0 ),
+    assertz(head_mark(0, Hash, T)).
+maybe_advance(H, Prev, A, Hash) :-
+    (   head_mark(_, Prev, T0)
+    ->  true
+    ;   chain_from(Prev, Blocks),
+        chain_in_turn(Blocks, 0, T0)
+    ),
+    ( in_turn(H, A) -> T is T0 + 1 ; T = T0 ),
+    assertz(head_mark(H, Hash, T)).
 
 %% ---- auditing --------------------------------------------------------
 %%

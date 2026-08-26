@@ -170,7 +170,7 @@ echo "-- a member of the federation rewrites history"
 # somebody entitled to sign. It simply weighs less, and fork choice is
 # where that is spent.
 BEFORE=$(head_of alice)
-node carol "genesis_prev(G), seal('$CAROL', 0, G, carol, 'a history I prefer', S, H), assertz(block(0,G,carol,'a history I prefer',S,H)), assertz(head_mark(0,H))" >/dev/null
+node carol "genesis_prev(G), seal('$CAROL', 0, G, carol, 'a history I prefer', S, H), assertz(block(0,G,carol,'a history I prefer',S,H)), ( in_turn(0,carol) -> T=1 ; T=0 ), assertz(head_mark(0,H,T))" >/dev/null
 for w in alice bob carol; do gossip "$w"; done
 AFTER=$(head_of alice)
 check "the rewritten block is VALID (a member signed it)" \
