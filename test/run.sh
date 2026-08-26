@@ -158,6 +158,23 @@ else
   say hub RED; sed 's/^/   /' "$HERE/hub.out"; red=$((red + 1))
 fi
 
+# ---- token: the two standards -----------------------------------------
+# contracts/token/{fungible,nonfungible}.pl -- what every protocol here
+# is built out of. The invariants are conservation (balances sum to
+# supply) and exactly-one-owner, each checked by a predicate nothing in
+# the contract needs to be true for its own code to work. Two real
+# thefts are attempted and must fail: ERC-20's approve race, and taking
+# an NFT back with an approval that should have died with the sale.
+if sh "$HERE/token.sh" > "$HERE/token.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/token.out"; then
+    say token "$(head -1 "$HERE/token.out")"
+  else
+    say token GREEN
+  fi
+else
+  say token RED; sed 's/^/   /' "$HERE/token.out"; red=$((red + 1))
+fi
+
 # ---- uniswap: a pool as rules -----------------------------------------
 # contracts/dex/uniswap.pl -- a contract, reached by path. A
 # constant-product exchange over library(u256), the type money is

@@ -111,6 +111,9 @@ libraries:
 # is not something a node should be able to pick up by name without
 # having been given it.
 contracts:
+  token:
+    - fungible       # ERC-20's shape: balances, allowances, conservation
+    - nonfungible    # ERC-721's: one owner per id, and who may move it
   dex:
     - uniswap        # constant-product pools: the quote, the invariant
 
@@ -129,5 +132,6 @@ suite:
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality
     - hub            # rung 7: many chains, one node, none known in advance
+    - token          # the two standards: conservation, one owner, and the thefts
     - uniswap        # the pool: the quote, the invariant, and mallory at it
     - bench          # rung 8: the harness's rules -- not its timings
