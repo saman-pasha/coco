@@ -1,4 +1,4 @@
-%% library(uniswap) -- Uniswap v2, as rules over arbitrary-precision integers.
+%% library(uniswap) -- Uniswap v2, as rules over 256-bit money.
 %%
 %%   uni_create(+T0, +T1)                     a pool, empty
 %%   uni_reserves(+T0, +T1, -R0, -R1)         what it holds
@@ -18,7 +18,7 @@
 %% is what makes it checkable by someone who does not believe the
 %% formula, which is the only kind of check worth having on a chain.
 %%
-%% ARITHMETIC IS library(bigint), NEVER `is/2'. This is not a stylistic
+%% ARITHMETIC IS library(u256), NEVER `is/2'. This is not a stylistic
 %% preference. cocolog's integers are 64 bits and they wrap in silence:
 %%
 %%     ?- X is 1000000000000000000 * 997.
@@ -28,10 +28,19 @@
 %% token uses (one token is 10^18), and it is simply not the answer. A
 %% pool built on `is/2' would quote wrong prices confidently and its
 %% invariant check would pass on the wrong numbers. So every amount here
-%% is an atom of decimal digits and every operation is a bigint one.
+%% is an atom of decimal digits and every operation is a u256 one.
+%%
+%% u256 IS THE TYPE MONEY IS WRITTEN IN, throughout The Coco -- balances,
+%% prices, amounts, and whatever a contract holds. It is 256 bits wide
+%% because that is what the chains this hub reads are, and NOTHING IN IT
+%% WRAPS: an operation that cannot represent its answer raises, the way
+%% Solidity 0.8 made overflow revert. A refused transaction is a fact; a
+%% wrapped balance is a lie that spends. (cocolog's own library(bigint)
+%% is arbitrary precision and is the right tool for arithmetic that is
+%% not money -- it has no ceiling, which is exactly what money needs.)
 %%
 %% AMOUNTS ARE ATOMS. '1000000000000000000' is one token. Small numbers
-%% may be written as plain integers -- bigint takes either -- but what
+%% may be written as plain integers -- u256 takes either -- but what
 %% comes back is always an atom, because that is the only spelling that
 %% survives the range.
 %%
@@ -50,7 +59,7 @@
 %% and the periphery's router. Those are additions to this, not
 %% corrections of it.
 
-:- use_module(library(bigint)).
+:- use_module(library(u256)).
 :- use_module(library(lists)).
 
 :- dynamic uni_pool/4.          % uni_pool(T0, T1, R0, R1)
@@ -58,6 +67,18 @@
 
 %% MINIMUM_LIQUIDITY, v2's own constant.
 uni_minimum_liquidity('1000').
+
+%% AND v2's OTHER CONSTANT, which is the one that makes the arithmetic
+%% safe rather than lucky. A v2 reserve is a uint112, and `_update'
+%% reverts with OVERFLOW if a balance will not fit one. That is not
+%% frugality: with both reserves under 2^112, every product this file
+%% takes stays under 2^224 and cannot overflow a 256-bit word at all.
+%% The ceiling is the proof, so it is enforced here too.
+uni_max_reserve('5192296858534827628530496329220095').   % 2^112 - 1
+
+uni_fits_reserve(R) :-
+    uni_max_reserve(Max),
+    \+ u256_cmp(R, Max, '>').
 
 %% ---- the pair --------------------------------------------------------
 %%
@@ -84,7 +105,7 @@ uni_supply(A, B, Total) :-
 
 uni_k(A, B, K) :-
     uni_reserves(A, B, R0, R1),
-    bigint_mul(R0, R1, K).
+    u256_mul(R0, R1, K).
 
 uni_set_reserves(T0, T1, R0, R1) :-
     retract(uni_pool(T0, T1, _, _)),
@@ -104,27 +125,27 @@ uni_set_total(T0, T1, Total) :-
 %% luck, and why a formula rearranged to look tidier is a different
 %% formula.
 uni_amount_out(AmountIn, RIn, ROut, AmountOut) :-
-    bigint_cmp(AmountIn, '0', '>'),
-    bigint_cmp(RIn, '0', '>'),
-    bigint_cmp(ROut, '0', '>'),
-    bigint_mul(AmountIn, '997', WithFee),
-    bigint_mul(WithFee, ROut, Numerator),
-    bigint_mul(RIn, '1000', Scaled),
-    bigint_add(Scaled, WithFee, Denominator),
-    bigint_div(Numerator, Denominator, AmountOut).
+    u256_cmp(AmountIn, '0', '>'),
+    u256_cmp(RIn, '0', '>'),
+    u256_cmp(ROut, '0', '>'),
+    u256_mul(AmountIn, '997', WithFee),
+    u256_mul(WithFee, ROut, Numerator),
+    u256_mul(RIn, '1000', Scaled),
+    u256_add(Scaled, WithFee, Denominator),
+    u256_div(Numerator, Denominator, AmountOut).
 
 %% The other direction: what must go in for a wanted output. The `+1' is
 %% v2's, and it is not a rounding error -- it is the pool refusing to be
 %% short-changed by the division that truncated.
 uni_amount_in(AmountOut, RIn, ROut, AmountIn) :-
-    bigint_cmp(AmountOut, '0', '>'),
-    bigint_cmp(ROut, AmountOut, '>'),
-    bigint_mul(RIn, AmountOut, N0),
-    bigint_mul(N0, '1000', Numerator),
-    bigint_sub(ROut, AmountOut, Left),
-    bigint_mul(Left, '997', Denominator),
-    bigint_div(Numerator, Denominator, Q),
-    bigint_add(Q, '1', AmountIn).
+    u256_cmp(AmountOut, '0', '>'),
+    u256_cmp(ROut, AmountOut, '>'),
+    u256_mul(RIn, AmountOut, N0),
+    u256_mul(N0, '1000', Numerator),
+    u256_sub(ROut, AmountOut, Left),
+    u256_mul(Left, '997', Denominator),
+    u256_div(Numerator, Denominator, Q),
+    u256_add(Q, '1', AmountIn).
 
 %% ---- swapping --------------------------------------------------------
 %%
@@ -140,13 +161,14 @@ uni_swap(TIn, TOut, AmountIn, AmountOut) :-
     ;   RIn = R1, ROut = R0
     ),
     uni_amount_out(AmountIn, RIn, ROut, AmountOut),
-    bigint_cmp(ROut, AmountOut, '>'),
-    bigint_add(RIn, AmountIn, RIn2),
-    bigint_sub(ROut, AmountOut, ROut2),
+    u256_cmp(ROut, AmountOut, '>'),
+    u256_add(RIn, AmountIn, RIn2),
+    u256_sub(ROut, AmountOut, ROut2),
     %% k, before and after, on the reserves themselves
-    bigint_mul(RIn, ROut, KBefore),
-    bigint_mul(RIn2, ROut2, KAfter),
-    \+ bigint_cmp(KAfter, KBefore, '<'),
+    u256_mul(RIn, ROut, KBefore),
+    u256_mul(RIn2, ROut2, KAfter),
+    \+ u256_cmp(KAfter, KBefore, '<'),
+    uni_fits_reserve(RIn2),
     (   TIn == T0
     ->  uni_set_reserves(T0, T1, RIn2, ROut2)
     ;   uni_set_reserves(T0, T1, ROut2, RIn2)
@@ -165,23 +187,25 @@ uni_mint(A, B, A0, A1, Liquidity) :-
     uni_pool(T0, T1, R0, R1),
     uni_total(T0, T1, Total),
     (   A == T0 -> Amt0 = A0, Amt1 = A1 ; Amt0 = A1, Amt1 = A0 ),
-    bigint_cmp(Amt0, '0', '>'),
-    bigint_cmp(Amt1, '0', '>'),
-    (   bigint_cmp(Total, '0', '=')
+    u256_cmp(Amt0, '0', '>'),
+    u256_cmp(Amt1, '0', '>'),
+    (   u256_cmp(Total, '0', '=')
     ->  uni_minimum_liquidity(Min),
-        bigint_mul(Amt0, Amt1, Product),
-        bigint_sqrt(Product, Root),
-        bigint_cmp(Root, Min, '>'),
-        bigint_sub(Root, Min, Liquidity),
-        bigint_add(Liquidity, Min, NewTotal)
-    ;   bigint_mul(Amt0, Total, X0), bigint_div(X0, R0, L0),
-        bigint_mul(Amt1, Total, X1), bigint_div(X1, R1, L1),
-        (   bigint_cmp(L0, L1, '<') -> Liquidity = L0 ; Liquidity = L1 ),
-        bigint_cmp(Liquidity, '0', '>'),
-        bigint_add(Total, Liquidity, NewTotal)
+        u256_mul(Amt0, Amt1, Product),
+        u256_sqrt(Product, Root),
+        u256_cmp(Root, Min, '>'),
+        u256_sub(Root, Min, Liquidity),
+        u256_add(Liquidity, Min, NewTotal)
+    ;   u256_mul(Amt0, Total, X0), u256_div(X0, R0, L0),
+        u256_mul(Amt1, Total, X1), u256_div(X1, R1, L1),
+        (   u256_cmp(L0, L1, '<') -> Liquidity = L0 ; Liquidity = L1 ),
+        u256_cmp(Liquidity, '0', '>'),
+        u256_add(Total, Liquidity, NewTotal)
     ),
-    bigint_add(R0, Amt0, NR0),
-    bigint_add(R1, Amt1, NR1),
+    u256_add(R0, Amt0, NR0),
+    u256_add(R1, Amt1, NR1),
+    uni_fits_reserve(NR0),
+    uni_fits_reserve(NR1),
     uni_set_reserves(T0, T1, NR0, NR1),
     uni_set_total(T0, T1, NewTotal).
 
@@ -192,13 +216,13 @@ uni_burn(A, B, Liquidity, Out0, Out1) :-
     uni_key(A, B, T0, T1),
     uni_pool(T0, T1, R0, R1),
     uni_total(T0, T1, Total),
-    bigint_cmp(Liquidity, '0', '>'),
-    \+ bigint_cmp(Liquidity, Total, '>'),
-    bigint_mul(Liquidity, R0, P0), bigint_div(P0, Total, B0),
-    bigint_mul(Liquidity, R1, P1), bigint_div(P1, Total, B1),
-    bigint_sub(R0, B0, NR0),
-    bigint_sub(R1, B1, NR1),
-    bigint_sub(Total, Liquidity, NewTotal),
+    u256_cmp(Liquidity, '0', '>'),
+    \+ u256_cmp(Liquidity, Total, '>'),
+    u256_mul(Liquidity, R0, P0), u256_div(P0, Total, B0),
+    u256_mul(Liquidity, R1, P1), u256_div(P1, Total, B1),
+    u256_sub(R0, B0, NR0),
+    u256_sub(R1, B1, NR1),
+    u256_sub(Total, Liquidity, NewTotal),
     uni_set_reserves(T0, T1, NR0, NR1),
     uni_set_total(T0, T1, NewTotal),
     (   A == T0 -> Out0 = B0, Out1 = B1 ; Out0 = B1, Out1 = B0 ).

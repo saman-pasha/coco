@@ -79,6 +79,20 @@ allowed(atom_concat/3).   allowed(atom_length/2).  allowed(atom_chars/2).
 allowed(atom_codes/2).    allowed(atom_number/2).  allowed(char_code/2).
 allowed(sub_atom/5).      allowed(number_codes/2). allowed(upcase_atom/2).
 allowed(downcase_atom/2). allowed(atomic_list_concat/3).
+%% MONEY IS u256, and a contract may say so. `is/2' is in this
+%% vocabulary and it is 64 bits wide: at ordinary token scale -- one
+%% token is 10^18 -- it wraps in silence, so a contract that priced
+%% anything with it would be confidently wrong and its own checks would
+%% pass on the wrong numbers. library(u256) is the type a balance, a
+%% price or an amount is written in here, and it belongs inside the
+%% fence for exactly the reason the rest of this list does: every one of
+%% these is deterministic, total, and sees nothing but its arguments.
+%% They cannot wrap -- an operation that cannot represent its answer
+%% raises -- which is what makes them safe to hand a contract.
+allowed(u256_add/3).   allowed(u256_sub/3).    allowed(u256_mul/3).
+allowed(u256_div/3).   allowed(u256_mod/3).    allowed(u256_muldiv/4).
+allowed(u256_cmp/3).   allowed(u256_sqrt/2).   allowed(u256_dec/2).
+allowed(u256_hex/2).   allowed(u256_int/2).
 %% The chain's own primitives. A contract that could not hash or check a
 %% signature could not talk about the chain it lives on.
 allowed(sha256/2).     allowed(sha256_hex/2).   allowed(sha256d_hex/2).

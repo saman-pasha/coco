@@ -99,7 +99,7 @@ libraries:
     - pos            # rung 6: weight as a query, and the leader draw
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
     - hub            # rung 7: rules as entries, the namespace, the anchor, the bridge
-    - uniswap        # a constant-product pool as rules, over library(bigint)
+    - uniswap        # a constant-product pool as rules, over library(u256)
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.

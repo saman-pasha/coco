@@ -7,9 +7,10 @@
 #   pool pays 996006981039903216 at a 0.3% fee. The Coco did not invent
 #   that number -- it is what the constant-product formula pays, quoted
 #   wherever the formula is explained, and reproducible in any language
-#   with wide integers. Three independent things agree on it here: this
-#   library over Zigurat's BigInt, library(u256)'s fixed-width limbs,
-#   and Python's own integers.
+#   with wide integers. Three independent implementations agree on it:
+#   library(u256)'s fixed-width limbs (which the pool is built on),
+#   cocolog's library(bigint) over Zigurat's arbitrary-precision
+#   BigInt, and Python's own integers.
 #
 #   AND IT IS ITS OWN INVERSE. Asking what input buys that exact output
 #   returns the input we started with. A formula that is not its own
@@ -31,6 +32,12 @@
 #   with the pool. That is the direction every truncation in the
 #   library goes, and a pool that rounded the other way could be
 #   drained a wei at a time.
+#
+#   MONEY IS u256. Balances, prices and amounts are 256 bits wide
+#   throughout The Coco, and NOTHING IN THEM WRAPS -- an operation that
+#   cannot represent its answer raises, the way Solidity 0.8 made
+#   overflow revert. v2's own uint112 reserve ceiling is enforced too,
+#   because that ceiling is WHY v2's products cannot overflow a word.
 #
 #   AND THE ARITHMETIC IS NOT `is/2'. The first check asserts cocolog's
 #   64-bit multiply giving the WRONG answer for the first product a
@@ -55,7 +62,7 @@ if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 
 U="use_module(library(uniswap))"
 if ! timeout 60 "$C" query "$U, write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
-  echo "SKIP (library(uniswap) will not load -- is this build carrying bigint?)"
+  echo "SKIP (library(uniswap) will not load -- did the u256 module build?)"
   exit 0
 fi
 
@@ -82,7 +89,7 @@ check "and the inverse returns the input" \
   "$(q "uni_amount_in('$QUOTE','$POOL','$POOL',X), write(answer(X)), nl")" "$ONE"
 check "a bigger pool moves the price less" \
   "$(q "uni_amount_out('$ONE','10000000000000000000000','10000000000000000000000',X), \
-        bigint_cmp(X,'$QUOTE',C), write(answer(C)), nl")" ">"
+        u256_cmp(X,'$QUOTE',C), write(answer(C)), nl")" ">"
 
 # ---- liquidity -------------------------------------------------------
 MINT="uni_create(dai,weth), uni_mint(dai,weth,'$POOL','$POOL',L)"
@@ -100,7 +107,7 @@ check "off-ratio mints the SMALLER share" \
 # ---- the invariant ---------------------------------------------------
 check "k grows across a swap -- that is the fee" \
   "$(q "$MINT, uni_k(dai,weth,K0), uni_swap(dai,weth,'$ONE',_), \
-        uni_k(dai,weth,K1), bigint_cmp(K1,K0,C), write(answer(C)), nl")" ">"
+        uni_k(dai,weth,K1), u256_cmp(K1,K0,C), write(answer(C)), nl")" ">"
 check "the swap pays the quoted amount" \
   "$(q "$MINT, uni_swap(dai,weth,'$ONE',Out), write(answer(Out)), nl")" "$QUOTE"
 check "the pair is unordered: same pool either way" \
@@ -113,10 +120,10 @@ check "the pair is unordered: same pool either way" \
 # approaches the reserve without ever reaching it.
 check "mallory cannot drain the pool in one swap" \
   "$(no "$MINT, uni_swap(dai,weth,'1000000000000000000000000000000',Out), \
-         bigint_cmp(Out,'$POOL','<'), write(answer(Out)), nl")" "allowed"
+         u256_cmp(Out,'$POOL','<'), write(answer(Out)), nl")" "allowed"
 check "and what she got was still less than the reserve" \
   "$(q "$MINT, uni_swap(dai,weth,'1000000000000000000000000000000',Out), \
-        bigint_cmp(Out,'$POOL',C), write(answer(C)), nl")" "<"
+        u256_cmp(Out,'$POOL',C), write(answer(C)), nl")" "<"
 check "a swap on a pool that does not exist fails" \
   "$(no "uni_swap(nosuch,token,'$ONE',_), write(answer(x)), nl")" "refused"
 check "a zero swap is not a swap" \
@@ -129,7 +136,7 @@ check "burning more than exists is refused" \
 # Deposit, take the whole share back, and be no better off: what the
 # floors dropped stayed with the pool.
 check "a mint and burn round trip does not profit" \
-  "$(q "$MINT, uni_burn(dai,weth,L,O0,_), bigint_cmp(O0,'$POOL',C), write(answer(C)), nl")" \
+  "$(q "$MINT, uni_burn(dai,weth,L,O0,_), u256_cmp(O0,'$POOL',C), write(answer(C)), nl")" \
   "<"
 check "and the pool keeps the minimum liquidity" \
   "$(q "$MINT, uni_burn(dai,weth,L,_,_), uni_supply(dai,weth,T), write(answer(T)), nl")" \

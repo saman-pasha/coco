@@ -176,6 +176,35 @@ check "a fresh process reads a contract's source out of the chain" \
   "$(timeout 90 "$C" $KB query "$K, findall(1, contract_clause(escrow, _), L), length(L, N), ( N =:= 3 -> write(three_clauses) ; write(N) ), nl" 2>/dev/null | grep -aoE '^(three_clauses|[0-9]+)$' | head -1)" \
   "three_clauses"
 
+# ---- money is u256, inside the fence ---------------------------------
+# `is/2' is in the vocabulary and it is SIXTY-FOUR BITS: at ordinary
+# token scale -- one token is 10^18 -- it wraps in silence, so a
+# contract that priced anything with it would be confidently wrong and
+# its own checks would agree with it. library(u256) is the type a
+# balance, a price or an amount is written in throughout The Coco, and
+# it is inside the fence for the same reason everything else there is:
+# deterministic, total, blind to everything but its arguments, and
+# unable to wrap -- an operation that cannot represent its answer
+# raises. `is/2' stays admitted, because heights and counters are
+# honest 64-bit work; what changed is that MONEY has a type.
+Q="u256_mul(In,'997',F), u256_mul(R0,'1000',S), u256_add(S,F,D), u256_muldiv(F,R1,D,Out)"
+AMM="[(quote(In,R0,R1,Out) :- $Q)]"
+check "admits a contract that prices in u256" \
+  "$(loc "use_module(library(u256)), contract_admit(amm, $AMM, R), write(R), nl" "$V")" \
+  "admitted"
+# And it does not merely pass the fence -- it runs, and pays Uniswap's
+# own number for one token into a 1000/1000 pool.
+check "and it runs, paying the constant-product quote" \
+  "$(loc "use_module(library(u256)), contract_install(amm, $AMM), \
+          contract_call(amm, quote('1000000000000000000','1000000000000000000000','1000000000000000000000',Out)), \
+          write(Out), nl" '^[0-9]+$')" \
+  "996006981039903216"
+# The fence is still a fence: u256 got in because it is safe, not
+# because the list grew careless.
+check "still refuses assertz beside the u256 calls" \
+  "$(loc "use_module(library(u256)), contract_admit(sneak, [(q(A,B,C) :- u256_add(A,B,C), assertz(owned(C)))], R), write(R), nl" "$V")" \
+  "refused"
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "GREEN: 0 failure(s)"; exit 0

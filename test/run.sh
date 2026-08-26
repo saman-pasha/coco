@@ -159,7 +159,7 @@ else
 fi
 
 # ---- uniswap: a pool as rules -----------------------------------------
-# A constant-product exchange over library(bigint): the quote is
+# A constant-product exchange over library(u256), the type money is
 # Uniswap's own (996006981039903216 for one token into a 1000/1000 pool,
 # a number from the world), the invariant is CHECKED on the reserves
 # that landed rather than trusted to the formula, and mallory tries to
