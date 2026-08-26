@@ -6,6 +6,7 @@ None produced a number.
 ```sh
 sh bench/tps.sh          # the lanes, measured and narrated
 sh test/bench.sh         # the harness's RULES, checked: 25 checks
+sh bench/solana.sh       # the other system on the same box (SKIPs without its toolchain)
 ```
 
 | file | what |
@@ -13,65 +14,80 @@ sh test/bench.sh         # the harness's RULES, checked: 25 checks
 | `harness.pl` | what a reading must carry before it may be printed |
 | `mallory.pl` | eight ways to inflate a number |
 | `tps.sh` | the lanes |
+| `solana.sh` | the same rules pointed at a single-node Solana validator |
 
 ## The number is on the page
 
 One run, on a 4-core Linux container, against a Zigurat server on a
-FRESH store -- the server running the Cicili MVCCS engine, which
-replaced the C++ one:
+FRESH store -- the Cicili MVCCS engine underneath, and fork choice now
+INCREMENTAL: `head_mark/3` carries each chain's in-turn count, computed
+once at accept time, so `ledger_head/1` is one pass over the marks
+instead of a walk of every chain from every mark:
 
 | lane | rate | arrangement |
 |---|---:|---|
-| `verify` | **140/s** | `local_no_database` |
-| `validate` | **138/s** | `local_no_database` |
-| `seal_batched` | **11.1/s** | `server_one_kb_ONE_TURN` |
-| `seal_per_turn` | **1.3/s** | `server_one_kb_per_turn` |
-| `parallel_own_kbs` | **17.5/s** | `server_4_kbs_ONE_TURN_each` |
-| `parallel_one_kb` | **13.6/s** | `server_1_kb_4_writers` |
-| `seal_batched_again` | **8.4/s** | `server_one_kb_ONE_TURN` |
-| `spec_read_ahead` | **12 blk** | `server_1kb_READ_UNCOMMITTED_reader` |
+| `verify` | **163/s** | `local_no_database` |
+| `validate` | **167/s** | `local_no_database` |
+| `seal_batched` | **14.8/s** | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | **1.5/s** | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | **23.1/s** | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | REFUSED | `server_1_kb_4_writers` |
+| `seal_batched_again` | **9.5/s** | `server_one_kb_ONE_TURN` |
+| `spec_read_ahead` | **28 blk** | `server_1kb_READ_UNCOMMITTED_reader` |
 | `committed_beside_it` | **0 blk** | `server_1kb_default_isolation_reader` |
 
-The last two are the SPECULATIVE LANE, and they are counts, not rates:
-one writer held forty blocks staged in ONE open transaction for 36
-seconds; a reader that named `READ_UNCOMMITTED` through cocolog's
-`library(zigurat)` audited twelve of them -- every hash recomputed,
-every signature checked, every parent link followed, `ledger_audit(ok)`
--- BEFORE the commit landed, while a reader at the default commit
-isolation, polled at the same moments, saw no chain at all; and after
-the commit the store answered every one of the forty. The lane refuses
-itself if no staged block was audited ahead of finality, or if the
-default-isolation reader ever saw an unfinished chain.
+The REFUSED is rule 1 doing its job. All four contended writers are
+the same author sealing the same fifteen heights, so identical blocks
+race for the same rows, a writer's whole transaction can lose the
+commit, and on this run fewer than sixty rows landed: the harness
+refuses the count rather than print a rate the store does not back.
+The run before it, same session, also on a fresh store, read
+15.9 / 1.6 / 22.0 / 17.8 with all sixty committed -- rule 6 keeps the
+two runs two claims, and the contended line of that one is as real as
+the refusal of this one.
 
-The run before it, same container, same session, on a store aged by a
-whole day's suites, read 9.55 / 1.13 / 17.84 / 7.67 -- and the
-contended lane was REFUSED under rule 2, because all sixty committed
-blocks landed in under one second. The prior recording below is the
-same lanes against the C++ engine this one replaced, on a store that
-had been in use all session; rule 6 says the two tables are different
-runs and stay different claims, so both stand and neither line says
-more than its arrangement:
+The `spec_` lines are the SPECULATIVE LANE, and they are counts, not
+rates: one writer held ONE HUNDRED blocks staged in ONE open
+transaction for 174 seconds; a reader that named `READ_UNCOMMITTED`
+through cocolog's `library(zigurat)` audited twenty-eight of them --
+every hash recomputed, every signature checked, every parent link
+followed, `ledger_audit(ok)` -- BEFORE the commit landed. Five polls
+caught the writer mid-edit and audited `broken`: the price
+READ_UNCOMMITTED names up front, printed on its own line and never
+folded into the claim in either direction. The reader at the default
+commit isolation, polled at the same moments, saw no chain at all,
+and after the commit the store answered every one of the hundred.
+The lane still refuses itself if no staged block was audited whole
+ahead of finality, or if the default-isolation reader ever saw an
+unfinished chain -- and it did refuse, twice, on the way here: when
+one torn poll at the top was allowed to poison the claim, and when
+the fork-choice speedup closed a 40-block window in 7.087s, faster
+than one poll could land. The 100-block window is the fix for the
+second; the first is why torn polls print instead of deciding.
 
-| lane | rate | arrangement (C++ engine, prior recording) |
-|---|---:|---|
-| `verify` | 181/s | `local_no_database` |
-| `validate` | 181/s | `local_no_database` |
-| `seal_batched` | 4.4/s | `server_one_kb_ONE_TURN` |
-| `seal_per_turn` | 1.2/s | `server_one_kb_per_turn` |
-| `parallel_own_kbs` | 9.0/s | `server_4_kbs_ONE_TURN_each` |
-| `parallel_one_kb` | 4.3/s | `server_1_kb_4_writers` |
-| `seal_batched_again` | 9.3/s | `server_one_kb_ONE_TURN` |
+Two prior recordings stand below, per rule 6 different claims: the
+same lanes on the Cicili engine while fork choice still WALKED every
+chain, and before that on the C++ engine the Cicili one replaced:
 
-What moved and what did not, by the lanes' own mechanics: the store
-lanes carry the engine, and the parallel ones carry its locking -- an
-owned-object writer per knowledge base doubled, and four writers
-through ONE knowledge base went from 4.3/s to 13.6/s, the one lane
-whose whole cost is contention. `seal_per_turn` did not move because
-~0.42s of process start-up times ten IS that lane; the two `--local`
-lanes never touch the store, so the engine cannot move them and did
-not (their drift is the container's); and the scaling shape further
-down survives untouched, because fork choice re-derived per seal is
-the ledger's cost, not the store's.
+| lane | Cicili engine, walk fork choice | C++ engine | arrangement |
+|---|---:|---:|---|
+| `verify` | 140/s | 181/s | `local_no_database` |
+| `validate` | 138/s | 181/s | `local_no_database` |
+| `seal_batched` | 11.1/s | 4.4/s | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | 1.3/s | 1.2/s | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | 17.5/s | 9.0/s | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | 13.6/s | 4.3/s | `server_1_kb_4_writers` |
+| `seal_batched_again` | 8.4/s | 9.3/s | `server_one_kb_ONE_TURN` |
+
+What moved and what did not, by the lanes' own mechanics: the ENGINE
+replacement carried the store lanes (4.4 to 11.1 batched; the
+contended lane, whose whole cost is locking, 4.3 to 13.6); the FORK
+CHOICE change carried the sealing lanes again (11.1 to 14.8 batched,
+17.5 to 23.1 uncoordinated), because every seal reads the head and
+the head stopped costing a walk. `seal_per_turn` moved with neither,
+because ~0.42s of process start-up times ten IS that lane; and the
+two `--local` lanes never touch the store, so nothing here can move
+them (their drift is the container's).
 
 **And no sentence here says "competes with".** The ladder set that
 condition before the number existed; the number exists now and the
@@ -105,11 +121,13 @@ The sixth is not in `harness.pl`, because no predicate can enforce it:
 
 `seal_batched` and `seal_batched_again` are **the same lane, the same
 arrangement, a fresh knowledge base each time**, minutes apart in one
-run. They read **4.40/s** and **9.34/s** — 2.1× apart, and neither is
-wrong. Across three runs the first of them read 8.11, 6.02 and 4.40.
+run. On the recorded run they read **14.75/s** and **9.48/s** — 1.6×
+apart, and neither is wrong; on the C++-engine recording they read
+4.40/s and 9.34/s, 2.1× apart the other way. Across three runs of
+that era the first of them read 8.11, 6.02 and 4.40.
 
-Meanwhile `verify` and `validate` held at **181–183/s every single
-time**, because nothing they do touches the store.
+Meanwhile `verify` and `validate` hold within a few percent of each
+other every single time, because nothing they do touches the store.
 
 That contrast is the harness's most useful output. cocolog's CLAUDE.md
 warns that a slow suite is the store ageing; **a slow benchmark is the
@@ -133,14 +151,18 @@ Seconds per ten seals, as the chain grows:
 
 | chain length | 0 | 10 | 20 | 30 | 40 |
 |---|---|---|---|---|---|
-| first run | 0.81 s | 1.64 s | 2.59 s | 3.89 s | 5.20 s |
-| a later run | 7.01 s | 7.63 s | 8.40 s | 9.88 s | 11.86 s |
+| recorded run (incremental fork choice) | 0.83 s | 1.43 s | 2.24 s | 3.33 s | 5.46 s |
+| walk fork choice, fresh store | 0.81 s | 1.64 s | 2.59 s | 3.89 s | 5.20 s |
+| walk fork choice, aged store | 7.01 s | 7.63 s | 8.40 s | 9.88 s | 11.86 s |
 
-The baseline moves with the store's age. **The growth does not.** Cost
-per block rises with the length of the chain, because `ledger_head/1`
-re-derives fork choice from every head mark on every seal — and a single
-averaged rate hides that completely. A system that is quick at length
-zero and unusable at length ten thousand has a perfectly respectable
+The baseline moves with the store's age. **The growth does not** — and
+the incremental fork choice did not remove it, only its walk: every
+seal still reads EVERY head mark (one `findall` over the marks instead
+of a chain walk from each), so cost per block still rises with the
+length of the chain, more shallowly per mark. What the change bought
+shows in the batched lanes above, not in this shape. A single averaged
+rate hides the shape completely: a system that is quick at length zero
+and unusable at length ten thousand has a perfectly respectable
 average.
 
 **A tip-only filter was tried, measured, and did not help.** The idea:
@@ -154,14 +176,17 @@ making those.
 
 ## A verified count is not a useful count
 
-The contended lane is the most honest line in the file. Four writers,
-one knowledge base, fifteen seals each: **all sixty blocks committed**,
-so rule 1 passed and 4.31/s is a real rate.
+The contended lane is the most honest line in the file, in either of
+its outcomes. Four writers, one knowledge base, fifteen seals each: on
+the runs where **all sixty blocks commit** (17.8/s on this session's
+other run, 4.31/s on the C++ recording), rule 1 passes and the rate is
+real. On the recorded run a writer's whole transaction lost the commit
+race and rule 1 REFUSED the count instead.
 
-It is also nearly worthless. Each writer read the head independently, so
-they all sealed the **same heights** — sixty blocks at **fifteen
-distinct heights**, a bush four wide rather than a chain sixty long.
-Fork choice will discard three blocks in four.
+A committed sixty is also nearly worthless. Each writer read the head
+independently, so they all sealed the **same heights** — sixty blocks
+at **fifteen distinct heights**, a bush four wide rather than a chain
+sixty long. Fork choice will discard three blocks in four.
 
 No rule in the harness can tell you that. Only the arrangement can,
 which is why rule 3 exists.
@@ -199,6 +224,49 @@ choosing the workload is upstream of every rule a harness can have. The
 only defence is the one this repository already uses everywhere else:
 print the whole table, name the arrangement on every line, and do not
 write the sentence.
+
+## The other system on the same box
+
+`bench/solana.sh` — a SINGLE-NODE Solana test validator
+(`solana-test-validator`, agave 4.2.1) on the SAME container every
+Coco lane ran on, driven by Solana's own CLI, measured under the same
+six rules. The founding rule — no sentence says "competes with" until
+the number is on the page — was never a refusal to compare; it was the
+price of comparing, and this lane pays it.
+
+Two runs, the first run before them discarded (rule 5), both printed
+(rule 6):
+
+| lane | run 2 | run 3 | arrangement |
+|---|---:|---:|---|
+| `solana_per_process` | 1.93/s | 1.93/s | `solana_1node_one_process_per_txn`, 10 of 10 confirmed |
+| `solana_pipelined` | 31.7/s | 32.5/s | `solana_1node_pipelined_submits`, 100 of 100 confirmed |
+
+What is held equal: the hardware; the finality bar (a transaction
+counts only when ITS OWN SIGNATURE reads `confirmed` afterwards —
+rule 1 per transaction, and the reason votes are never in the count);
+the wall clock; the batching, matched lane for lane — ten CLI
+processes each waiting for its own confirmation against
+`seal_per_turn`, a hundred submits in waves of ten with every
+signature verified against `seal_batched`; and the first run
+discarded. The per-process lane pays a CLI process start-up per
+transaction exactly the way `seal_per_turn` pays a cocolog one, which
+is why those two lines are twins and why both are floors.
+
+What cannot be held equal, and is printed rather than adjusted: the
+unit of work. A Solana transaction is an ed25519-signed lamport
+transfer between two accounts; a Coco block is a secp256k1-sealed
+append to a hash chain whose every seal reads the whole head. Close
+enough to put side by side, different enough that the arrangement
+column is the truth of each line. The discarded warm-up transfer also
+carries the destination past Solana's rent-exempt minimum, so every
+measured transfer is a plain lamport move of the same shape — the
+lane's own rule-1 lesson: its first version measured ten rent
+refusals in 0.139s and would happily have printed 0.00/s over them.
+
+Both tables are on the page now, arrangements and all. The units
+differ and both columns say so; the sentence is still the reader's to
+write — this file does not write it.
 
 ## What is not here
 
