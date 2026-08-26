@@ -63,8 +63,8 @@ echo "   signature afterwards, so votes are never in the count"
 echo
 
 # ---- the validator, fresh ---------------------------------------------
-pkill -f solana-test-validator 2>/dev/null
-sleep 1
+pkill -9 -f solana-test-validator 2>/dev/null
+sleep 2
 rm -rf "$LEDGER"
 solana-keygen new -o "$KEY" --no-bip39-passphrase --force >/dev/null 2>&1
 ( solana-test-validator --reset --quiet --ledger "$LEDGER" \
@@ -79,11 +79,9 @@ if [ "$ready" != 1 ]; then
   exit 0
 fi
 solana config set --url "$RPC" --keypair "$KEY" >/dev/null 2>&1
-DEST=$(solana-keygen pubkey /dev/stdin 2>/dev/null <<EOF
-$(solana-keygen new --no-bip39-passphrase --no-outfile 2>/dev/null | grep -ao 'pubkey: .*' | cut -d' ' -f2)
-EOF
-)
-[ -n "$DEST" ] || DEST=$(solana-keygen new --no-bip39-passphrase -o /tmp/coco-solana-dest.json --force >/dev/null 2>&1; solana-keygen pubkey /tmp/coco-solana-dest.json)
+solana-keygen new --no-bip39-passphrase -o /tmp/coco-solana-dest.json --force >/dev/null 2>&1
+DEST=$(solana-keygen pubkey /tmp/coco-solana-dest.json)
+if [ -z "$DEST" ]; then echo "SKIP could not derive a destination key"; exit 0; fi
 
 # how many of these SIGNATURES read confirmed -- rule 1, per transaction
 confirmed_of() {  # file-of-signatures
@@ -106,7 +104,7 @@ solana transfer "$DEST" 0.000001 --allow-unfunded-recipient >/dev/null 2>&1  # d
 t0=$(now)
 i=0; ok=0
 while [ $i -lt 10 ]; do
-  out=$(solana transfer "$DEST" 0.00000$((i+1)) --allow-unfunded-recipient 2>/dev/null | grep -ao '^Signature: .*' | cut -d' ' -f2)
+  out=$(solana transfer "$DEST" "0.0000$((101+i))" --allow-unfunded-recipient 2>/dev/null | grep -ao '^Signature: .*' | cut -d' ' -f2)
   [ -n "$out" ] && { echo "$out" >> /tmp/coco-solana-perproc.sigs; ok=$((ok+1)); }
   i=$((i+1))
 done
