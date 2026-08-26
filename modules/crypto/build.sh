@@ -21,6 +21,6 @@ mkdir -p "$OUT"
 
 for mod in $COCO_MODULES_CRYPTO; do
   ( cd "$CICILI" && sbcl --script cicili.lisp "$HERE/$mod.cicili" )
-  gcc -shared -fPIC -O2 -o "$OUT/$mod.so" "$HERE/$mod.c"
+  gcc -shared -fPIC -O3 -o "$OUT/$mod.so" "$HERE/$mod.c"
   echo "built $OUT/$mod.so"
 done
