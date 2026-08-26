@@ -64,17 +64,17 @@ if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 # contracts/, categorised, because it is a thing deployed on a chain
 # rather than machinery The Coco offers. library/ holds the fence and
 # the money type; a pool is neither.
-CONTRACT="$ROOT/contracts/dex/uniswap.pl"
-if ! timeout 60 "$C" run "$CONTRACT" "write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
+CONTRACT="$ROOT/contracts/token/fungible.pl $ROOT/contracts/dex/uniswap.pl"
+if ! timeout 60 "$C" run $CONTRACT "write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
   echo "SKIP (contracts/dex/uniswap.pl will not load -- did the u256 module build?)"
   exit 0
 fi
 
 # Every answer is written inside `answer(...)' so the extraction cannot
 # pick up a stray digit from the echoed goal or from "1 answer(s)".
-q() { timeout 120 "$C" run "$CONTRACT" "$1" 2>/dev/null \
+q() { timeout 120 "$C" run $CONTRACT "$1" 2>/dev/null \
       | grep -aoE 'answer\([^)]*\)' | head -1 | sed 's/^answer(//; s/)$//'; }
-no() { if timeout 120 "$C" run "$CONTRACT" "$1" 2>/dev/null \
+no() { if timeout 120 "$C" run $CONTRACT "$1" 2>/dev/null \
             | grep -aq 'answer('; then echo allowed; else echo refused; fi; }
 
 ONE=1000000000000000000            # one token, 18 decimals
@@ -96,55 +96,101 @@ check "a bigger pool moves the price less" \
         u256_cmp(X,'$QUOTE',C), write(answer(C)), nl")" ">"
 
 # ---- liquidity -------------------------------------------------------
-MINT="uni_create(dai,weth), uni_mint(dai,weth,'$POOL','$POOL',L)"
+# The pool holds REAL BALANCES now, so the tokens have to exist and
+# somebody has to own some before anything can be deposited or traded.
+TOK="ft_create(dai,'DAI',18), ft_create(weth,'WETH',18), \
+     ft_mint(dai,alice,'1000000000000000000000000'), ft_mint(weth,alice,'1000000000000000000000000'), \
+     ft_mint(dai,bob,'1000000000000000000000000'), ft_mint(weth,bob,'1000000000000000000000000')"
+MINT="$TOK, uni_create(dai,weth), uni_mint(dai,weth,alice,'$POOL','$POOL',L)"
 check "the first deposit mints sqrt(a0*a1) - 1000" \
   "$(q "$MINT, write(answer(L)), nl")" "999999999999999999000"
 check "and the burned thousand is in the supply" \
   "$(q "$MINT, uni_supply(dai,weth,T), write(answer(T)), nl")" "1000000000000000000000"
 check "a second, in ratio, mints its share" \
-  "$(q "$MINT, uni_mint(dai,weth,'$POOL','$POOL',L2), write(answer(L2)), nl")" \
+  "$(q "$MINT, uni_mint(dai,weth,alice,'$POOL','$POOL',L2), write(answer(L2)), nl")" \
   "1000000000000000000000"
 check "off-ratio mints the SMALLER share" \
-  "$(q "$MINT, uni_mint(dai,weth,'$POOL','${POOL}0',L2), write(answer(L2)), nl")" \
+  "$(q "$MINT, uni_mint(dai,weth,alice,'$POOL','${POOL}0',L2), write(answer(L2)), nl")" \
   "1000000000000000000000"
 
 # ---- the invariant ---------------------------------------------------
 check "k grows across a swap -- that is the fee" \
-  "$(q "$MINT, uni_k(dai,weth,K0), uni_swap(dai,weth,'$ONE',_), \
+  "$(q "$MINT, uni_k(dai,weth,K0), uni_swap(dai,weth,bob,'$ONE',_), \
         uni_k(dai,weth,K1), u256_cmp(K1,K0,C), write(answer(C)), nl")" ">"
 check "the swap pays the quoted amount" \
-  "$(q "$MINT, uni_swap(dai,weth,'$ONE',Out), write(answer(Out)), nl")" "$QUOTE"
+  "$(q "$MINT, uni_swap(dai,weth,bob,'$ONE',Out), write(answer(Out)), nl")" "$QUOTE"
 check "the pair is unordered: same pool either way" \
-  "$(q "uni_create(dai,weth), uni_mint(weth,dai,'$POOL','$POOL',_), \
+  "$(q "$TOK, uni_create(dai,weth), uni_mint(weth,dai,alice,'$POOL','$POOL',_), \
         uni_reserves(dai,weth,R0,_), write(answer(R0)), nl")" "$POOL"
 
 # ---- mallory ---------------------------------------------------------
 # She cannot take more than the pool holds, and she cannot take all of
 # it: the formula's denominator grows with her input, so the output
-# approaches the reserve without ever reaching it.
+# approaches the reserve without ever reaching it. Note she must now
+# actually OWN what she dumps -- a thousand times the pool, which she
+# has -- because the tokens are real and the ledger is checked.
 check "mallory cannot drain the pool in one swap" \
-  "$(no "$MINT, uni_swap(dai,weth,'1000000000000000000000000000000',Out), \
+  "$(no "$MINT, uni_swap(dai,weth,bob,'1000000000000000000000000',Out), \
          u256_cmp(Out,'$POOL','<'), write(answer(Out)), nl")" "allowed"
 check "and what she got was still less than the reserve" \
-  "$(q "$MINT, uni_swap(dai,weth,'1000000000000000000000000000000',Out), \
+  "$(q "$MINT, uni_swap(dai,weth,bob,'1000000000000000000000000',Out), \
         u256_cmp(Out,'$POOL',C), write(answer(C)), nl")" "<"
 check "a swap on a pool that does not exist fails" \
-  "$(no "uni_swap(nosuch,token,'$ONE',_), write(answer(x)), nl")" "refused"
+  "$(no "uni_swap(nosuch,token,bob,'$ONE',_), write(answer(x)), nl")" "refused"
 check "a zero swap is not a swap" \
-  "$(no "$MINT, uni_swap(dai,weth,'0',_), write(answer(x)), nl")" "refused"
+  "$(no "$MINT, uni_swap(dai,weth,bob,'0',_), write(answer(x)), nl")" "refused"
 check "burning more than exists is refused" \
-  "$(no "$MINT, uni_burn(dai,weth,'99999999999999999999999999',_,_), \
+  "$(no "$MINT, uni_burn(dai,weth,alice,'99999999999999999999999999',_,_), \
          write(answer(x)), nl")" "refused"
 
 # ---- rounding, and which way it falls --------------------------------
 # Deposit, take the whole share back, and be no better off: what the
 # floors dropped stayed with the pool.
 check "a mint and burn round trip does not profit" \
-  "$(q "$MINT, uni_burn(dai,weth,L,O0,_), u256_cmp(O0,'$POOL',C), write(answer(C)), nl")" \
+  "$(q "$MINT, uni_burn(dai,weth,alice,L,O0,_), u256_cmp(O0,'$POOL',C), write(answer(C)), nl")" \
   "<"
 check "and the pool keeps the minimum liquidity" \
-  "$(q "$MINT, uni_burn(dai,weth,L,_,_), uni_supply(dai,weth,T), write(answer(T)), nl")" \
+  "$(q "$MINT, uni_burn(dai,weth,alice,L,_,_), uni_supply(dai,weth,T), write(answer(T)), nl")" \
   "1000"
+
+echo "-- and the tokens are real"
+# The pool is an account, the deposit is a transfer, and the share is
+# itself a fungible token -- a v2 pair IS an ERC-20.
+check "the deposit actually leaves the provider" \
+  "$(q "$MINT, ft_balance(dai,alice,B), u256_sub('1000000000000000000000000',B,D), write(answer(D)), nl")" \
+  "$POOL"
+check "and the pool actually holds it" \
+  "$(q "$MINT, uni_balances(dai,weth,B0,_), write(answer(B0)), nl")" "$POOL"
+check "the LP share is a token the provider holds" \
+  "$(q "$MINT, uni_lp_token(dai,weth,Lp), ft_balance(Lp,alice,B), write(answer(B)), nl")" \
+  "999999999999999999000"
+check "and the burned minimum sits where nobody can reach it" \
+  "$(q "$MINT, uni_lp_token(dai,weth,Lp), ft_balance(Lp,zero,B), write(answer(B)), nl")" \
+  "1000"
+check "a swap pays the trader in actual tokens" \
+  "$(q "$MINT, uni_swap(weth,dai,bob,'$ONE',_), ft_balance(dai,bob,B), \
+        u256_sub(B,'1000000000000000000000000',D), write(answer(D)), nl")" "$QUOTE"
+check "a swap nobody can fund is refused" \
+  "$(no "$MINT, uni_swap(weth,dai,carol,'$ONE',_), write(answer(x)), nl")" "refused"
+check "the pool is backed: it holds what it promised" \
+  "$(q "$MINT, uni_swap(weth,dai,bob,'$ONE',_), \
+        ( uni_backed(dai,weth) -> write(answer(backed)) ; write(answer(short)) ), nl")" \
+  "backed"
+# A donation is not a trade: sending a pool tokens raises its balance
+# without touching its reserves, which is exactly what sync and skim
+# are for.
+check "a donation leaves the pool backed but out of step" \
+  "$(q "$MINT, uni_account(dai,weth,Acct), ft_transfer(dai,bob,Acct,'$ONE'), \
+        uni_reserves(dai,weth,R0,_), uni_balances(dai,weth,B0,_), \
+        u256_sub(B0,R0,D), write(answer(D)), nl")" "$ONE"
+check "skim hands the difference to whoever asks" \
+  "$(q "$MINT, uni_account(dai,weth,Acct), ft_transfer(dai,bob,Acct,'$ONE'), \
+        uni_skim(dai,weth,carol), ft_balance(dai,carol,B), write(answer(B)), nl")" \
+  "$ONE"
+check "sync believes the balances instead" \
+  "$(q "$MINT, uni_account(dai,weth,Acct), ft_transfer(dai,bob,Acct,'$ONE'), \
+        uni_sync(dai,weth), uni_reserves(dai,weth,R0,_), write(answer(R0)), nl")" \
+  "1001000000000000000000"
 
 echo
 if [ "$failures" -eq 0 ]; then

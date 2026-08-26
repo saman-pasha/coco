@@ -62,7 +62,8 @@ check() {
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 
-F="$ROOT/contracts/token/nonfungible.pl $ROOT/contracts/dex/uniswap-v3.pl"
+F="$ROOT/contracts/token/fungible.pl $ROOT/contracts/token/nonfungible.pl \
+   $ROOT/contracts/dex/uniswap-v3.pl"
 if ! timeout 60 "$C" run $F "write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
   echo "SKIP (the v3 pool will not load -- did the u256 module build?)"
   exit 0
@@ -93,7 +94,11 @@ check "a tick past the end is not a price" \
   "$(no "tm_sqrt_ratio_at_tick(887273,S), write(answer(S)), nl")" "refused"
 
 echo "-- positions"
-MK="v3_create(p,dai,weth,3000,0), v3_mint(p,alice,-60,60,'1000000000000000000',Id,A0,A1)"
+TOK="ft_create(dai,'DAI',18), ft_create(weth,'WETH',18), \
+     ft_mint(dai,alice,'1000000000000000000000000'), ft_mint(weth,alice,'1000000000000000000000000'), \
+     ft_mint(dai,bob,'1000000000000000000000000'), ft_mint(weth,bob,'1000000000000000000000000'), \
+     ft_mint(dai,carol,'1000000000000000000000000'), ft_mint(weth,carol,'1000000000000000000000000')"
+MK="$TOK, v3_create(p,dai,weth,3000,0), v3_mint(p,alice,-60,60,'1000000000000000000',Id,A0,A1)"
 check "a symmetric range needs equal token0" \
   "$(v "$MK, write(answer(A0)), nl")" "2995354955910780"
 check "and equal token1" \
@@ -106,29 +111,29 @@ check "selling the position moves who owns it" \
   "$(v "$MK, nft_transfer_from(p,alice,alice,bob,Id), \
         v3_position(Id,_,O,_,_,_), write(answer(O)), nl")" "bob"
 check "a range above the price is all token0" \
-  "$(v "v3_create(p,dai,weth,3000,0), \
+  "$(v "$TOK, v3_create(p,dai,weth,3000,0), \
         v3_mint(p,alice,600,1200,'1000000000000000000',_,_,A1x), \
         write(answer(A1x)), nl")" "0"
 check "a range below it is all token1" \
-  "$(v "v3_create(p,dai,weth,3000,0), \
+  "$(v "$TOK, v3_create(p,dai,weth,3000,0), \
         v3_mint(p,alice,-1200,-600,'1000000000000000000',_,A0x,_), \
         write(answer(A0x)), nl")" "0"
 check "out-of-range liquidity is not depth" \
-  "$(v "v3_create(p,dai,weth,3000,0), \
+  "$(v "$TOK, v3_create(p,dai,weth,3000,0), \
         v3_mint(p,alice,600,1200,'1000000000000000000',_,_,_), \
         v3_active_liquidity(p,L), write(answer(L)), nl")" "0"
 check "in-range liquidity is" \
   "$(v "$MK, v3_active_liquidity(p,L), write(answer(L)), nl")" "1000000000000000000"
 check "an inverted range is refused" \
-  "$(no "v3_create(p,dai,weth,3000,0), v3_mint(p,alice,60,-60,'1000',I,_,_), \
+  "$(no "$TOK, v3_create(p,dai,weth,3000,0), v3_mint(p,alice,60,-60,'1000',I,_,_), \
          write(answer(I)), nl")" "refused"
 check "a fee tier nobody routes through is refused" \
-  "$(no "v3_create(p,dai,weth,1234,0), write(answer(x)), nl")" "refused"
+  "$(no "$TOK, v3_create(p,dai,weth,1234,0), write(answer(x)), nl")" "refused"
 
 echo "-- swapping, within one range"
-M2="v3_create(p,dai,weth,3000,0), v3_mint(p,alice,-60,60,'1000000000000000000',_,_,_)"
+M2="$TOK, v3_create(p,dai,weth,3000,0), v3_mint(p,alice,-60,60,'1000000000000000000',_,_,_)"
 check "a swap pays what the curve says" \
-  "$(v "$M2, v3_swap(p,weth,'1000000000000000',Out,_), write(answer(Out)), nl")" \
+  "$(v "$M2, v3_swap(p,bob,weth,'1000000000000000',Out,_), write(answer(Out)), nl")" \
   "996006981039903"
 check "and v2 pays a thousand times that, on the same curve" \
   "$(timeout 180 "$C" run "$ROOT/contracts/dex/uniswap.pl" \
@@ -137,10 +142,10 @@ check "and v2 pays a thousand times that, on the same curve" \
        | sed 's/answer(//; s/)//')" \
   "996006981039903216"
 check "the price moved up and stayed in the range" \
-  "$(v "$M2, v3_swap(p,weth,'1000000000000000',_,_), v3_price(p,S,_), write(answer(S)), nl")" \
+  "$(v "$M2, v3_swap(p,bob,weth,'1000000000000000',_,_), v3_price(p,S,_), write(answer(S)), nl")" \
   "79307152992291059138124713654"
 check "the other direction moves it down" \
-  "$(v "$M2, v3_swap(p,dai,'1000000000000000',_,_), v3_price(p,S,_), \
+  "$(v "$M2, v3_swap(p,bob,dai,'1000000000000000',_,_), v3_price(p,S,_), \
         ( u256_cmp(S,'79228162514264337593543950336','<') -> write(answer(down)) \
         ; write(answer(up)) ), nl")" "down"
 
@@ -149,70 +154,70 @@ echo "-- crossing ticks"
 # enough walks out of alice's and the depth halves under it. Every
 # number here comes from an independent implementation of Uniswap's
 # SwapMath, not from this one.
-MX="v3_create(p,dai,weth,3000,0), \
+MX="$TOK, v3_create(p,dai,weth,3000,0), \
     v3_mint(p,alice,-60,60,'1000000000000000000',A,_,_), \
     v3_mint(p,bob,-600,600,'1000000000000000000',B,_,_)"
 check "two ranges over the price stack their depth" \
   "$(v "$MX, v3_liq(p,L), write(answer(L)), nl")" "2000000000000000000"
 check "a crossing swap pays what the reference says" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',Out,_), write(answer(Out)), nl")" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',Out,_), write(answer(Out)), nl")" \
   "9912816306615178"
 check "and spends all of it" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,U), write(answer(U)), nl")" "0"
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,U), write(answer(U)), nl")" "0"
 check "the price ends at the tick it crossed" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), v3_price(p,_,T), write(answer(T)), nl")" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), v3_price(p,_,T), write(answer(T)), nl")" \
   "60"
 check "and the depth halved, because a range ended" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), v3_liq(p,L), write(answer(L)), nl")" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), v3_liq(p,L), write(answer(L)), nl")" \
   "1000000000000000000"
 check "fee growth matches the reference too" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), v3_fg(p,_,G), write(answer(G)), nl")" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), v3_fg(p,_,G), write(answer(G)), nl")" \
   "7132256228676415841154124566172760"
 # A gap is not a wall: the walk moves to where the liquidity starts.
-GAP="v3_create(p,dai,weth,3000,0), v3_mint(p,alice,600,1200,'1000000000000000000',_,_,_)"
+GAP="$TOK, v3_create(p,dai,weth,3000,0), v3_mint(p,alice,600,1200,'1000000000000000000',_,_,_)"
 check "a swap reaches liquidity across a gap" \
-  "$(v "$GAP, v3_swap(p,weth,'1000000000000000',Out,_), write(answer(Out)), nl")" \
+  "$(v "$GAP, v3_swap(p,bob,weth,'1000000000000000',Out,_), write(answer(Out)), nl")" \
   "938034474824077"
 check "and the price got to where the range starts" \
-  "$(v "$GAP, v3_swap(p,weth,'1000000000000000',_,_), v3_price(p,_,T), write(answer(T)), nl")" \
+  "$(v "$GAP, v3_swap(p,bob,weth,'1000000000000000',_,_), v3_price(p,_,T), write(answer(T)), nl")" \
   "600"
 # A range holds a finite amount. Ask for more and the pool pays what it
 # has and HANDS BACK the rest rather than swallowing it.
 check "a swap past all the liquidity pays out what there was" \
-  "$(v "$M2, v3_swap(p,weth,'100000000000000000',Out,_), write(answer(Out)), nl")" \
+  "$(v "$M2, v3_swap(p,bob,weth,'100000000000000000',Out,_), write(answer(Out)), nl")" \
   "2995354955910780"
 check "and returns the rest unspent" \
-  "$(v "$M2, v3_swap(p,weth,'100000000000000000',_,U), write(answer(U)), nl")" \
+  "$(v "$M2, v3_swap(p,bob,weth,'100000000000000000',_,U), write(answer(U)), nl")" \
   "96986605754521638"
 
 echo "-- fees, and whose they are"
 check "two equal ranges, both in range, earn equally" \
-  "$(v "$MX, v3_swap(p,weth,'1000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), \
         v3_fees_owed(A,_,FA), v3_fees_owed(B,_,FB), \
         ( u256_cmp(FA,FB,'=') -> write(answer(equal)) ; write(answer(FA-FB)) ), nl")" \
   "equal"
 check "after a crossing, the one that stayed earns more" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
         v3_fees_owed(A,_,FA), v3_fees_owed(B,_,FB), \
         u256_cmp(FA,FB,C), write(answer(C)), nl")" "<"
 # The conservation law of the fee accounting: what the positions are
 # owed sums to what the trade was charged, to the wei.
 check "and the two sum to exactly the 0.3% charged" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
         v3_fees_owed(A,_,FA), v3_fees_owed(B,_,FB), u256_add(FA,FB,S), \
         write(answer(S)), nl")" "30000000000000"
 check "a position opened after the trade earns nothing from it" \
-  "$(v "$MX, v3_swap(p,weth,'1000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), \
         v3_mint(p,carol,-60,60,'1000000000000000000',Cid,_,_), \
         v3_fees_owed(Cid,_,F), write(answer(F)), nl")" "0"
 check "collecting hands them over and zeroes the debt" \
-  "$(v "$MX, v3_swap(p,weth,'1000000000000000',_,_), v3_collect(A,alice,_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), v3_collect(A,alice,_,_), \
         v3_fees_owed(A,_,F), write(answer(F)), nl")" "0"
 check "collecting twice does not pay twice" \
-  "$(v "$MX, v3_swap(p,weth,'1000000000000000',_,_), v3_collect(A,alice,_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), v3_collect(A,alice,_,_), \
         v3_collect(A,alice,_,F), write(answer(F)), nl")" "0"
 check "and a stranger may not collect" \
-  "$(no "$MX, v3_swap(p,weth,'1000000000000000',_,_), \
+  "$(no "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), \
          v3_collect(A,mallory,_,F), write(answer(F)), nl")" "refused"
 
 echo "-- closing"
@@ -221,7 +226,7 @@ check "only the token's owner may close the position" \
 check "the owner may, and gets the range back" \
   "$(v "$MK, v3_burn(p,alice,Id,B0,_,_,_), write(answer(B0)), nl")" "2995354955910780"
 check "closing pays out the fees it earned" \
-  "$(v "$MX, v3_swap(p,weth,'1000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), \
         v3_burn(p,alice,A,_,_,_,F1), write(answer(F1)), nl")" "1499999999999"
 check "and the position token is gone with it" \
   "$(no "$MK, v3_burn(p,alice,Id,_,_,_,_), nft_owner(p,Id,_), write(answer(x)), nl")" "refused"
@@ -235,18 +240,55 @@ check "the kept liquidity agrees with the positions" \
   "$(v "$MX, ( v3_liquidity_agrees(p) -> write(answer(agrees)) ; write(answer(drifted)) ), nl")" \
   "agrees"
 check "and still agrees after crossing a tick" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
         ( v3_liquidity_agrees(p) -> write(answer(agrees)) ; write(answer(drifted)) ), nl")" \
   "agrees"
 check "and after crossing back down again" \
-  "$(v "$MX, v3_swap(p,weth,'10000000000000000',_,_), \
-        v3_swap(p,dai,'10000000000000000',_,_), \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
+        v3_swap(p,bob,dai,'10000000000000000',_,_), \
         ( v3_liquidity_agrees(p) -> write(answer(agrees)) ; write(answer(drifted)) ), nl")" \
   "agrees"
 check "and after a burn" \
   "$(v "$MX, v3_burn(p,alice,A,_,_,_,_), \
         ( v3_liquidity_agrees(p) -> write(answer(agrees)) ; write(answer(drifted)) ), nl")" \
   "agrees"
+
+echo "-- and the tokens are real"
+# Opening a position MOVES the two amounts; a swap moves the input in
+# and the output out; collecting and closing move them back. A position
+# or a trade nobody can fund fails at the ledger, not at a check here.
+check "the deposit actually leaves the provider" \
+  "$(v "$MK, ft_balance(dai,alice,B), u256_sub('1000000000000000000000000',B,D), write(answer(D)), nl")" \
+  "2995354955910780"
+check "and the pool actually holds it" \
+  "$(v "$MK, v3_account(p,Ac), ft_balance(dai,Ac,B), write(answer(B)), nl")" \
+  "2995354955910780"
+check "a position nobody can fund is refused" \
+  "$(no "$MK, v3_mint(p,dave,-60,60,'1000000000000000000',I,_,_), write(answer(I)), nl")" \
+  "refused"
+check "a swap pays the trader in actual tokens" \
+  "$(v "$M2, v3_swap(p,bob,weth,'1000000000000000',_,_), ft_balance(dai,bob,B), \
+        u256_sub(B,'1000000000000000000000000',D), write(answer(D)), nl")" "996006981039903"
+check "a swap nobody can fund is refused" \
+  "$(no "$M2, v3_swap(p,dave,weth,'1000',O,_), write(answer(O)), nl")" "refused"
+check "collecting fees pays out real tokens" \
+  "$(v "$MK, v3_swap(p,bob,weth,'1000000000000000',_,_), \
+        ft_balance(weth,alice,B0), v3_collect(Id,alice,_,_), \
+        ft_balance(weth,alice,B1), u256_sub(B1,B0,D), write(answer(D)), nl")" \
+  "2999999999999"
+# The question that matters after all of it: does the pool hold what it
+# has promised -- every position's amounts plus every position's
+# unclaimed fees?
+check "the pool is backed after a swap" \
+  "$(v "$MX, v3_swap(p,bob,weth,'1000000000000000',_,_), \
+        ( v3_backed(p) -> write(answer(backed)) ; write(answer(short)) ), nl")" "backed"
+check "and after one that crossed a tick" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
+        ( v3_backed(p) -> write(answer(backed)) ; write(answer(short)) ), nl")" "backed"
+check "and after the fees are taken out of it" \
+  "$(v "$MX, v3_swap(p,bob,weth,'10000000000000000',_,_), \
+        v3_collect(A,alice,_,_), v3_collect(B,bob,_,_), \
+        ( v3_backed(p) -> write(answer(backed)) ; write(answer(short)) ), nl")" "backed"
 
 echo
 if [ "$failures" -eq 0 ]; then

@@ -8,11 +8,15 @@
 %% having been given it.
 %%
 %%   uni_create(+T0, +T1)                     a pool, empty
-%%   uni_reserves(+T0, +T1, -R0, -R1)         what it holds
+%%   uni_account(+T0, +T1, -Account)          the pool's own account
+%%   uni_lp_token(+T0, +T1, -LpToken)         the share, which is a token
+%%   uni_reserves(+T0, +T1, -R0, -R1)         what it thinks it holds
+%%   uni_balances(+T0, +T1, -B0, -B1)         what it actually holds
 %%   uni_supply(+T0, +T1, -Total)             LP tokens outstanding
-%%   uni_mint(+T0, +T1, +A0, +A1, -Liquidity) deposit, and be owed a share
-%%   uni_burn(+T0, +T1, +Liquidity, -A0, -A1) hand the share back
-%%   uni_swap(+TIn, +TOut, +AmountIn, -AmountOut)
+%%   uni_mint(+T0, +T1, +Who, +A0, +A1, -Liquidity)
+%%   uni_burn(+T0, +T1, +Who, +Liquidity, -A0, -A1)
+%%   uni_swap(+TIn, +TOut, +Who, +AmountIn, -AmountOut)
+%%   uni_sync(+T0, +T1)      uni_skim(+T0, +T1, +To)   uni_backed(+T0, +T1)
 %%   uni_amount_out(+AmountIn, +RIn, +ROut, -AmountOut)    the quote, pure
 %%   uni_amount_in(+AmountOut, +RIn, +ROut, -AmountIn)     and its inverse
 %%   uni_k(+T0, +T1, -K)                      the invariant, as a number
@@ -61,6 +65,28 @@
 %% is what makes depositing off-ratio cost the depositor rather than
 %% everyone else.
 %%
+%% THE POOL IS AN ACCOUNT, AND THE TOKENS ARE REAL. A swap does not
+%% adjust two numbers: it MOVES BALANCES in
+%% contracts/token/fungible.pl, from the trader to the pool and back
+%% again, and it can only move what the trader actually has. So a trade
+%% that could not be paid for fails at the ledger rather than at a
+%% bookkeeping check, which is where it fails on a chain.
+%%
+%% AND THE SHARE IS A TOKEN TOO. A Uniswap v2 pair IS an ERC-20 -- the
+%% LP share is fungible, transferable, and poolable in turn -- so the
+%% share here is a fungible token like any other, and `uni_supply/3' is
+%% simply its total supply rather than a number this file keeps. One
+%% fact, one place.
+%%
+%% WHICH MAKES THE RESERVES A CACHE, exactly as they are in v2. The pool
+%% stores reserve0 and reserve1, but the truth is the pool account's
+%% BALANCE, and the two can differ: anyone may send tokens to a pool
+%% without trading. That is why v2 has `sync' (believe the balances) and
+%% `skim' (give the excess away), and why both are here. `uni_backed/2'
+%% is the invariant that matters -- the balances are never LESS than the
+%% reserves -- because a pool that had promised more than it held would
+%% be insolvent, and no amount of correct swap arithmetic would fix it.
+%%
 %% What is not here: the protocol fee (v2's feeTo, off by default and
 %% off here), the price accumulators for the TWAP oracle, flash swaps,
 %% and the periphery's router. Those are additions to this, not
@@ -69,8 +95,11 @@
 :- use_module(library(u256)).
 :- use_module(library(lists)).
 
-:- dynamic uni_pool/4.          % uni_pool(T0, T1, R0, R1)
-:- dynamic uni_total/3.         % uni_total(T0, T1, TotalSupply)
+%% The pool holds real balances, and its share is a real token: both
+%% come from contracts/token/fungible.pl, which must be loaded beside
+%% this file.
+
+:- dynamic uni_pool/4.          % uni_pool(T0, T1, R0, R1) -- a CACHE
 
 %% MINIMUM_LIQUIDITY, v2's own constant.
 uni_minimum_liquidity('1000').
@@ -96,19 +125,60 @@ uni_fits_reserve(R) :-
 uni_key(A, B, A, B) :- A @< B, !.
 uni_key(A, B, B, A).
 
+%% The pool's own account in the token ledger, and the token its shares
+%% are. Both are derived from the pair, so nothing has to be remembered.
+uni_account(A, B, pool(T0, T1)) :- uni_key(A, B, T0, T1).
+uni_lp_token(A, B, lp(T0, T1))  :- uni_key(A, B, T0, T1).
+
 uni_create(A, B) :-
     uni_key(A, B, T0, T1),
     \+ uni_pool(T0, T1, _, _),
     assertz(uni_pool(T0, T1, '0', '0')),
-    assertz(uni_total(T0, T1, '0')).
+    uni_lp_token(T0, T1, Lp),
+    ft_create(Lp, 'UNI-V2', 18).
 
 uni_reserves(A, B, R0, R1) :-
     uni_key(A, B, T0, T1),
     uni_pool(T0, T1, R0, R1).
 
+%% The supply of the share token: not a number this file keeps.
 uni_supply(A, B, Total) :-
+    uni_lp_token(A, B, Lp),
+    ft_total(Lp, Total).
+
+%% What the pool ACTUALLY holds, as opposed to what it believes.
+uni_balances(A, B, B0, B1) :-
     uni_key(A, B, T0, T1),
-    uni_total(T0, T1, Total).
+    uni_account(T0, T1, Acct),
+    ft_balance(T0, Acct, B0),
+    ft_balance(T1, Acct, B1).
+
+%% THE SOLVENCY INVARIANT: never less than promised. Anyone may send a
+%% pool tokens, so more is ordinary; less would mean the pool had
+%% promised what it does not hold.
+uni_backed(A, B) :-
+    uni_reserves(A, B, R0, R1),
+    uni_balances(A, B, B0, B1),
+    \+ u256_cmp(B0, R0, '<'),
+    \+ u256_cmp(B1, R1, '<').
+
+%% v2's own two answers to a donation. `sync' believes the balances;
+%% `skim' hands the difference to whoever asks and leaves the reserves
+%% alone.
+uni_sync(A, B) :-
+    uni_key(A, B, T0, T1),
+    uni_balances(T0, T1, B0, B1),
+    uni_set_reserves(T0, T1, B0, B1).
+
+uni_skim(A, B, To) :-
+    uni_key(A, B, T0, T1),
+    uni_account(T0, T1, Acct),
+    uni_reserves(T0, T1, R0, R1),
+    uni_balances(T0, T1, B0, B1),
+    u256_sub(B0, R0, X0),
+    u256_sub(B1, R1, X1),
+    ( u256_cmp(X0, '0', '>') -> ft_transfer(T0, Acct, To, X0) ; true ),
+    ( u256_cmp(X1, '0', '>') -> ft_transfer(T1, Acct, To, X1) ; true ).
 
 uni_k(A, B, K) :-
     uni_reserves(A, B, R0, R1),
@@ -117,10 +187,6 @@ uni_k(A, B, K) :-
 uni_set_reserves(T0, T1, R0, R1) :-
     retract(uni_pool(T0, T1, _, _)),
     assertz(uni_pool(T0, T1, R0, R1)).
-
-uni_set_total(T0, T1, Total) :-
-    retract(uni_total(T0, T1, _)),
-    assertz(uni_total(T0, T1, Total)).
 
 %% ---- the quote, which is pure ---------------------------------------
 %%
@@ -160,7 +226,7 @@ uni_amount_in(AmountOut, RIn, ROut, AmountIn) :-
 %% IS CHECKED AGAINST THE NUMBERS THAT ACTUALLY LANDED. If k went down
 %% the swap does not happen -- no state is written, because the write is
 %% the last thing and a failed check never reaches it.
-uni_swap(TIn, TOut, AmountIn, AmountOut) :-
+uni_swap(TIn, TOut, Who, AmountIn, AmountOut) :-
     uni_key(TIn, TOut, T0, T1),
     uni_pool(T0, T1, R0, R1),
     (   TIn == T0
@@ -176,6 +242,13 @@ uni_swap(TIn, TOut, AmountIn, AmountOut) :-
     u256_mul(RIn2, ROut2, KAfter),
     \+ u256_cmp(KAfter, KBefore, '<'),
     uni_fits_reserve(RIn2),
+    %% THE MONEY MOVES, and it moves before the reserves are believed:
+    %% the trader pays first, out of a balance they must actually have,
+    %% and the pool pays out of its own. A trade nobody could fund fails
+    %% at the ledger, which is where it fails on a chain.
+    uni_account(T0, T1, Acct),
+    ft_transfer(TIn, Who, Acct, AmountIn),
+    ft_transfer(TOut, Acct, Who, AmountOut),
     (   TIn == T0
     ->  uni_set_reserves(T0, T1, RIn2, ROut2)
     ;   uni_set_reserves(T0, T1, ROut2, RIn2)
@@ -189,47 +262,61 @@ uni_swap(TIn, TOut, AmountIn, AmountOut) :-
 %% anyway -- burned to nobody. That is v2's answer to the donation
 %% attack: with a permanent thousand units outstanding, the value of one
 %% unit of liquidity cannot be inflated by emptying the pool.
-uni_mint(A, B, A0, A1, Liquidity) :-
+uni_mint(A, B, Who, A0, A1, Liquidity) :-
     uni_key(A, B, T0, T1),
     uni_pool(T0, T1, R0, R1),
-    uni_total(T0, T1, Total),
+    uni_supply(T0, T1, Total),
     (   A == T0 -> Amt0 = A0, Amt1 = A1 ; Amt0 = A1, Amt1 = A0 ),
     u256_cmp(Amt0, '0', '>'),
     u256_cmp(Amt1, '0', '>'),
+    uni_lp_token(T0, T1, Lp),
     (   u256_cmp(Total, '0', '=')
     ->  uni_minimum_liquidity(Min),
         u256_mul(Amt0, Amt1, Product),
         u256_sqrt(Product, Root),
         u256_cmp(Root, Min, '>'),
         u256_sub(Root, Min, Liquidity),
-        u256_add(Liquidity, Min, NewTotal)
+        %% MINIMUM_LIQUIDITY is minted to an account nobody holds the
+        %% key to. v2 sends it to address zero; here it goes to `zero'
+        %% and stays there, which is what makes it unrecoverable and
+        %% therefore what makes the donation attack cost more than it
+        %% can win.
+        ft_mint(Lp, zero, Min)
     ;   u256_mul(Amt0, Total, X0), u256_div(X0, R0, L0),
         u256_mul(Amt1, Total, X1), u256_div(X1, R1, L1),
         (   u256_cmp(L0, L1, '<') -> Liquidity = L0 ; Liquidity = L1 ),
-        u256_cmp(Liquidity, '0', '>'),
-        u256_add(Total, Liquidity, NewTotal)
+        u256_cmp(Liquidity, '0', '>')
     ),
     u256_add(R0, Amt0, NR0),
     u256_add(R1, Amt1, NR1),
     uni_fits_reserve(NR0),
     uni_fits_reserve(NR1),
-    uni_set_reserves(T0, T1, NR0, NR1),
-    uni_set_total(T0, T1, NewTotal).
+    %% the deposit is a real transfer, and the share a real token
+    uni_account(T0, T1, Acct),
+    ft_transfer(T0, Who, Acct, Amt0),
+    ft_transfer(T1, Who, Acct, Amt1),
+    ft_mint(Lp, Who, Liquidity),
+    uni_set_reserves(T0, T1, NR0, NR1).
 
 %% And back out, in proportion. The division floors, so what comes out
 %% is never more than the share is worth -- the remainder stays with the
 %% pool, which is where every rounding in this file goes.
-uni_burn(A, B, Liquidity, Out0, Out1) :-
+uni_burn(A, B, Who, Liquidity, Out0, Out1) :-
     uni_key(A, B, T0, T1),
     uni_pool(T0, T1, R0, R1),
-    uni_total(T0, T1, Total),
+    uni_supply(T0, T1, Total),
     u256_cmp(Liquidity, '0', '>'),
     \+ u256_cmp(Liquidity, Total, '>'),
     u256_mul(Liquidity, R0, P0), u256_div(P0, Total, B0),
     u256_mul(Liquidity, R1, P1), u256_div(P1, Total, B1),
     u256_sub(R0, B0, NR0),
     u256_sub(R1, B1, NR1),
-    u256_sub(Total, Liquidity, NewTotal),
+    %% the share is burned out of the holder's own balance, so only what
+    %% they hold can be redeemed -- the ledger enforces it, not a check
+    uni_lp_token(T0, T1, Lp),
+    ft_burn(Lp, Who, Liquidity),
+    uni_account(T0, T1, Acct),
+    ft_transfer(T0, Acct, Who, B0),
+    ft_transfer(T1, Acct, Who, B1),
     uni_set_reserves(T0, T1, NR0, NR1),
-    uni_set_total(T0, T1, NewTotal),
     (   A == T0 -> Out0 = B0, Out1 = B1 ; Out0 = B1, Out1 = B0 ).

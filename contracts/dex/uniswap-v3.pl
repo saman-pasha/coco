@@ -5,7 +5,8 @@
 %%   v3_state(+Pool, -SqrtPriceX96, -Tick, -Liquidity)
 %%   v3_mint(+Pool, +Owner, +Lower, +Upper, +Liquidity, -Id, -Amount0, -Amount1)
 %%   v3_position(+Id, -Pool, -Owner, -Lower, -Upper, -Liquidity)
-%%   v3_swap(+Pool, +TokenIn, +AmountIn, -AmountOut, -Unspent)
+%%   v3_account(+Pool, -Account)   v3_backed(+Pool)
+%%   v3_swap(+Pool, +Who, +TokenIn, +AmountIn, -AmountOut, -Unspent)
 %%   v3_fees_owed(+Id, -Owed0, -Owed1)     v3_collect(+Id, +Caller, -F0, -F1)
 %%   v3_burn(+Pool, +Caller, +Id, -Amount0, -Amount1, -Fees0, -Fees1)
 %%   v3_fee_growth_inside(+Pool, +Lower, +Upper, -Inside0, -Inside1)
@@ -65,6 +66,16 @@
 %% where wrapping is the algorithm rather than a bug, and it is spelled
 %% out rather than inherited.
 %%
+%% THE POOL IS AN ACCOUNT, AND THE TOKENS ARE REAL. Opening a position
+%% MOVES the two amounts out of the provider's balance in
+%% contracts/token/fungible.pl; a swap moves the input in and the output
+%% out; closing and collecting move them back. So a position nobody can
+%% fund fails at the ledger, and `v3_backed/1' asks the question that
+%% matters afterwards: does the pool actually hold what it has promised?
+%%
+%% THE SHARE IS STILL AN NFT and not a fungible token, which is the one
+%% place v3 differs from v2 in kind rather than degree -- see above.
+%%
 %% WHAT IS STILL NOT HERE: the protocol fee (Uniswap's feeProtocol, off
 %% by default), the TWAP oracle's accumulators, flash swaps, and exact
 %% -OUTPUT swaps. A swap that runs out of initialised ticks stops and
@@ -73,6 +84,10 @@
 :- use_module(library(u256)).
 :- use_module(library(tickmath)).
 :- use_module(library(lists)).
+
+%% The positions are NFTs and the pool holds real balances, so both
+%% contracts/token/nonfungible.pl and contracts/token/fungible.pl must
+%% be loaded beside this file.
 
 :- dynamic v3_pool/4.       % v3_pool(Pool, Token0, Token1, FeePips)
 :- dynamic v3_price/3.      % v3_price(Pool, SqrtPriceX96, Tick)
@@ -88,6 +103,35 @@ v3_fee_tier(10000).
 v3_fee_denominator('1000000').
 
 %% ---- the pool --------------------------------------------------------
+
+%% The pool's own account in the token ledger, wrapped so it cannot
+%% collide with a token or a trader of the same name.
+v3_account(Pool, pool(Pool)).
+
+%% Does it hold what it owes? Every position's amounts at the current
+%% price, plus every position's unclaimed fees, against the balance the
+%% pool actually has. More is ordinary -- anyone may send a pool tokens
+%% -- and less would mean it had promised what it does not hold.
+v3_backed(Pool) :-
+    v3_account(Pool, Acct),
+    v3_pool(Pool, Token0, Token1, _),
+    v3_price(Pool, Sqrt, Tick),
+    findall(A0-A1,
+            ( v3_pos(Id, Pool, Lo, Hi, L, _, _, _, _),
+              v3_amounts(Sqrt, Tick, Lo, Hi, L, P0, P1),
+              v3_fees_owed(Id, F0, F1),
+              u256_add(P0, F0, A0), u256_add(P1, F1, A1) ),
+            Pairs),
+    v3_owed_sum(Pairs, '0', '0', Owed0, Owed1),
+    ft_balance(Token0, Acct, B0),
+    ft_balance(Token1, Acct, B1),
+    \+ u256_cmp(B0, Owed0, '<'),
+    \+ u256_cmp(B1, Owed1, '<').
+
+v3_owed_sum([], A0, A1, A0, A1).
+v3_owed_sum([X0-X1|T], A0, A1, S0, S1) :-
+    u256_add(A0, X0, N0), u256_add(A1, X1, N1),
+    v3_owed_sum(T, N0, N1, S0, S1).
 
 v3_create(Pool, Token0, Token1, FeePips, Tick) :-
     ground(Pool), ground(Token0), ground(Token1),
@@ -211,7 +255,11 @@ v3_collect(Id, Caller, F0, F1) :-
     v3_fees_owed(Id, F0, F1),
     v3_fee_growth_inside(Pool, Lo, Hi, In0, In1),
     retract(v3_pos(Id, Pool, Lo, Hi, L, _, _, _, _)),
-    assertz(v3_pos(Id, Pool, Lo, Hi, L, In0, In1, '0', '0')).
+    assertz(v3_pos(Id, Pool, Lo, Hi, L, In0, In1, '0', '0')),
+    v3_pool(Pool, Token0, Token1, _),
+    v3_account(Pool, Acct),
+    ( u256_cmp(F0, '0', '>') -> ft_transfer(Token0, Acct, Caller, F0) ; true ),
+    ( u256_cmp(F1, '0', '>') -> ft_transfer(Token1, Acct, Caller, F1) ; true ).
 
 %% ---- positions -------------------------------------------------------
 
@@ -247,6 +295,12 @@ v3_mint(Pool, Owner, Lower, Upper, Liquidity, Id, Amount0, Amount1) :-
     assertz(v3_next_id(Pool, N2)),
     u256_dec(N, Id),
     nft_mint(Pool, Owner, Id),
+    %% the deposit is a real transfer, out of a balance the provider
+    %% must actually have
+    v3_pool(Pool, Token0, Token1, _),
+    v3_account(Pool, Acct),
+    ( u256_cmp(Amount0, '0', '>') -> ft_transfer(Token0, Owner, Acct, Amount0) ; true ),
+    ( u256_cmp(Amount1, '0', '>') -> ft_transfer(Token1, Owner, Acct, Amount1) ; true ),
     %% THE BASELINE IS TAKEN NOW, after the ticks exist, so the position
     %% earns from this moment and not from the pool's beginning.
     v3_fee_growth_inside(Pool, Lower, Upper, In0, In1),
@@ -270,7 +324,20 @@ v3_burn(Pool, Caller, Id, Amount0, Amount1, Fees0, Fees1) :-
     ;   true
     ),
     retract(v3_pos(Id, Pool, _, _, _, _, _, _, _)),
-    nft_burn(Pool, Id).
+    nft_burn(Pool, Id),
+    %% the range and the fees it earned both come back as real tokens
+    v3_pool(Pool, Token0, Token1, _),
+    v3_account(Pool, Acct),
+    nft_owner_or(Pool, Id, Caller, To),
+    u256_add(Amount0, Fees0, Pay0),
+    u256_add(Amount1, Fees1, Pay1),
+    ( u256_cmp(Pay0, '0', '>') -> ft_transfer(Token0, Acct, To, Pay0) ; true ),
+    ( u256_cmp(Pay1, '0', '>') -> ft_transfer(Token1, Acct, To, Pay1) ; true ).
+
+%% Whoever closes it is paid, which is the caller -- the token said they
+%% were allowed, and an approved spender closing on the owner's behalf
+%% is a v3 periphery arrangement rather than something this decides.
+nft_owner_or(_, _, Caller, Caller).
 
 v3_untouch_tick(Pool, Tick, Liquidity, Which) :-
     retract(v3_tickinfo(Pool, Tick, S0, E0, O0, O1)),
@@ -339,13 +406,24 @@ v3_accrue(Pool, Zfo, FeeAmt, L) :-
 
 %% ---- the swap, walking ------------------------------------------------
 
-v3_swap(Pool, TokenIn, AmountIn, AmountOut, Unspent) :-
+v3_swap(Pool, Who, TokenIn, AmountIn, AmountOut, Unspent) :-
     v3_pool(Pool, Token0, Token1, _),
-    (   TokenIn == Token0 -> Zfo = true
-    ;   TokenIn == Token1 -> Zfo = false
+    (   TokenIn == Token0 -> Zfo = true, TokenOut = Token1
+    ;   TokenIn == Token1 -> Zfo = false, TokenOut = Token0
     ),
     u256_cmp(AmountIn, '0', '>'),
-    v3_walk(Pool, Zfo, AmountIn, '0', AmountOut, Unspent).
+    %% THE TRADER MUST HAVE IT BEFORE THE WALK BEGINS. Checking after
+    %% would mean a swap that moved the price and then failed to be
+    %% paid for -- the price change is the part that cannot be undone by
+    %% a failing goal, since it is written as it goes.
+    ft_balance(TokenIn, Who, Have),
+    \+ u256_cmp(AmountIn, Have, '>'),
+    v3_walk(Pool, Zfo, AmountIn, '0', AmountOut, Unspent),
+    %% only what was actually spent changes hands
+    u256_sub(AmountIn, Unspent, Spent),
+    v3_account(Pool, Acct),
+    ( u256_cmp(Spent, '0', '>') -> ft_transfer(TokenIn, Who, Acct, Spent) ; true ),
+    ( u256_cmp(AmountOut, '0', '>') -> ft_transfer(TokenOut, Acct, Who, AmountOut) ; true ).
 
 v3_walk(Pool, Zfo, Remaining, Acc, Out, Unspent) :-
     (   u256_cmp(Remaining, '0', '=')
