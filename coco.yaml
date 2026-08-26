@@ -99,7 +99,20 @@ libraries:
     - pos            # rung 6: weight as a query, and the leader draw
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
     - hub            # rung 7: rules as entries, the namespace, the anchor, the bridge
-    - uniswap        # a constant-product pool as rules, over library(u256)
+
+# ---- the contracts ---------------------------------------------------
+# CONTRACTS ARE NOT LIBRARIES, and they do not live in library/. A
+# library is machinery The Coco offers -- the fence itself, the money
+# type, the encodings -- and anything may load one. A contract is a
+# thing DEPLOYED ON THE CHAIN: it holds state, it is called through
+# `contract_call/2', and its source is what a block's payload carries.
+# They are categorised by what they are for, one directory each, and
+# reached by path rather than by `library(Name)' -- because a contract
+# is not something a node should be able to pick up by name without
+# having been given it.
+contracts:
+  dex:
+    - uniswap        # constant-product pools: the quote, the invariant
 
 # ---- the suite -------------------------------------------------------
 # `red: 0' does not mean the suite passed: wire SKIPs without a server.

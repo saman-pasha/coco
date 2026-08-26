@@ -1,4 +1,11 @@
-%% library(uniswap) -- Uniswap v2, as rules over 256-bit money.
+%% contracts/dex/uniswap -- Uniswap v2, as rules over 256-bit money.
+%%
+%% A CONTRACT, NOT A LIBRARY, which is why it lives here and not under
+%% library/. A library is machinery The Coco offers -- the fence, the
+%% money type, the encodings -- and anything may load one by name. This
+%% holds state, it is a thing deployed on a chain, and it is reached by
+%% PATH: a node should not be able to pick up a pool by name without
+%% having been given it.
 %%
 %%   uni_create(+T0, +T1)                     a pool, empty
 %%   uni_reserves(+T0, +T1, -R0, -R1)         what it holds

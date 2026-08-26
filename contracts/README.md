@@ -14,6 +14,22 @@ sh test/contracts.sh      # the same thing, checked: 27 checks
 | `sources.pl` | the contracts — honest and criminal, side by side |
 | `node.pl` | deploy, install from the chain, report |
 | `run.sh` | the choreography |
+| `dex/uniswap.pl` | constant-product pools: the quote, the invariant |
+
+## Contracts live here, categorised — and not in `library/`
+
+A **library** is machinery The Coco offers: the fence itself, the money
+type `library(u256)`, the encodings. Anything may load one, by name.
+
+A **contract** is a thing deployed on a chain. It holds state, it is
+called through `contract_call/2`, and its source is what a block's
+payload carries. Contracts go under this directory, one subdirectory per
+category (`dex/` so far), and they are reached **by path** rather than by
+`library(Name)` — a node should not be able to pick up a pool by name
+without having been given it.
+
+`coco.yaml` lists them under `contracts:`, by category, the same way it
+lists modules and libraries: one declaration, and the suite reads it.
 
 ## Deployment needed no mechanism
 

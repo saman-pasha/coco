@@ -1,5 +1,5 @@
 #!/bin/sh
-# library(uniswap): a constant-product pool as rules, and mallory at it.
+# contracts/dex/uniswap: a constant-product pool as rules, and mallory at it.
 #
 # WHAT IS BEING PINNED, and where the numbers come from:
 #
@@ -60,17 +60,21 @@ check() {
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 
-U="use_module(library(uniswap))"
-if ! timeout 60 "$C" query "$U, write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
-  echo "SKIP (library(uniswap) will not load -- did the u256 module build?)"
+# THE CONTRACT IS REACHED BY PATH, not by library(Name): it lives under
+# contracts/, categorised, because it is a thing deployed on a chain
+# rather than machinery The Coco offers. library/ holds the fence and
+# the money type; a pool is neither.
+CONTRACT="$ROOT/contracts/dex/uniswap.pl"
+if ! timeout 60 "$C" run "$CONTRACT" "write(ok), nl" 2>/dev/null | grep -aq '\bok\b'; then
+  echo "SKIP (contracts/dex/uniswap.pl will not load -- did the u256 module build?)"
   exit 0
 fi
 
 # Every answer is written inside `answer(...)' so the extraction cannot
 # pick up a stray digit from the echoed goal or from "1 answer(s)".
-q() { timeout 120 "$C" query "$U, $1" 2>/dev/null \
+q() { timeout 120 "$C" run "$CONTRACT" "$1" 2>/dev/null \
       | grep -aoE 'answer\([^)]*\)' | head -1 | sed 's/^answer(//; s/)$//'; }
-no() { if timeout 120 "$C" query "$U, $1" 2>/dev/null \
+no() { if timeout 120 "$C" run "$CONTRACT" "$1" 2>/dev/null \
             | grep -aq 'answer('; then echo allowed; else echo refused; fi; }
 
 ONE=1000000000000000000            # one token, 18 decimals
