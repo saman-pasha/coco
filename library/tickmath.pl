@@ -173,3 +173,75 @@ tm_amount1_delta(SqrtA0, SqrtB0, Liquidity, Amount1) :-
 %% rather than a negative amount.
 tm_order(A, B, A, B) :- \+ u256_cmp(A, B, '>'), !.
 tm_order(A, B, B, A).
+
+%% ---- rounding, and which way it has to fall ---------------------------
+%%
+%% A swap that CROSSES ticks computes many small legs, and a rounding
+%% that favoured the trader on each one would let a large trade split
+%% into small ones and take the difference. So the input a leg needs is
+%% rounded UP and the output it pays is rounded DOWN -- every fraction
+%% goes to the pool, exactly as Uniswap rounds, and the direction is the
+%% reason a leg is never worth splitting.
+
+tm_div_up(A, B, Q) :-
+    u256_div(A, B, Q0),
+    u256_mod(A, B, R),
+    (   u256_cmp(R, '0', '=') -> Q = Q0 ; u256_add(Q0, '1', Q) ).
+
+tm_amount0_delta_up(SqrtA0, SqrtB0, Liquidity, Amount0) :-
+    tm_order(SqrtA0, SqrtB0, SqrtA, SqrtB),
+    u256_cmp(SqrtA, '0', '>'),
+    tm_q96(Q96),
+    u256_mul(Liquidity, Q96, Numerator1),
+    u256_sub(SqrtB, SqrtA, Numerator2),
+    %% muldiv keeps the 512-bit middle; the rounding is applied to the
+    %% quotient of each division rather than at the end, because the two
+    %% divisions each drop a fraction.
+    u256_muldiv(Numerator1, Numerator2, SqrtB, Inner0),
+    u256_mul(Numerator1, Numerator2, Wide),
+    u256_mod(Wide, SqrtB, Rem1),
+    (   u256_cmp(Rem1, '0', '=') -> Inner = Inner0 ; u256_add(Inner0, '1', Inner) ),
+    tm_div_up(Inner, SqrtA, Amount0).
+
+tm_amount1_delta_up(SqrtA0, SqrtB0, Liquidity, Amount1) :-
+    tm_order(SqrtA0, SqrtB0, SqrtA, SqrtB),
+    u256_sub(SqrtB, SqrtA, Diff),
+    tm_q96(Q96),
+    u256_mul(Liquidity, Diff, Wide),
+    tm_div_up(Wide, Q96, Amount1).
+
+%% ---- where a price lands, given what is put in ------------------------
+%%
+%% Token0 in pushes the price DOWN:
+%%
+%%   sqrtP' = (L * Q96 * sqrtP) / (L * Q96 + amountIn * sqrtP)
+%%
+%% rounded UP, so the price does not fall further than it was paid for.
+%% The product in the denominator can overflow a word at extreme sizes;
+%% Uniswap falls back to a division-first form there, and so does this.
+tm_next_sqrt_down(Sqrt, Liquidity, AmountIn, Next) :-
+    tm_q96(Q96),
+    u256_mul(Liquidity, Q96, Numerator1),
+    (   catch(( u256_mul(AmountIn, Sqrt, Product),
+                u256_add(Numerator1, Product, Denominator) ),
+              _, fail)
+    ->  u256_muldiv(Numerator1, Sqrt, Denominator, N0),
+        u256_mul(Numerator1, Sqrt, Wide),
+        u256_mod(Wide, Denominator, Rem),
+        (   u256_cmp(Rem, '0', '=') -> Next = N0 ; u256_add(N0, '1', Next) )
+    ;   %% the fallback: divide first, which cannot overflow
+        u256_div(Numerator1, Sqrt, Q),
+        u256_add(Q, AmountIn, D),
+        tm_div_up(Numerator1, D, Next)
+    ).
+
+%% Token1 in pushes the price UP, and this one is a plain addition:
+%%
+%%   sqrtP' = sqrtP + amountIn * Q96 / L
+%%
+%% rounded DOWN, for the same reason the other is rounded up -- the
+%% fraction stays with the pool either way.
+tm_next_sqrt_up(Sqrt, Liquidity, AmountIn, Next) :-
+    tm_q96(Q96),
+    u256_muldiv(AmountIn, Q96, Liquidity, Delta),
+    u256_add(Sqrt, Delta, Next).
