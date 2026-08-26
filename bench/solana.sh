@@ -99,12 +99,15 @@ confirmed_of() {  # file-of-signatures
 # ---- the per-process lane: seal_per_turn's twin ------------------------
 # one CLI process per transaction, each waiting for its own confirmation
 # -- the same shape as ten cocolog processes each sealing one block.
-solana transfer "$DEST" 0.000001 --allow-unfunded-recipient >/dev/null 2>&1  # discarded
+# The discarded first transfer (rule 5) also carries the destination
+# past Solana's rent-exempt minimum, so the measured transfers are
+# plain lamport moves -- the same shape every time.
+solana transfer "$DEST" 0.01 --allow-unfunded-recipient >/dev/null 2>&1  # discarded
 : > /tmp/coco-solana-perproc.sigs
 t0=$(now)
 i=0; ok=0
 while [ $i -lt 10 ]; do
-  out=$(solana transfer "$DEST" "0.0000$((101+i))" --allow-unfunded-recipient 2>/dev/null | grep -ao '^Signature: .*' | cut -d' ' -f2)
+  out=$(solana transfer "$DEST" "0.001$((101+i))" --allow-unfunded-recipient 2>/dev/null | grep -ao '^Signature: .*' | cut -d' ' -f2)
   [ -n "$out" ] && { echo "$out" >> /tmp/coco-solana-perproc.sigs; ok=$((ok+1)); }
   i=$((i+1))
 done
@@ -127,7 +130,7 @@ i=0
 while [ $i -lt 100 ]; do
   j=0
   while [ $j -lt 10 ] && [ $i -lt 100 ]; do
-    ( solana transfer "$DEST" "0.0000$((1000+i))" --allow-unfunded-recipient --no-wait 2>/dev/null \
+    ( solana transfer "$DEST" "0.001$((1000+i))" --allow-unfunded-recipient --no-wait 2>/dev/null \
         | grep -ao '^Signature: .*' | cut -d' ' -f2 >> /tmp/coco-solana-pipe.sigs ) &
     j=$((j+1)); i=$((i+1))
   done
