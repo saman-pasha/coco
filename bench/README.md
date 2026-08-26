@@ -29,6 +29,19 @@ replaced the C++ one:
 | `parallel_own_kbs` | **17.5/s** | `server_4_kbs_ONE_TURN_each` |
 | `parallel_one_kb` | **13.6/s** | `server_1_kb_4_writers` |
 | `seal_batched_again` | **8.4/s** | `server_one_kb_ONE_TURN` |
+| `spec_read_ahead` | **12 blk** | `server_1kb_READ_UNCOMMITTED_reader` |
+| `committed_beside_it` | **0 blk** | `server_1kb_default_isolation_reader` |
+
+The last two are the SPECULATIVE LANE, and they are counts, not rates:
+one writer held forty blocks staged in ONE open transaction for 36
+seconds; a reader that named `READ_UNCOMMITTED` through cocolog's
+`library(zigurat)` audited twelve of them -- every hash recomputed,
+every signature checked, every parent link followed, `ledger_audit(ok)`
+-- BEFORE the commit landed, while a reader at the default commit
+isolation, polled at the same moments, saw no chain at all; and after
+the commit the store answered every one of the forty. The lane refuses
+itself if no staged block was audited ahead of finality, or if the
+default-isolation reader ever saw an unfinished chain.
 
 The run before it, same container, same session, on a store aged by a
 whole day's suites, read 9.55 / 1.13 / 17.84 / 7.67 -- and the
@@ -189,14 +202,14 @@ write the sentence.
 
 ## What is not here
 
-**The speculative lane.** The ladder aimed at two lanes on one engine —
-a `READ_UNCOMMITTED` lane pipelining verification ahead of finality,
-against a settlement lane at commit isolation. **cocolog exposes no
-isolation-level knob**, so that lane could not be built here. What the
-two-lane comparison became instead is the one that *is* available today:
-disjoint single-appender knowledge bases against one contended base.
-Naming an isolation level per turn is a cocolog capability, and belongs
-in cocolog the way TLS in its C client does.
+**The speculative lane is not "not here" any more.** The ladder aimed
+at two lanes on one engine — a `READ_UNCOMMITTED` lane pipelining
+verification ahead of finality, against a settlement lane at commit
+isolation — and could not build it, because cocolog exposed no
+isolation-level knob. It does now: `library(zigurat)` names the level
+per turn (`zigurat_isolation/1`, all five), which is exactly where that
+capability belonged — in cocolog, the way TLS lives in its C client —
+and the lane is in `tps.sh` with its counts in the table above.
 
 **A tuned number.** Nothing here was tuned. These are the rates the
 system has, on a container, with the store in whatever state the session
