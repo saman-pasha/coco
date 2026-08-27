@@ -19,7 +19,6 @@
 
 :- use_module(library(poa)).
 :- use_module(library(contract)).
-:- use_module(library(lists)).
 
 :- dynamic contract_refused/2.
 

@@ -26,7 +26,6 @@
 :- use_module(library(pos)).
 :- use_module(library(bft)).
 :- use_module(library(poa)).
-:- use_module(library(lists)).
 
 :- dynamic vote/6.        % vote(Kind, Height, Round, BlockHash, Who, Sig)
 :- dynamic lock_row/3.    % lock_row(Height, Round, BlockHash)

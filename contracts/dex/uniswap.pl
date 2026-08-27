@@ -93,7 +93,6 @@
 %% corrections of it.
 
 :- use_module(library(u256)).
-:- use_module(library(lists)).
 
 %% The pool holds real balances, and its share is a real token: both
 %% come from contracts/token/fungible.pl, which must be loaded beside

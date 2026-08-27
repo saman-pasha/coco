@@ -83,7 +83,6 @@
 
 :- use_module(library(u256)).
 :- use_module(library(tickmath)).
-:- use_module(library(lists)).
 
 %% The positions are NFTs and the pool holds real balances, so both
 %% contracts/token/nonfungible.pl and contracts/token/fungible.pl must

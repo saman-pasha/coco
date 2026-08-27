@@ -40,7 +40,6 @@
 :- use_module(library(secp256k1)).
 :- use_module(library(pos)).
 :- use_module(library(poa)).      % for `authority/2': whose key is whose
-:- use_module(library(lists)).
 
 %% WHAT IS SIGNED IS THE WHOLE VOTE. Kind, height, round and block hash
 %% are all in the text, so a prevote cannot be replayed as a precommit, a

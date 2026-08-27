@@ -22,7 +22,6 @@
 :- use_module(library(contract)).
 :- use_module(library(poa)).
 :- use_module(library(sha256)).
-:- use_module(library(lists)).
 
 :- dynamic member_head/3.     % member_head(Chain, Height, Hash)
 :- dynamic imported/2.        % imported(Chain, Fact)

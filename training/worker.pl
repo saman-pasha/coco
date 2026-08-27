@@ -19,7 +19,6 @@
 
 :- use_module(library(poa)).
 :- use_module(library(settle)).
-:- use_module(library(lists)).
 
 :- dynamic param_chunk/3.
 :- dynamic settled/3.

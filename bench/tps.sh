@@ -239,7 +239,7 @@ SPEC_H=-1; SPEC_AUD=none; COMM_H=-1; PAIRS=0; TORN=0
 t0=$(now)
 while kill -0 $WPID 2>/dev/null && [ $PAIRS -lt 30 ]; do
   out=$(timeout 60 "$C" $B --kb bench_spec query \
-    "use_module(library(zigurat)), zigurat_isolation(read_uncommitted), $K, ledger_height(H), ledger_audit(A), format(\"~w ~w~n\",[H,A])" 2>/dev/null \
+    "zigurat_isolation(read_uncommitted), $K, ledger_height(H), ledger_audit(A), format(\"~w ~w~n\",[H,A])" 2>/dev/null \
     | grep -aE '^-?[0-9]+ (ok|broken)$' | head -1)
   cout=$(timeout 60 "$C" $B --kb bench_spec query \
     "$K, ledger_height(H), write(H), nl" 2>/dev/null | grep -aoE '^-?[0-9]+$' | head -1)

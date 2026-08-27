@@ -35,7 +35,6 @@
 :- use_module(library(torch)).
 
 :- use_module(library(sha256)).
-:- use_module(library(lists)).
 
 %% ---- the parameters --------------------------------------------------
 

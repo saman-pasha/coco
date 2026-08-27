@@ -20,7 +20,6 @@
 %% rather than of care taken here.
 
 :- use_module(library(poa)).
-:- use_module(library(lists)).
 
 :- dynamic block/6.
 :- dynamic head_mark/3.

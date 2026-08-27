@@ -55,7 +55,6 @@
 %% see contracts/dex/uniswap.pl on why money has a type.
 
 :- use_module(library(u256)).
-:- use_module(library(lists)).
 
 %% The ends of the axis. Beyond these the ratio leaves the 160 bits the
 %% format has, so a tick outside them is not a price at all.

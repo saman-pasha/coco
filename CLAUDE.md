@@ -99,6 +99,28 @@ untouched. `tools/cc/cxx` finds the right install dir and says so with
 Nothing is load-bearing on clang; what is load-bearing is that all of it
 agrees.
 
+### No `use_module` for a tier-1 library
+
+cocolog registers sixteen libraries before the first goal runs — `lists`,
+`apply`, `builtins`, `dcg`, `files`, `library` and `zigurat` compiled into
+the binary, and `assoc`, `pairs`, `ordsets`, `yall`, `aggregate`,
+`ugraphs`, `dcg_basics` and `dcg_high_order` read from `lib/swipl` beside
+it. **Asking for one is a directive that does nothing** and reads like a
+dependency that is not there.
+
+Twenty-four such lines were written here out of habit for another Prolog
+— 23 `use_module(library(lists))` across `library/`, `contracts/`, the
+nodes and `bench/`, and one `library(zigurat)` in `bench/tps.sh` — and
+are gone. What The Coco DOES import is its own tier-2 libraries (`poa`,
+`contract`, `hub`, `bft`, `pos`, `poh`, `settle`, `tickmath`, `bytes`,
+`spine`, `keccak`) and cocolog's loadable modules (`torch`), every one of
+which genuinely has to be found on the library path.
+
+The list is checkable rather than memorable — copy the cocolog binary
+somewhere with no `library/` beside it, point `COCOLOG_LIBRARY` at
+nothing, and see which names still load. cocolog's own CLAUDE.md has the
+two lines.
+
 ## The hazards, inherited
 
 cocolog's CLAUDE.md hazards all apply here, because the same store and

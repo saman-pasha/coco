@@ -38,7 +38,6 @@
 
 :- use_module(library(sha256)).
 :- use_module(library(bytes)).
-:- use_module(library(lists)).
 
 :- dynamic stake_entry/2.
 

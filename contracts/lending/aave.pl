@@ -70,7 +70,6 @@
 %% position is refused outright.
 
 :- use_module(library(u256)).
-:- use_module(library(lists)).
 
 %% Balances are real: the pool is an account in contracts/token/fungible,
 %% which must be loaded beside this file.

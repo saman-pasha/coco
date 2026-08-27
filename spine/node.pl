@@ -13,7 +13,6 @@
 %% run on K machines as easily as in K processes.
 
 :- use_module(library(poh)).
-:- use_module(library(lists)).
 
 :- dynamic spine_seg/4.
 :- dynamic spine_head/2.

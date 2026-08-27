@@ -37,8 +37,6 @@
 %% ran, which is why every reading here carries its arrangement and why
 %% no sentence anywhere compares this to anything.
 
-:- use_module(library(lists)).
-
 :- dynamic reading/5.
 
 %% Under a second is not a measurement.

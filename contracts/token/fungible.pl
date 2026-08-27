@@ -44,7 +44,6 @@
 %% another. Those are additions to this, not corrections of it.
 
 :- use_module(library(u256)).
-:- use_module(library(lists)).
 
 :- dynamic ft_token/3.          % ft_token(Token, Symbol, Decimals)
 :- dynamic ft_bal/3.            % ft_bal(Token, Who, Amount)

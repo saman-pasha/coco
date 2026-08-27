@@ -24,7 +24,6 @@
 
 :- use_module(library(sha256)).
 :- use_module(library(secp256k1)).
-:- use_module(library(lists)).
 
 :- dynamic authority/2.
 

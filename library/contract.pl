@@ -38,8 +38,6 @@
 %% goals and a fence that checked `findall(X, Anything, L)' by looking
 %% only at the functor would be no fence at all.
 
-:- use_module(library(lists)).
-
 :- dynamic contract_clause/2.
 :- dynamic contract_state/3.
 :- dynamic contract_deployed/2.

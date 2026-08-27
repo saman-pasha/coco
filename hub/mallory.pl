@@ -21,7 +21,6 @@
 :- use_module(library(poa)).
 :- use_module(library(sha256)).
 :- use_module(library(secp256k1)).
-:- use_module(library(lists)).
 
 mallory_key('4444444444444444444444444444444444444444444444444444444444444444').
 

@@ -35,7 +35,6 @@
 
 :- use_module(library(contract)).
 :- use_module(library(sha256)).
-:- use_module(library(lists)).
 
 %% ---- rules as a payload ----------------------------------------------
 

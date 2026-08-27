@@ -16,8 +16,6 @@
 %%
 %% The last one succeeds and no harness can stop it.
 
-:- use_module(library(lists)).
-
 verdict(G, refused) :- \+ call(G), !.
 verdict(_, 'ACCEPTED').
 

@@ -34,7 +34,6 @@
 
 :- use_module(library(spine)).
 :- use_module(library(sha256)).
-:- use_module(library(lists)).
 
 %% Thirty-two zero bytes, like the ledger's genesis parent -- a spine has
 %% to start somewhere and the start has to be hash-shaped.

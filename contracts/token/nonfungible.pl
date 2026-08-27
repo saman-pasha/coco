@@ -44,7 +44,6 @@
 %% collection used one.
 
 :- use_module(library(u256)).
-:- use_module(library(lists)).
 
 :- dynamic nft_collection/2.    % nft_collection(Collection, Name)
 :- dynamic nft_own/3.           % nft_own(Collection, Id, Owner)
