@@ -124,22 +124,25 @@ fact drift; one does not.
 ## Layout
 
 ```
-modules/          the Prolog: what The Coco is made of
-modules/crypto/   the chains' primitives as loadable Cicili modules;
-                  build.sh compiles them to library/*.so
-library/          the built .so's on the default $COCOLOG_LIBRARY path,
-                  and the Prolog libraries beside them: bytes, base58,
-                  bech32, eth, btc, poa, contract, settle, poh, pos,
-                  bft, hub. A caller cannot tell which of its libraries are
-                  Prolog and which are compiled C, which is the point --
-                  btc.pl composes two of each, and poh.pl is the layer
-                  over spine.so
+modules/          the C halves: Cicili sources for the loadable modules,
+                  one directory per group, each with a build.sh that
+                  compiles them to library/*.so
+modules/crypto/   keccak, secp256k1, sha256, sha512, ed25519, ripemd160,
+                  blake2b -- and spine, rung 5's tick loop
+modules/math/     u256: 256-bit arithmetic that raises rather than wraps
+library/          THE LIBRARY PATH: the built .so's and the Prolog
+                  libraries beside them. A caller cannot tell which of its
+                  libraries are Prolog and which are compiled C, which is
+                  the point -- btc.pl composes two of each, and poh.pl is
+                  the layer over spine.so
 coco.yaml         the one declaration -- pillars, paths, the knowledge
                   base, the module list, the suite. Read by every script
 ledger/           rung 2: the PoA federation ledger -- the federation,
                   a node, the choreography, and mallory the criminal node
 contracts/        rung 3: a contract is a predicate -- the sources
-                  (honest and criminal), the node, the choreography
+                  (honest and criminal), the node, the choreography.
+                  token/ is ERC-20 and ERC-721, dex/ is Uniswap v2 and
+                  v3, lending/ is Aave
 training/         rung 4: training as settlement -- the task, the
                   worker, mallory the criminal worker
 spine/            rung 5: the PoH spine -- the producer, the parallel
@@ -166,3 +169,74 @@ art/              the banner -- Coco, the engineer, one of the three
 
 The layout grows a directory per rung as each rung is climbed; nothing is
 checked in before its GREEN line.
+
+**`spine/` IS A RUNG, NOT A MODULE**, and it is the one name in the tree
+that is both — which is worth saying because the mistake is a natural one.
+`library(spine)` is C, and its source has always been
+`modules/crypto/spine.cicili`; `spine/` is rung 5's *choreography*, the
+same shape as `ledger/`, `votes/`, `hub/` and `training/` — a README, a
+node, a mallory and a `run.sh`. The module is already where modules go.
+
+## The libraries
+
+Every one is reached the same way — `use_module(library(Name))` — and
+nothing at the call site says whether the answer came from C or from
+clauses. That is the seam, not a detail of it.
+
+**COMPILED, from `modules/`:**
+
+| | |
+|---|---|
+| `library(u256)` | 256-bit add, sub, mul, div, mod, muldiv, sqrt — **none of them wrapping**. cocolog's integers are 64 bits and wrap in silence: `1000000000000000000 * 997` answers `875820019684212736`, so the first product a Uniswap swap computes at ordinary token scale is already a wrong number nobody was told about. These raise instead |
+| `library(keccak)` | Ethereum's, with the `0x01` pad — not NIST SHA3 |
+| `library(secp256k1)` | the curve: derive, verify, recover |
+| `library(sha256)`, `library(ripemd160)` | Bitcoin's, and the two halves of hash160 |
+| `library(sha512)`, `library(ed25519)` | RFC 8032, deterministic, byte for byte |
+| `library(blake2b)` | Sui, Aptos, Polkadot, Cardano, Zcash |
+| `library(spine)` | rung 5's tick loop, the event fold and the segment check |
+
+**CLAUSES, in `library/`:**
+
+| | |
+|---|---|
+| `library(bytes)` | hex text to byte lists and back |
+| `library(base58)`, `library(bech32)` | base58check; bech32, bech32m, segwit addresses |
+| `library(eth)` | keccak + secp256k1: Ethereum addresses, who signed |
+| `library(btc)` | sha256 + ripemd160 + base58 + bech32: Bitcoin |
+| `library(poa)` | rung 2: proof of authority, as rules |
+| `library(contract)` | rung 3: the fence, scoped state, the call door |
+| `library(settle)` | rung 4: the acceptance predicate over held-out data |
+| `library(poh)` | rung 5: segments, parallel verification, the ledger seam |
+| `library(pos)`, `library(bft)` | rung 6: stake as a query and the leader draw; votes, quorum certificates, the lock, the evidence |
+| `library(hub)` | rung 7: rules as entries, the namespace, the anchor, the bridge |
+| `library(tickmath)` | prices as ticks, ticks as square roots — v3's arithmetic |
+
+`coco.yaml` is where the two lists actually live, and both `build.sh` and
+the suite read them from there: adding a module is adding a line, and the
+suite then proves every one of them LOADS. A `.pl` with a syntax error in
+a clause nothing calls is invisible until the day something calls it.
+
+### And cocolog's own, on the same path
+
+`$COCOLOG_LIBRARY` is two directories — The Coco's `library/`, then
+cocolog's — so everything cocolog ships as a loadable library is reachable
+from a contract or a node without anything being copied here:
+
+| | |
+|---|---|
+| `library(tcp)`, `library(http)`, `library(httpd)` | sockets, HTTP/1.1 as a grammar, and a server whose pages are clauses |
+| `library(thread)` | threads that share nothing, channels that copy |
+| `library(json)`, `library(xml)`, `library(html)` | a term as a document and a document as a term, both ways |
+| `library(curl)` | an HTTP client |
+| `library(bigint)`, `library(torch)` | arbitrary-precision integers; libtorch |
+
+**It is a list, and you can add to it.** `test/config.sh` APPENDS what you
+export rather than replacing it, so a directory of your own goes beside
+the two that have to be there:
+
+```sh
+COCOLOG_LIBRARY=/opt/my/modules sh test/run.sh
+```
+
+Ours come first, on purpose: a suite that let somebody else's
+`library(poa)` win would be green about somebody else's code.
