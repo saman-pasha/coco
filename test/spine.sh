@@ -43,10 +43,17 @@ check() {
 }
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
-if [ ! -f "$COCOLOG_LIBRARY/spine.so" ]; then
+# OURS, not the SEARCH PATH. COCOLOG_LIBRARY is colon-separated now --
+# this repository's library/ and then cocolog's, because torch, tcp,
+# bigint and curl are loadable modules under cocolog's own library/
+# rather than builtins. `"$COCOLOG_LIBRARY/u256.so"' was a real path
+# when it was one directory and is nonsense now, so every probe below
+# uses COCO_PATHS_LIBRARY, which is still the single directory The
+# Coco's own modules are built into.
+if [ ! -f "$COCO_PATHS_LIBRARY/spine.so" ]; then
   sh "$ROOT/modules/crypto/build.sh" >/dev/null 2>&1 || true
 fi
-if [ ! -f "$COCOLOG_LIBRARY/spine.so" ]; then
+if [ ! -f "$COCO_PATHS_LIBRARY/spine.so" ]; then
   echo "SKIP (the spine module would not build -- no sbcl or CICILI)"; exit 0
 fi
 

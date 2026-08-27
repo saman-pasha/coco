@@ -12,6 +12,11 @@
 %% turn is lost. So a worker trains in one process with no connection
 %% open, and PUBLISHES in another -- short turns, each one a transaction.
 
+%% libtorch is a LOADABLE module in cocolog now, under its modules/torch,
+%% so it is asked for like any other library. It used to be compiled into
+%% the binary and always present.
+:- use_module(library(torch)).
+
 :- use_module(library(poa)).
 :- use_module(library(settle)).
 :- use_module(library(lists)).

@@ -56,8 +56,8 @@ check() {
 }
 
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
-if ! "$C" query "torch_seed(1)" >/dev/null 2>&1; then
-  echo "SKIP (no torch in this cocolog build)"; exit 0
+if ! "$C" query "use_module(library(torch)), torch_seed(1)" >/dev/null 2>&1; then
+  echo "SKIP (no library(torch) -- sh modules/torch/build.sh in cocolog)"; exit 0
 fi
 
 # Anchored, always: cocolog echoes the goal, so an unanchored search for

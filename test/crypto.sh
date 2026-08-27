@@ -59,12 +59,19 @@ if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 # Build anything coco.yaml names that is not on the library path yet, so
 # that adding a module to the file is the whole of adding a module.
 for m in $COCO_MODULES_CRYPTO; do
-  if [ ! -f "$COCOLOG_LIBRARY/$m.so" ]; then
+# OURS, not the SEARCH PATH. COCOLOG_LIBRARY is colon-separated now --
+# this repository's library/ and then cocolog's, because torch, tcp,
+# bigint and curl are loadable modules under cocolog's own library/
+# rather than builtins. `"$COCOLOG_LIBRARY/u256.so"' was a real path
+# when it was one directory and is nonsense now, so every probe below
+# uses COCO_PATHS_LIBRARY, which is still the single directory The
+# Coco's own modules are built into.
+  if [ ! -f "$COCO_PATHS_LIBRARY/$m.so" ]; then
     sh "$ROOT/modules/crypto/build.sh" > "$HERE/crypto-build.log" 2>&1 || true
     break
   fi
 done
-if [ ! -f "$COCOLOG_LIBRARY/secp256k1.so" ]; then
+if [ ! -f "$COCO_PATHS_LIBRARY/secp256k1.so" ]; then
   echo "SKIP (the crypto modules would not build -- no sbcl or CICILI checkout)"
   exit 0
 fi

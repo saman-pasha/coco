@@ -47,12 +47,25 @@ say() {   # lane claimed actual seconds arrangement
     "verify_count($2,$3,V), R = reading($1,$2,$4,$5,V),
      ( report(R) -> true ; true ),
      ( refusal(R,W), W \\== none -> format(\"   why: ~w~n\",[W]) ; true )" 2>/dev/null \
-  | grep -aE '^[a-z_]+ ' | while read -r lane rate arr count sec; do
-      if [ "$rate" = "REFUSED" ]; then
-        printf '  %-22s %12s   %s\n' "$lane" "REFUSED" "$arr"
-      else
-        printf '  %-22s %9s /s   %-26s %s in %ss\n' "$lane" "$rate" "$arr" "$count" "$sec"
-      fi
+  | while IFS= read -r line; do
+      case "$line" in
+        # THE REASON, WHICH USED TO BE THROWN AWAY. harness.pl computes
+        # `why' precisely so a person can act on a refusal, and the
+        # `grep -aE "^[a-z_]+ "' that used to be here dropped it on the
+        # floor -- it is indented, so it never matched. Three lanes read
+        # REFUSED for three different reasons and the page said only
+        # REFUSED. A rule that will not say which rule is a rule you have
+        # to go and read the source for.
+        '   why: '*) printf '  %s\n' "$line" ;;
+        [a-z_]*' '*)
+          # shellcheck disable=SC2086
+          set -- $line
+          if [ "$2" = "REFUSED" ]; then
+            printf '  %-22s %12s   %s\n' "$1" "REFUSED" "$3"
+          else
+            printf '  %-22s %9s /s   %-26s %s in %ss\n' "$1" "$2" "$3" "$4" "$5"
+          fi ;;
+      esac
     done
 }
 
@@ -82,19 +95,25 @@ echo "   labelled as any."
 # warm-up, discarded
 "$C" run "$FED" "$K, use_module(library(secp256k1)), use_module(library(sha256)), sha256(x,H), secp256k1_sign('$ALICE',H,S), authority(alice,P), forall(between(1,60,_), secp256k1_verify(H,S,P))" >/dev/null 2>&1
 t0=$(now)
-"$C" run "$FED" "$K, use_module(library(secp256k1)), use_module(library(sha256)), sha256(x,H), secp256k1_sign('$ALICE',H,S), authority(alice,P), forall(between(1,300,_), secp256k1_verify(H,S,P))" >/dev/null 2>&1
+"$C" run "$FED" "$K, use_module(library(secp256k1)), use_module(library(sha256)), sha256(x,H), secp256k1_sign('$ALICE',H,S), authority(alice,P), forall(between(1,2000,_), secp256k1_verify(H,S,P))" >/dev/null 2>&1
 t1=$(now)
-say verify 300 300 "$(secs $t0 $t1)" local_no_database
+say verify 2000 2000 "$(secs $t0 $t1)" local_no_database
 
 "$C" run "$FED" "$K, seal('$ALICE',1,p,alice,pay,Sg,Hs), forall(between(1,60,_), valid_block(1,p,alice,pay,Sg,Hs))" >/dev/null 2>&1
 t0=$(now)
-"$C" run "$FED" "$K, seal('$ALICE',1,p,alice,pay,Sg,Hs), forall(between(1,300,_), valid_block(1,p,alice,pay,Sg,Hs))" >/dev/null 2>&1
+"$C" run "$FED" "$K, seal('$ALICE',1,p,alice,pay,Sg,Hs), forall(between(1,2000,_), valid_block(1,p,alice,pay,Sg,Hs))" >/dev/null 2>&1
 t1=$(now)
-say validate 300 300 "$(secs $t0 $t1)" local_no_database
+say validate 2000 2000 "$(secs $t0 $t1)" local_no_database
 echo "     ^ both include ~0.42s of process start-up in the denominator, so"
-echo "       they are floors. The work alone is nearer 245/s. The harness does"
-echo "       not subtract it: a number you had to adjust is a number you have"
-echo "       to explain, and this file explains rather than adjusts."
+echo "       they are floors -- less of one at 2000 than they were at 300."
+echo "       The harness does not subtract it: a number you had to adjust is"
+echo "       a number you have to explain, and this file explains rather"
+echo "       than adjusts."
+echo "     ^ THE COUNT WENT 300 -> 2000 because the harness refused the lane."
+echo "       300 verifies cleared the one-second floor on the container this"
+echo "       was written on and take 0.78s on a quieter one -- so rule 2 fired"
+echo "       and the reading was thrown away, which is the rule working. The"
+echo "       count is part of the arrangement and moves with the machine."
 
 if ! timeout 20 "$C" $B --kb bench_probe list >/dev/null 2>&1; then
   echo
@@ -112,14 +131,20 @@ echo "     ^ thirty blocks, ONE transaction. Not thirty transactions."
 
 fresh bench_turn
 t0=$(now)
-i=0; while [ $i -lt 10 ]; do
+i=0; while [ $i -lt 30 ]; do
   NODE_NAME=alice NODE_KEY=$ALICE timeout 120 "$C" $B --kb bench_turn query "$K, ledger_seal($i)" >/dev/null 2>&1
   i=$((i+1))
 done
 t1=$(now)
-say seal_per_turn 10 "$(count_blocks bench_turn)" "$(secs $t0 $t1)" server_one_kb_per_turn
-echo "     ^ ten transactions, ten processes. Each pays ~0.42s of start-up,"
-echo "       so most of this reading is the harness and not the store."
+say seal_per_turn 30 "$(count_blocks bench_turn)" "$(secs $t0 $t1)" server_one_kb_per_turn
+echo "     ^ thirty transactions, thirty processes. Each pays ~0.42s of"
+echo "       start-up, so most of this reading is the harness and not the"
+echo "       store."
+echo "     ^ TEN BECAME THIRTY for the same reason verify's 300 became 2000:"
+echo "       at ten this lane read 1.04s on one run and under a second on the"
+echo "       next, so it printed a rate once and REFUSED once, from the same"
+echo "       code on the same machine. A lane that straddles the floor is a"
+echo "       lane that reports a coin toss." 
 
 echo
 echo "== the uncoordinated lane: $CORES writers, $CORES knowledge bases"

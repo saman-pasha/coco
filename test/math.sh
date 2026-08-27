@@ -52,12 +52,19 @@ check() {
 if [ ! -x "$C" ]; then echo "no cocolog binary at $C"; exit 1; fi
 
 for m in $COCO_MODULES_MATH; do
-  if [ ! -f "$COCOLOG_LIBRARY/$m.so" ]; then
+# OURS, not the SEARCH PATH. COCOLOG_LIBRARY is colon-separated now --
+# this repository's library/ and then cocolog's, because torch, tcp,
+# bigint and curl are loadable modules under cocolog's own library/
+# rather than builtins. `"$COCOLOG_LIBRARY/u256.so"' was a real path
+# when it was one directory and is nonsense now, so every probe below
+# uses COCO_PATHS_LIBRARY, which is still the single directory The
+# Coco's own modules are built into.
+  if [ ! -f "$COCO_PATHS_LIBRARY/$m.so" ]; then
     sh "$ROOT/modules/math/build.sh" > "$HERE/math-build.log" 2>&1 || true
     break
   fi
 done
-if [ ! -f "$COCOLOG_LIBRARY/u256.so" ]; then
+if [ ! -f "$COCO_PATHS_LIBRARY/u256.so" ]; then
   echo "SKIP (the math modules would not build -- no sbcl or CICILI checkout)"
   exit 0
 fi

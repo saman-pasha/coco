@@ -89,7 +89,18 @@ CICILI=${CICILI:-$COCO_PILLARS_CICILI};                export CICILI
 ZIGURATIP=${ZIGURATIP:-$COCO_PILLARS_ZIGURAT};         export ZIGURATIP
 ZIGURATIP_HOME=${ZIGURATIP_HOME:-$COCO_PILLARS_ZIGURAT_HOME}; export ZIGURATIP_HOME
 COCOLOG=${COCOLOG:-$COCO_PILLARS_COCOLOG};             export COCOLOG
-COCOLOG_LIBRARY=${COCOLOG_LIBRARY:-$COCO_PATHS_LIBRARY}; export COCOLOG_LIBRARY
+# THE SEARCH PATH IS TWO DIRECTORIES: ours, then cocolog's. cocolog's
+# tcp, torch, bigint and curl are loadable modules under its own library/
+# now rather than builtins, so without the second entry `library(torch)'
+# is not found -- which showed up as `training SKIP (no torch in this
+# cocolog build)' while the runner still printed `red: 0'. A case going
+# GREEN to SKIP in silence is the hazard cocolog's CLAUDE.md names.
+#
+# COCO_PATHS_LIBRARY stays ONE directory, and is what modules/*/build.sh
+# writes into. A build script that `mkdir -p'-s a colon-separated list
+# makes a directory named `library:', which is how this was found.
+COCOLOG_LIBRARY=${COCOLOG_LIBRARY:-$COCO_PATHS_LIBRARY:$COCO_PILLARS_COCOLOG/library}
+export COCOLOG_LIBRARY
 ZIGURAT_HOST=${ZIGURAT_HOST:-$COCO_ARRANGEMENT_HOST};  export ZIGURAT_HOST
 ZIGURAT_PORT=${ZIGURAT_PORT:-$COCO_ARRANGEMENT_PORT};  export ZIGURAT_PORT
 ZIGURAT_TIMEOUT=${ZIGURAT_TIMEOUT:-$COCO_ARRANGEMENT_TIMEOUT}; export ZIGURAT_TIMEOUT

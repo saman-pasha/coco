@@ -16,7 +16,12 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 ln -sfn "$COCOLOG/lib/sdk.cicili" "$HERE/sdk.cicili"
 
-OUT="$COCOLOG_LIBRARY"
+# OURS, not the SEARCH PATH. COCOLOG_LIBRARY is colon-separated now --
+# The Coco's library/ and then cocolog's, since torch and friends live
+# there -- and `mkdir -p' on the whole list makes a directory called
+# `library:'. COCO_PATHS_LIBRARY is the one directory this repository
+# writes into.
+OUT="${COCO_PATHS_LIBRARY:-$COCOLOG_LIBRARY}"
 mkdir -p "$OUT"
 
 for mod in $COCO_MODULES_MATH; do

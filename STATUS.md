@@ -191,12 +191,49 @@ certificate.
 
 ### The TPS harness: the number, and the six ways it lies
 
-**The number is on the page.** On a 4-core container, against a server
-whose store had been in use all session: `verify` 181/s and `validate`
-181/s with no database in them at all; `seal_batched` 4.4/s;
-`seal_per_turn` 1.2/s; `parallel_own_kbs` 9.0/s; `parallel_one_kb`
-4.3/s. **And the sentence still is not written**, because what those
-lanes measure is that arrangement on that container.
+**The number is on the page.** Re-run on a 4-core container after
+cocolog's engine fix, every lane reading (see below for why two of them
+had stopped):
+
+| lane | rate | arrangement |
+|---|---|---|
+| `verify` | **387/s** | 2000 in 5.166s, local, no database |
+| `validate` | **394/s** | 2000 in 5.076s, local, no database |
+| `seal_batched` | 6.03/s | 30 in 4.977s, server, one kb, ONE turn |
+| `seal_per_turn` | 4.58/s | 30 in 6.554s, server, one kb, per turn |
+| `parallel_own_kbs` | 12.53/s | 60 in 4.788s, 4 kbs, one turn each |
+| `parallel_one_kb` | 5.82/s | 60 in 10.308s, 1 kb, 4 writers |
+| `seal_batched_again` | 5.70/s | the first lane over again, minutes later |
+
+**And the sentence still is not written**, because what those lanes
+measure is that arrangement on that container.
+
+**COCOLOG'S 300x ENGINE FIX MOVED NONE OF THIS, and it was checked
+rather than assumed.** cocolog made `coco_make` dereference its
+arguments, which took `between(1,20000,_), fail` from 15.5s to 51ms.
+These lanes did not move at all: the same `verify` workload read
+**389/s on a build WITHOUT the fix and 383-395/s with it**, back to back
+on this machine. The lanes are ECDSA-bound — 3000 verifies at ~2.5ms is
+7.5s, and the engine overhead the fix removed was ~200ms of that. A
+benchmark that had been quoted as evidence of the speedup would have
+been quoting the machine.
+
+**Two lanes had stopped reading, and neither was the fix's doing.**
+`verify` and `validate` came back REFUSED — *the run was too short to
+mean anything* — because 300 verifies take 0.78s on this container where
+they cleared the one-second floor on the one this was written on. The
+pre-fix build takes 0.771s too. The counts are 2000 and 30 now: **the
+count is part of the arrangement and moves with the machine.**
+`seal_per_turn` at ten was worse than refused, it *straddled* the floor —
+1.04s on one run and under on the next, printing a rate once and
+REFUSED once from the same code on the same machine.
+
+**And a refusal now says which rule.** `harness.pl` computes `why`
+precisely so a person can act on it, and the shell pipeline dropped it:
+the reason line is indented and the `grep -aE '^[a-z_]+ '` never matched
+it. Three lanes read REFUSED for three different reasons and the page
+said only REFUSED. A rule that will not name itself is a rule you have to
+go and read the source for.
 
 **Five rules live in `harness.pl` and a reading that breaks one prints
 REFUSED and says which.** The count is verified against rows actually in

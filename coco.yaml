@@ -41,6 +41,15 @@ pillars:
 # The Coco's own .pl libraries and compiled .so modules both land here,
 # which is what lets library(eth) be Prolog and library(keccak) be C
 # without a caller knowing the difference.
+#
+# THIS IS WHERE OURS LAND, which is not the same question as where
+# `use_module' looks. config.sh appends cocolog's own library/ to the
+# SEARCH PATH it exports, because cocolog moved tcp, torch, bigint and
+# curl out of its binary into loadable modules there -- `torch_seed/1'
+# used to be a builtin and is `use_module(library(torch))' now. Keeping
+# the two apart matters: modules/*/build.sh writes into this one, and a
+# colon-separated list here got `mkdir -p'-ed into a directory called
+# `library:'.
 paths:
   library: ${ROOT}/library
 

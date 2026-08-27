@@ -15,6 +15,11 @@
 %% and the answer is not clever: the verifier ignores the claim entirely
 %% and measures. A worker's word about its own accuracy is not evidence
 %% and is never treated as any.
+
+%% libtorch is a LOADABLE module in cocolog now, under its modules/torch,
+%% so it is asked for like any other library. It used to be compiled into
+%% the binary and always present.
+:- use_module(library(torch)).
 train_params(liar, Params) :-
     the_task(task(_, data(S, E), _, _, arch(Arch), _, _)),
     worker_seed(WS), torch_seed(WS),

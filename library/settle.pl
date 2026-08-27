@@ -29,6 +29,11 @@
 %% between them: the block is signed and hash-chained, the digest is
 %% inside it, and the rows are only believed if they hash back to it.
 
+%% libtorch is a LOADABLE module in cocolog now, under its modules/torch,
+%% so it is asked for like any other library. It used to be compiled into
+%% the binary and always present.
+:- use_module(library(torch)).
+
 :- use_module(library(sha256)).
 :- use_module(library(lists)).
 
