@@ -3,16 +3,22 @@
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
 assembly and **all eight rungs**: `test/run.sh` GREEN with a server up —
-local, crypto, ledger, contracts, training, spine, votes, hub, bench,
-wire — which is sixty-two crypto checks against numbers published by
-other people, plus a federation ledger, contracts under a fence,
-settlement that measures rather than believes, a proof-of-history spine
-held to constants computed outside this project, a stake-weighted BFT
-vote whose safety arithmetic names the validators who break it, an
-aggregator that verifies three chains under three regimes by reading
-each chain's own rules off its own blocks, and a harness that prints
-transactions per second with the arrangement on every line. The ladder
-is walked; what is left is depth, not rungs.
+local, math, crypto, ledger, contracts, training, spine, votes, secure,
+hub, token, uniswap, uniswap-v3, lending, bench, wire — which is
+sixty-two crypto checks against numbers published by other people, plus a
+federation ledger, contracts under a fence, settlement that measures
+rather than believes, a proof-of-history spine held to constants computed
+outside this project, a stake-weighted BFT vote whose safety arithmetic
+names the validators who break it, an aggregator that verifies three
+chains under three regimes by reading each chain's own rules off its own
+blocks, and a harness that prints transactions per second with the
+arrangement on every line. The ladder is walked; what is left is depth,
+not rungs.
+
+**And one arrangement that runs across rungs rather than being one of
+them**: `secure` re-runs proof of authority, proof of history and proof
+of stake with the node-to-store link encrypted, and requires all
+seventy-eight verdicts to be byte for byte what they were in the clear.
 The missions below moved here from cocolog's
 STATUS.md, where they were conceived — the foundations they stand on are
 proven THERE, story by story, and stay there.
@@ -53,8 +59,17 @@ Each of these is a tested story in cocolog's STATUS.md, not a hope:
   (RSASSA-PSS, PKCS#1 v1.5), AES, X509 with the `ca` tool — and a
   certificate-borne permission system (`PERMISSIONS_MODE`): grants
   over a schema or one object are written INTO the certificate by the
-  issuer, membership is a file per subject, refusal happens at the
-  TLS handshake. Who may append is the server's decision, not a rule's.
+  issuer, membership is a file per subject, and the server checks those
+  grants PER OPERATION against the peer TLS identified. Who may append is
+  the server's decision, not a rule's. **The refusal is not a refused
+  handshake**, which this repository had written down and which reading
+  ZiguratIP corrected: `zigurat_tls_handler` identifies every TLS peer,
+  certificate or not, and `Globals::permits` opens
+  `if (!_identified) return true;` — so a plain connection is
+  unidentified and reaches everything, a certificated peer reaches what
+  its certificate grants, and an uncertificated TLS peer is identified
+  with an empty permission set and reaches nothing. Turning TLS on is
+  what turns access control on.
 * The engine's builtins are deterministic by design and `max_steps` is
   a gas meter already in the struct; the store's isolation ladder runs
   READ_UNCOMMITTED to SERIALIZABLE, per turn; the shared read side is
@@ -1287,3 +1302,12 @@ travels chunked because a row fits in a page; permission gates the door
 and the signature rides in the row; dirty reads accelerate and never
 finalize; and a claim is only made after `test/run.sh` — with the
 server up — ends `red: 0`.
+
+One more, added the day the link could be encrypted: **an authenticated
+peer is not a trusted one.** Every validity rule here asks who SIGNED the
+block and never who opened the socket, and no path may ever skip
+re-verification because a peer arrived over TLS. `test/secure.sh` holds
+that in both directions — mallory over a verified link is refused exactly
+as she was in the clear, and every honest verdict is unchanged — so a
+consensus law that started depending on the transport would show up as a
+difference between two runs rather than as nothing at all.

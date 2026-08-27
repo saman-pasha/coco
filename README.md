@@ -70,8 +70,9 @@ as transactions, the balancer as gossip, the accumulator as fan-in
 settlement with a held-out acceptance test, claim-of-one as leader
 election, freeze/thaw as suspended contracts, model parameters as rows in
 the tensors table, the certificate-borne permission system that decides
-who may append at the TLS handshake, and the isolation ladder from
-READ_UNCOMMITTED to SERIALIZABLE, chosen per turn.
+who may append — the certificate names the grants, and the server checks
+them per operation against the peer TLS identified — and the isolation
+ladder from READ_UNCOMMITTED to SERIALIZABLE, chosen per turn.
 
 ## The ladder
 
@@ -83,6 +84,12 @@ predicates under `max_steps`; training as settlement; a PoH spine; PoS
 and BFT votes where the trust model wants them; the aggregator, where a
 chain carries its own light client; and the TPS harness, whose number
 is printed before any sentence uses it.
+
+One arrangement runs **across** rungs rather than being one of them.
+`test/secure.sh` re-runs the three consensus rungs — 2, 5 and 6 — with
+the node-to-store link encrypted, and requires every verdict to be
+unchanged. A ladder whose rungs meant something different over TLS would
+not be a ladder worth climbing.
 
 ## Running
 
@@ -143,14 +150,28 @@ connection is not identified at all and reaches everything. Turning TLS
 on is what turns access control on.
 
 **It changes the link and not one verdict**, and `test/secure.sh` is
-where that is demonstrated rather than asserted: `ledger`, `spine` and
-`votes` run again behind a TLS terminator, and all seventy-eight verdict
-lines must come back byte for byte identical — including the three
-attacks that are supposed to succeed. Every law those rungs enforce is a
-law about *content*: a hash recomputed from the block's own fields, a
-signature checked against the author's published key, a tick count
-re-run, a quorum weighed against a stake table read out of rows. Not one
-of them asks who handed the bytes over.
+where that is demonstrated rather than asserted. `ledger`, `spine` and
+`votes` run again behind a TLS terminator, and every verdict line must
+come back byte for byte identical:
+
+| rung | consensus | verdicts | over TLS |
+|---|---|---|---|
+| 2 | `library(poa)` — proof of authority | 25 | identical |
+| 5 | `library(poh)` — proof of history | 16 | identical |
+| 6 | `library(pos)`, `library(bft)` — stake and votes | 37 | identical |
+
+All seventy-eight, **including the three attacks that are supposed to
+succeed** — ECDSA malleability, which buys nothing because a block's hash
+does not cover its signature; two valid spines from one genesis, which is
+what a clock *is*; and a grindable leader draw, an accepted trade inside
+a gated federation. A run where mallory suddenly failed to grind would be
+as much of a failure as one where a real attack got through.
+
+That identity is not luck. Every law those rungs enforce is a law about
+*content*: a hash recomputed from the block's own fields, a signature
+checked against the author's published key, a tick count re-run, a quorum
+weighed against a stake table read out of rows. Not one of them asks who
+handed the bytes over.
 
 Which is also the trap the case exists to close. An encrypted transport
 invites a node to treat an authenticated peer as a trusted one, so
@@ -159,6 +180,25 @@ honest nodes use — at the transport layer exactly as authenticated as
 alice — and offers a block signed with her own real key. It is refused,
 for the reason it was always refused: she is not in the federation, and a
 handshake has no opinion about that.
+
+Three more checks a plaintext run cannot make: plaintext against the TLS
+port reaches no chain, so the terminator really is TLS; a node whose
+`ZIGURAT_CACERT` names an unrelated authority reads **zero** blocks
+rather than some; and it is told why by name — the refusal says
+`certificate`, not `read failed`.
+
+**A missing client certificate is not a failed handshake**, and anything
+built on this should know it. Under TLS 1.3 the server does not examine
+what the client sent until the client has finished talking, so the
+connect SUCCEEDS and the refusal arrives as an alert on the first read.
+The property to check is never whether a peer connected — it is what the
+peer can *reach*.
+
+The terminator is a rehearsal and says so, exactly as cocolog's own
+`test/zigurat-tls.sh` does: turning `TLS_MODE` on for real means
+restarting the shared server with credentials every other case would then
+have to speak. What is proved here is the client half and the consensus
+half; ZiguratIP's server side is ZiguratIP's suite's business.
 
 ## Layout
 
