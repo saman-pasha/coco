@@ -12,7 +12,9 @@
 # second copy of a fact, and the second copy is the one that goes stale.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$HERE/../.." && pwd)
 . "$HERE/../../test/config.sh"
+. "$ROOT/tools/cc/env.sh"
 
 ln -sfn "$COCOLOG/lib/sdk.cicili" "$HERE/sdk.cicili"
 
@@ -28,11 +30,12 @@ for mod in $COCO_MODULES_MATH; do
   # --release, for the same reason every other build in these three
   # repositories passes it. It changes NOTHING here and that was
   # measured -- the emitted .c is byte-identical either way, and the
-  # optimisation that matters is the -O3 on the gcc line below, which
+  # optimisation that matters is the -O3 on the compiler line below,
+  # which
   # is what actually produces the .so. It is passed anyway because a
   # reader comparing build scripts should not have to measure that to
   # know these modules are release-built. The question was asked.
   ( cd "$CICILI" && sbcl --script cicili.lisp --release "$HERE/$mod.cicili" )
-  gcc -shared -fPIC -O3 -o "$OUT/$mod.so" "$HERE/$mod.c"
+  "$CC" -shared -fPIC -O3 -o "$OUT/$mod.so" "$HERE/$mod.c"
   echo "built $OUT/$mod.so"
 done

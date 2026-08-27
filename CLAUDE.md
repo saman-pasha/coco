@@ -76,6 +76,29 @@ cd /home/user/ZiguratIP && ZIGURATIP_HOME=$PWD/home \
   LD_LIBRARY_PATH=$PWD/home/lib setsid ./home/bin/ziguratip
 ```
 
+### One compiler across all three, and it is clang
+
+`modules/*/build.sh` source `tools/cc/env.sh`, which puts `tools/cc` on
+`PATH` and points CC and CXX at the wrappers there. cocolog and ZiguratIP
+carry an identical copy, and that duplication is the point: these modules
+are `dlopen`'d into the cocolog binary, which itself links ZiguratIP's
+libCore, so one process ends up holding all three toolchains' output. A
+mixed build is two ABIs in one address space.
+
+Two things in `tools/cc/README` are worth reading before a build
+surprises you. **Cicili names `gcc` outright** and takes no override — it
+is frozen, so `gcc`/`g++` there are shims onto the real wrappers, on PATH
+for that one step. And **`clang++` alone does not compile C++ here**: it
+borrows libstdc++ from the newest gcc it can find, which on Ubuntu 24.04
+is gcc-14's runtime directory, and that one ships no headers — so
+`#include <string>` fails while `/usr/include/c++/13` sits there
+untouched. `tools/cc/cxx` finds the right install dir and says so with
+`--gcc-install-dir`.
+
+`CICILI_CC=gcc CICILI_CXX=g++ sh modules/math/build.sh` goes back to gcc.
+Nothing is load-bearing on clang; what is load-bearing is that all of it
+agrees.
+
 ## The hazards, inherited
 
 cocolog's CLAUDE.md hazards all apply here, because the same store and

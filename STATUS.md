@@ -191,22 +191,105 @@ certificate.
 
 ### The TPS harness: the number, and the six ways it lies
 
-**The number is on the page.** Re-run on a 4-core container after
-cocolog's engine fix, every lane reading (see below for why two of them
-had stopped):
+**The number is on the page.** Re-run on a 4-core container with every
+layer rebuilt by **clang** (see below), after a vacuum, every lane
+reading:
 
 | lane | rate | arrangement |
 |---|---|---|
-| `verify` | **387/s** | 2000 in 5.166s, local, no database |
-| `validate` | **394/s** | 2000 in 5.076s, local, no database |
-| `seal_batched` | 15.79/s | 30 in 1.900s, server, one kb, ONE turn |
-| `seal_per_turn` | 7.22/s | 30 in 4.157s, server, one kb, per turn |
-| `parallel_own_kbs` | 26.08/s | 60 in 2.301s, 4 kbs, one turn each |
-| `parallel_one_kb` | 18.40/s | 60 in 3.260s, 1 kb, 4 writers |
-| `seal_batched_again` | 13.19/s | the first lane over again, minutes later |
+| `verify` | **537/s** | 2000 in 3.722s, local, no database |
+| `validate` | **530/s** | 2000 in 3.772s, local, no database |
+| `seal_batched` | 18.38/s | 30 in 1.632s, server, one kb, ONE turn |
+| `seal_per_turn` | 7.96/s | 30 in 3.770s, server, one kb, per turn |
+| `parallel_own_kbs` | 32.77/s | 60 in 1.831s, 4 kbs, one turn each |
+| `parallel_one_kb` | 22.89/s | 60 in 2.621s, 1 kb, 4 writers |
+| `seal_batched_again` | 16.18/s | the first lane over again, minutes later |
 
 **And the sentence still is not written**, because what those lanes
 measure is that arrangement on that container.
+
+### What changing compiler was worth, and what that reading is not
+
+The whole stack was gcc-built until this run and is clang-built now —
+ZiguratIP's C++ libraries and server, cocolog's binary and its five
+`.so`s, The Coco's nine modules. Against run D, which was the last gcc
+run and also began with a vacuum:
+
+| lane | gcc (run D) | clang (run E) | |
+|---|---|---|---|
+| `verify` | 389.18 | **537.35** | +38% |
+| `validate` | 391.39 | **530.22** | +35% |
+| `seal_batched` | 15.79 | 18.38 | +16% |
+| `seal_per_turn` | 7.22 | 7.96 | +10% |
+| `parallel_own_kbs` | 26.08 | 32.77 | +26% |
+| `parallel_one_kb` | 18.40 | 22.89 | +24% |
+| `seal_batched_again` | 13.19 | 16.18 | +23% |
+
+**THE TWO LOCAL LANES ARE THE ONLY HALF OF THIS I WOULD DEFEND.**
+`verify` and `validate` touch no database, no socket and no other
+process: they are ECDSA and the interpreter, and across runs A-D they
+sat within a couple of percent of each other. A 35-38% jump is many
+times that spread, and it is where a compiler change should show — the
+hot loop is secp256k1 field arithmetic compiled from Cicili's C.
+
+**The five store lanes are one run against one run**, and this file's
+own rule seven exists because those lanes drift. They agree within 6%
+across four vacuumed gcc runs, so +16 to +26% is outside that band and
+probably real; "probably" is the honest word until there are four clang
+runs to put beside the four gcc ones. Nothing here has been re-run four
+times yet, and the table says so rather than rounding the caveat away.
+
+### One compiler for the whole stack, and what it cost to get there
+
+Three repositories, one address space: cocolog links ZiguratIP's libCore
+and libStreamIO into its own binary and `dlopen`s The Coco's modules into
+its own process. A mixed toolchain there is two ABIs in one process, so
+"build it with clang" is not a per-repository choice. All three now carry
+an identical `tools/cc/` — `cc`, `cxx`, a `gcc`/`g++` shim pair, and an
+`env.sh` — and each README says why.
+
+Four things had to be found before any of it built:
+
+**Cicili names `gcc` outright** in `config.lisp` and takes no environment
+override; a target's `:compile` list is appended after the base, so it can
+add flags but cannot rename the program. Cicili is frozen for all three of
+these repositories, so the shims go on `PATH` for that one step and the
+three-line patch that would retire them is written down, offered, and not
+applied.
+
+**`clang++` alone does not compile C++ on Ubuntu 24.04.** It borrows
+libstdc++ from the newest gcc it can find — gcc-14's *runtime* directory,
+which ships crtbegin.o and libgcc_s.so and not one header, because g++ is
+13.3 and the headers are under `/usr/include/c++/13`. Every C++ file dies
+at `fatal error: 'string' file not found`, naming a header that is plainly
+installed. `tools/cc/cxx` walks the install dirs newest-first, takes the
+first with a matching header set, and passes `--gcc-install-dir`.
+
+**`libCryptography.so` was under-linked and had been for years.** It calls
+`Zigurat::Configuration` from `x509.cpp` and named no `-lConfiguration`;
+g++ let every consumer through, because ld resolves a shared library's
+leftovers from whatever else is on the command line and something always
+was. clang reported the truth, from MVCCS-cicili's contention test, which
+links no Configuration and has no reason to. The fix is one word in
+`Cryptography/Makefile` rather than one word in every consumer — and the
+comment already sitting above that line describes this exact class of bug,
+found the same way, on Mach-O.
+
+**`CC ?=` and `CXX ?=` do nothing.** make gives them built-in values whose
+origin is `default`, not `undefined`, so the assignment is skipped and the
+final link went on being a `g++` link while every other line of the build
+said clang. Only `readelf -p .comment` showed it. Both Makefiles test
+`$(origin ...)` now.
+
+And one that is Cicili's own emission meeting a stricter compiler:
+`-Wparentheses-equality` and `-Wno-dangling-else` are needed on every
+target compiled as C++, because the transpiler writes `while ((x == 0))`
+and unbraced else-if chains, and **Cicili treats compiler chatter as
+fatal** — the build stopped with an `Unhandled SIMPLE-ERROR` whose text
+was a warning. gcc ignores unknown `-Wno-` options, so the flags travel.
+
+Both suites are green on the result: cocolog 25 cases `red: 0`, The Coco
+15 cases `red: 0`, no SKIPs in either.
 
 ### Every layer of this is release-built, and it was checked
 
@@ -263,6 +346,10 @@ consecutive runs afterwards agree within **6%** where four had drifted
 | `parallel_own_kbs` | 26.56 | 25.01 | 25.66 | 26.08 |
 | `parallel_one_kb` | 18.25 | 18.08 | 19.18 | 18.40 |
 | `seal_batched_again` | 13.00 | 13.56 | 12.88 | 13.19 |
+
+All four were gcc builds. **This band is what run E is measured against**,
+and it is also why the clang table above stops short of calling the store
+lanes settled: one run has no band of its own.
 
 The vacuum is setup: it is not timed and it is not a lane.
 
