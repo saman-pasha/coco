@@ -37,6 +37,10 @@ consensus: **a ledger that learns**, and above the single ledger, a
 host to many — chains as knowledge bases, each carrying its own
 consensus as data — **an aggregator hub with a mind**.
 
+The thesis picks a language, and the argument for the pick is written
+down rather than assumed: `bench/languages.md` compares Python, Prolog
+and cocolog — see "The comparison, and its rule" under Done here.
+
 ## What already stands under it
 
 Each of these is a tested story in cocolog's STATUS.md, not a hope:
@@ -202,6 +206,36 @@ now; what that changed, and what it deliberately did not, is the first
 entry below.
 
 ## Done here
+
+### The comparison, and its rule
+
+`bench/languages.md` compares Python, SWI-Prolog and cocolog across the
+language aspects, the backend work, and the four separate senses of
+"AI-friendly" — building models, representing knowledge, running
+agents, being written BY a model — which a language can hold any subset
+of, and the three hold different ones.
+
+It is in `bench/` on purpose: a comparison is a benchmark of a
+different kind, and it obeys the harness's rule — **no sentence claims
+a number that has not been printed.** Every figure in it comes from a
+table in this repository or in cocolog's, with the arrangement beside
+it; what is Python's or SWI's is stated qualitatively and checkably.
+
+And it is honest in both directions, which was the hard part to hold:
+cocolog loses often and the file says where — strings, GC, clause
+indexing, tabling and constraints, tooling, ecosystem — because a
+document that had cocolog winning every row would be `mallory.pl` in
+prose. What the thesis actually stands on is the four rows where
+cocolog differs in POSITION rather than in language: a clause is a row
+other processes read, a turn is a transaction, a suspended proof is
+data any process can finish, and determinism and metering are the
+engine's guarantee rather than the application's promise. The rest of
+the comparison exists so nobody mistakes that wall for the whole house.
+
+Pointed at from three places — the README's thesis, cocolog's own
+README, and bench/README.md's file table — and written in ONE, because
+a comparison that lived in two files would disagree with itself
+eventually, and the drift would be silent.
 
 ### The three rungs over TLS, and the verdicts that did not move
 
