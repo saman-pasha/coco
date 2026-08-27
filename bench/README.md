@@ -16,6 +16,13 @@ sh bench/solana.sh       # the other system on the same box (SKIPs without its t
 | `tps.sh` | the lanes |
 | `solana.sh` | the same rules pointed at a single-node Solana validator |
 
+**THE TABLES BELOW ARE IN THE ORDER THEY WERE MEASURED, oldest first,
+and none of them is deleted when the next one disagrees.** That is rule
+6 applied to this file rather than to a run: a superseded reading is a
+different claim, not a wrong one, and a benchmark that keeps only its
+best number is a benchmark nobody can check. The latest is **run E**,
+under *The whole stack rebuilt with clang*.
+
 ## The number is on the page
 
 One run, on a 4-core Linux container, against a Zigurat server on a
@@ -154,7 +161,95 @@ condition before the number existed; the number exists now and the
 sentence still is not written, because what these lanes measure is this
 arrangement on this container.
 
-## Six rules
+## Rule seven, and the four runs that agree because of it
+
+Every table above is a run against whatever the last run left behind.
+Four consecutive runs, nothing changed between them, showed it:
+
+| lane | run 1 | run 2 | run 3 | run 4 |
+|---|---:|---:|---:|---:|
+| `seal_batched` | 11.46 | 9.18 | 7.13 | 6.03 |
+| `parallel_own_kbs` | 21.00 | 17.63 | 15.45 | 12.53 |
+| `parallel_one_kb` | 12.92 | 9.22 | 7.25 | 5.82 |
+| `seal_batched_again` | 11.77 | 7.56 | 6.48 | 5.70 |
+
+**Monotone down, four lanes, four runs.** Noise does not do that. It is
+the hazard cocolog's CLAUDE.md names: deleted rows are kept under MVCC
+and nothing reclaims them, so each run walks past what the last one
+left. `fresh` does not help — `forget` DELETES, and under MVCC a delete
+is a write. A `vacuum` put the same four lanes back to 15.73, 28.28,
+20.33 and 13.25, *above the first run*.
+
+7. **A run starts from a vacuumed store.** `tps.sh` does it in setup;
+   it is not timed and it is not a lane. cocolog's own `test/groups.sh`
+   and `test/ruler.sh` already did this, for exactly this reason.
+
+Four vacuumed runs afterwards, all gcc, agree within **6%** where four
+had drifted 2-3x:
+
+| lane | A | B | C | D |
+|---|---:|---:|---:|---:|
+| `seal_batched` | 15.13 | 15.68 | 15.37 | 15.79 |
+| `parallel_own_kbs` | 26.56 | 25.01 | 25.66 | 26.08 |
+| `parallel_one_kb` | 18.25 | 18.08 | 19.18 | 18.40 |
+| `seal_batched_again` | 13.00 | 13.56 | 12.88 | 13.19 |
+
+**It does not make the lanes immune, and rule 6 still stands.** In run C
+`seal_batched` reads 15.37 and `seal_batched_again` 12.88 — a 16% slide
+inside ONE run, on a fresh knowledge base, minutes apart. Starting from
+a known point is the difference between a reading and an anecdote; it is
+not the difference between a reading and a truth.
+
+## Run E: the whole stack rebuilt with clang
+
+Every layer is clang 18 now — ZiguratIP's C++ libraries and the server,
+cocolog's binary and its five `.so`s, The Coco's nine modules. That is
+not a preference: these modules are `dlopen`'d into the cocolog binary,
+which itself links ZiguratIP's `libCore`, so one process holds all three
+repositories' output and a mixed toolchain is two ABIs in one address
+space.
+
+Run E, vacuumed per rule seven, against run D — the last gcc run, also
+vacuumed, the D column of the table above:
+
+| lane | gcc (run D) | clang (run E) | | arrangement |
+|---|---:|---:|---:|---|
+| `verify` | 389.18 | **537.35** | +38% | `local_no_database` |
+| `validate` | 391.39 | **530.22** | +35% | `local_no_database` |
+| `seal_batched` | 15.79 | **18.38** | +16% | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | 7.22 | **7.96** | +10% | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | 26.08 | **32.77** | +26% | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | 18.40 | **22.89** | +24% | `server_1_kb_4_writers` |
+| `seal_batched_again` | 13.19 | **16.18** | +23% | `server_one_kb_ONE_TURN` |
+
+**THE TWO LOCAL LANES ARE THE ONLY HALF OF THIS I WOULD DEFEND.**
+`verify` and `validate` touch no database, no socket and no other
+process: they are ECDSA and the interpreter. Across the four vacuumed
+gcc runs they sat within a couple of percent of each other, and a 35-38%
+jump is many times that spread. It also lands where a compiler change
+should — the hot loop is secp256k1 field arithmetic compiled from
+Cicili's C, which is the one thing in these lanes that is pure compute.
+
+**The five store lanes are one run against one run**, and rule seven
+exists because those lanes drift. The gcc band is 6%, so +16 to +26% is
+outside it and probably real; *probably* is the honest word until there
+are four clang runs to put beside the four gcc ones. Rule 6 has not been
+suspended for a toolchain: a store reading is comparable to another
+store reading from the same run, and one clang run is not a band.
+
+**These lanes have corrected a compiler claim before.** The section
+above records `--release` being credited with a 168-to-233 rise it had
+nothing to do with, because the emitted `.c` was byte-identical either
+way. What is different here is that the toolchain change is real down to
+the object file — `readelf -p .comment` on every `.o`, `.so` and binary
+in the three repositories names clang — and the lanes that moved most
+are the ones with the most compiled arithmetic in them. That is a
+consistent story, not a proof.
+
+## Seven rules
+
+Five are in `harness.pl` and a reading that breaks one prints REFUSED
+and says which:
 
 Five are in `harness.pl` and a reading that breaks one prints REFUSED
 and says which:
@@ -176,6 +271,10 @@ The sixth is not in `harness.pl`, because no predicate can enforce it:
 
 6. **A store reading is only comparable to another store reading from
    the same run.**
+
+And the seventh is in `tps.sh` rather than the harness, because it is
+setup and not a check: **a run starts from a vacuumed store.** Why, and
+the four monotone runs that bought it, are above.
 
 ## Rule 6 pays for itself in one line
 
@@ -328,6 +427,15 @@ refusals in 0.139s and would happily have printed 0.00/s over them.
 Both tables are on the page now, arrangements and all. The units
 differ and both columns say so; the sentence is still the reader's to
 write — this file does not write it.
+
+**These two lanes have not been re-run since the toolchain changed**,
+and they do not need to be for their own sake: `solana-test-validator`
+is a prebuilt agave binary and nothing here rebuilt it. But the Coco
+side of the comparison moved — `seal_per_turn` 7.22 to 7.96,
+`seal_batched` 15.79 to 18.38 — so a reader putting the columns side by
+side is now comparing a clang Coco against the same Solana as before.
+Same box, same rules, different day for one of the two columns. That is
+rule 6 again, and it is why the arrangement column exists.
 
 ## What is not here
 
