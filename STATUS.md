@@ -199,14 +199,38 @@ had stopped):
 |---|---|---|
 | `verify` | **387/s** | 2000 in 5.166s, local, no database |
 | `validate` | **394/s** | 2000 in 5.076s, local, no database |
-| `seal_batched` | 15.37/s | 30 in 1.952s, server, one kb, ONE turn |
-| `seal_per_turn` | 7.50/s | 30 in 4.001s, server, one kb, per turn |
-| `parallel_own_kbs` | 25.66/s | 60 in 2.338s, 4 kbs, one turn each |
-| `parallel_one_kb` | 19.18/s | 60 in 3.129s, 1 kb, 4 writers |
-| `seal_batched_again` | 12.88/s | the first lane over again, minutes later |
+| `seal_batched` | 15.79/s | 30 in 1.900s, server, one kb, ONE turn |
+| `seal_per_turn` | 7.22/s | 30 in 4.157s, server, one kb, per turn |
+| `parallel_own_kbs` | 26.08/s | 60 in 2.301s, 4 kbs, one turn each |
+| `parallel_one_kb` | 18.40/s | 60 in 3.260s, 1 kb, 4 writers |
+| `seal_batched_again` | 13.19/s | the first lane over again, minutes later |
 
 **And the sentence still is not written**, because what those lanes
 measure is that arrangement on that container.
+
+### Every layer of this is release-built, and it was checked
+
+Asked and answered, because a benchmark on a debug build is a benchmark
+of nothing. ZiguratIP's `Makefile.global` defaults `MODE` to **Debug**;
+only `Release` adds `-O3`, and only `Core` and `Cryptography` carry their
+own `OPTIMIZE` line. So `StreamIO`, `Type`, `Compiler`, `SocketIO` and
+`MVCCS` were the ones that could have been wrong — and every one of them
+contains `.cold` sections, which GCC emits only when optimising and never
+at `-O0`, with no `.debug_info` that `-g` would have left.
+
+| | how it was checked |
+|---|---|
+| ZiguratIP libs + `ziguratip` | `.cold` present (28–346 functions), no debug info |
+| `cocolog` | `.cold` × 89; `make` uses `-O3` and Cicili `--release` |
+| `embed.o` | has no `-O` flag of its own — Cicili's `--release` **injects** `-O3`, confirmed in the emitted `g++` line |
+| `torch.so`, `bigint.so` | `.cold` × 56 / 4 |
+| `tcp.so`, `thread.so`, `curl.so` | rebuilt with `build.sh` → **md5 identical** |
+| The Coco's nine modules | rebuilt → **md5 identical** |
+| `libcocologc.a` | rebuilt → **md5 identical**; `CFLAGS` never overridden |
+
+The pure-C modules show **no `.cold` at all**, which proves nothing —
+straight-line C without exceptions is rarely partitioned. Those were
+settled by rebuilding with the release script and comparing checksums.
 
 ### Rule seven: start from a known store
 
@@ -229,9 +253,18 @@ nothing reclaims them, so every run walks past what the last one left.
 is a write.
 
 **So the run now vacuums first**, which is what cocolog's own
-`test/groups.sh` and `test/ruler.sh` already do for exactly this. Three
+`test/groups.sh` and `test/ruler.sh` already do for exactly this. **Four**
 consecutive runs afterwards agree within **6%** where four had drifted
-2-3x. The vacuum is setup: it is not timed and it is not a lane.
+2-3x:
+
+| lane | A | B | C | D |
+|---|---|---|---|---|
+| `seal_batched` | 15.13 | 15.68 | 15.37 | 15.79 |
+| `parallel_own_kbs` | 26.56 | 25.01 | 25.66 | 26.08 |
+| `parallel_one_kb` | 18.25 | 18.08 | 19.18 | 18.40 |
+| `seal_batched_again` | 13.00 | 13.56 | 12.88 | 13.19 |
+
+The vacuum is setup: it is not timed and it is not a lane.
 
 **It does not make the lanes immune, and rule six still stands.** In the
 run recorded above `seal_batched` reads 15.37 and `seal_batched_again`
