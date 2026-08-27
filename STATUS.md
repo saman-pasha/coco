@@ -453,6 +453,109 @@ comparison became the one available today: disjoint single-appender
 knowledge bases against one contended base, 9.0/s against 4.3/s, with
 the contended one writing a bush.
 
+### Two tiers of library, and 23 directives that did nothing
+
+**A `use_module` FOR A TIER-1 LIBRARY IS A DIRECTIVE THAT DOES
+NOTHING**, and there were twenty-three of them here. Sixteen libraries
+answer before cocolog's first goal runs — `lists`, `apply`, `builtins`,
+`dcg`, `files`, `library` and `zigurat` compiled into the binary, and
+SWI's `assoc`, `pairs`, `ordsets`, `yall`, `aggregate`, `ugraphs`,
+`dcg_basics` and `dcg_high_order` read from `lib/swipl` beside it. They
+are part of Prolog, not an optional extra: a program that must announce
+`library(assoc)` before it can use an association list is doing the
+interpreter's bookkeeping for it.
+
+The lines read like dependencies and were not, which is the actual cost:
+a reader of `contracts/dex/uniswap.pl` had no way to tell which of its
+imports mattered. They were written out of habit from another Prolog.
+
+**IT IS CHECKABLE RATHER THAN REMEMBERED**, and that is why the sweep
+could be trusted — copy the binary somewhere with no `library/` beside
+it, point `COCOLOG_LIBRARY` at nothing, and ask:
+
+    COCOLOG_LIBRARY=/nowhere /tmp/d/cocolog query \
+      "use_module(library(lists)), write(yes), nl"
+
+Answering `yes` from a directory with no library path at all is what
+compiled-in means. Every one of the sixteen answers.
+
+**`$COCOLOG_LIBRARY` IS A LIST, AND `test/config.sh` NOW APPENDS TO IT.**
+It is the one variable in that file which does not simply defer to the
+environment, and the reason is that the two directories it names — The
+Coco's own `library/` and cocolog's — are not a default anybody could
+have meant to replace. So they go at the FRONT and whatever the caller
+exported is kept behind them:
+
+    COCOLOG_LIBRARY="$COCO_PATHS_LIBRARY:$COCO_PILLARS_COCOLOG/library${COCOLOG_LIBRARY:+:$COCOLOG_LIBRARY}"
+
+Ours first, so a suite cannot go green about somebody else's copy of a
+library it is testing; theirs kept, so `COCOLOG_LIBRARY=/opt/mine sh
+test/run.sh` works. It used to be an assignment, and every run threw away
+a path somebody had exported on purpose.
+
+### Uniswap, and the arithmetic that had to come first
+
+**A DEX ON THE LADDER'S RUNG 3**, which is where a contract is a predicate.
+Nothing about it needed a new mechanism: `contracts/dex/uniswap.pl` is v2
+— the constant product, the fee, the LP share, the invariant that must not
+decrease — and `contracts/dex/uniswap-v3.pl` is concentrated liquidity,
+where a position is an NFT minted from `contracts/token/nonfungible.pl`
+because two providers in one pool own genuinely different things:
+different ranges, different fee exposure. A share cannot be a balance.
+
+**`library(u256)` HAD TO EXIST FIRST, and the reason is a number.**
+cocolog's integers are 64 bits and they WRAP IN SILENCE:
+
+    1000000000000000000 * 997  =  875820019684212736
+
+That is the first product a v2 swap computes at ordinary token scale, and
+it is already a wrong answer nobody was told about. So the arithmetic
+moved into a Cicili module — 256-bit add, sub, mul, div, mod, muldiv and
+sqrt, none of them wrapping, an operation that cannot represent its answer
+RAISING instead. A DEX built on quietly wrapping integers is not a smaller
+DEX; it is a different program that agrees with this one on small numbers.
+
+**`library(tickmath)` is v3's other half**: prices as ticks, ticks as
+square roots, and the Q64.96 fixed point Uniswap actually uses. Crossing a
+tick means splitting one swap across ranges, and the liquidity that is in
+range changes underneath it — so a swap is a loop, and each step is a
+separate piece of arithmetic with its own rounding direction.
+
+**FEE GROWTH IS PER RANGE, and that is the same device Aave uses.** Fees
+cannot be credited to every position on every swap — that is work
+proportional to the number of providers, on every trade. So the pool keeps
+a global fee-growth accumulator and each tick records the growth OUTSIDE
+it; the growth *inside* a range is arithmetic on three numbers, and a
+position's owed fees is the difference since it last looked. Constant work
+per swap, exact per position.
+
+28 checks for v2, **61 for v3**, 32 for the token contracts under them,
+all GREEN.
+
+### Aave: a pot, a rule, and the moment a position stops being safe
+
+**No counterparties, only a pot.** Everyone's deposits of one asset go
+into one pool; borrowers take from it against collateral posted elsewhere
+in the protocol; the interest borrowers pay is what suppliers earn.
+`contracts/lending/aave.pl` is supply, withdraw, borrow, repay, accrual,
+utilization, the two-slope rate model, health, and liquidation.
+
+**A BALANCE IS A SCALED AMOUNT TIMES AN INDEX**, which is the whole trick
+and the same one v3 uses for fee growth. Interest cannot be credited to
+every account on every transaction. So the pool keeps ONE index per side,
+growing with time, and stores each user's balance DIVIDED by the index at
+the moment they touched it; multiply back and the interest is there.
+Constant work per operation, exact per user.
+
+**HEALTH IS A QUERY, not a stored number**, which is the ladder's thesis
+showing through: a position's health factor is computed from the oracle
+and the current indexes every time it is asked, so there is no cached
+value to go stale between the block that made a position unsafe and the
+block that notices. Liquidation is then a rule anybody can evaluate and
+nobody can disagree about.
+
+39 checks, GREEN.
+
 ### The aggregator: the chain carries its own light client
 
 **Every rule the host uses to judge a foreign chain is read off that
