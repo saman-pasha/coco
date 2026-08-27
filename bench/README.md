@@ -15,6 +15,7 @@ sh bench/solana.sh       # the other system on the same box (SKIPs without its t
 | `mallory.pl` | eight ways to inflate a number |
 | `tps.sh` | the lanes |
 | `solana.sh` | the same rules pointed at a single-node Solana validator |
+| `languages.md` | Python, Prolog and cocolog compared across the language aspects -- a benchmark of a different kind, under the same rule: no number that was not printed |
 
 **THE TABLES BELOW ARE IN THE ORDER THEY WERE MEASURED, oldest first,
 and none of them is deleted when the next one disagrees.** That is rule
