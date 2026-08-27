@@ -237,6 +237,24 @@ README, and bench/README.md's file table — and written in ONE, because
 a comparison that lived in two files would disagree with itself
 eventually, and the drift would be silent.
 
+**And the everyday row, which is where most language choices are
+actually made** — ease, syntax weight, readability, how much code a
+thought costs — got its own section rather than being scattered, with
+the "less code" claim turned from an adjective into a measurement:
+grep-counted code lines, printed like a rate. The whole of proof of
+authority is **39** non-comment lines (of 140 — the code is outnumbered
+by its own explanation nearly three to one, which is what brevity
+actually buys: room for every rule to carry its why); PoS is 42, the
+PoH layer 23, BFT 56 — the four consensus libraries together are 160
+lines of code. The section stays honest in both directions: Python wins
+ease of entry outright and that IS the explanation of the last fifteen
+years; Prolog's difficulty is located in semantics, not syntax; those
+39 dense lines read slower than 200 plain ones for anyone not yet
+thinking in clauses; and no Python second column is printed, because
+nobody wrote one — what is claimed checkably is only that the layers a
+Python version must add (storage, serialisation, schema) are the layers
+the position deletes.
+
 ### The three rungs over TLS, and the verdicts that did not move
 
 cocolog grew `--tls`, so every node here can reach its chain over an

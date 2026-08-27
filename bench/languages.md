@@ -44,6 +44,9 @@ rows where cocolog is genuinely different compare positions.
 | paradigm | imperative, OO, some functional | logic (Horn clauses + extras) | logic, SWI's dialect |
 | program is | objects and bytecode | clauses in one process | clauses that are ROWS in a store |
 | typing | dynamic, strong; gradual hints | dynamic, terms | dynamic, terms |
+| syntax size | large and familiar: keywords, statements, decorators, comprehensions | one grammar rule — everything is a term; operators are data (`op/3`) | the same, held to SWI |
+| ease of entry | the easiest mainstream language; that is WHY it is the default | famously steep: the cost is in semantics, not syntax | Prolog's curve, inherited |
+| in-domain code size | logic lives in libraries; glue stays short | rules ARE the program | measured below: all of PoA in 39 lines |
 | strings | first-class, unicode | strings, atoms and codes | codes only — `"hi"` IS `[104,105]` |
 | memory | refcount + cycle GC | precise GC on all stacks | trail-bounded; NO GC inside a solution |
 | indexing | dict/hash everywhere | JIT multi-argument clause indexing | none — clauses tried in order |
@@ -66,6 +69,116 @@ rows where cocolog is genuinely different compare positions.
 | spec / conformance | the CPython behaviour | ISO + SWI extensions | held to SWI byte for byte, where it ships |
 
 The rest of this file is the prose those rows compress.
+
+---
+
+## The everyday row: ease, syntax, and how much code a thought costs
+
+Most of what decides a language choice is none of the architecture
+below. It is the everyday questions: how hard is it to learn, how much
+must be typed to say a thing, how does a page of it read, how big is the
+program at the end. This section takes those questions at face value,
+and it is where the comparison's honesty rule earns its keep, because
+"less code" is exactly the kind of claim that is usually an adjective.
+Here it is a measurement.
+
+**Ease of entry: Python, outright.** That is not a concession, it is the
+explanation of the last fifteen years — Python is the default language
+of everything because a working programmer is productive in it in a
+day, and a non-programmer in a week. Prolog's entry is famously steep,
+and the steepness is honestly located: NOT in the syntax, which is
+smaller than any mainstream language's, but in the semantics —
+backtracking, unification, and the cut. A Prolog program's control flow
+is invisible in its text, and that is the single hardest thing about it.
+cocolog inherits the curve exactly, softens it with sixty-four runnable
+tutorials whose claims fail the build when they rot, and adds hazards of
+its own the newcomer must learn (codes for strings, deterministic
+builtins where SWI would backtrack).
+
+**Syntax size: Prolog's grammar is one rule.** Everything is a term;
+even `:-` and `,` are operators, and operators are DATA (`op/3`), so
+the whole language a reader must hold is: functors, arguments,
+operators. There are no keywords, no statements, no
+statement/expression split. Python's syntax is far larger than its
+reputation — some thirty-five keywords, decorators, comprehensions,
+generators, context managers, pattern matching, f-strings, async —
+each one earning its place, and each one a thing to know. But small
+syntax is not the same as easy, and the honest sentence is: Python has
+more syntax and less semantic surprise; Prolog has almost no syntax and
+one enormous semantic idea you must actually understand.
+
+**Less code, measured.** These are `grep -cvE '^\s*%|^\s*$'` over this
+repository, printed the way the harness prints a rate:
+
+| what | file | total lines | CODE lines |
+|---|---|---:|---:|
+| proof of authority, whole | `library/poa.pl` | 140 | **39** |
+| proof of stake, whole | `library/pos.pl` | 121 | **42** |
+| proof of history layer, whole | `library/poh.pl` | 88 | **23** |
+| BFT votes, quorums, evidence | `library/bft.pl` | 158 | **56** |
+| **four consensus libraries** | | 507 | **160** |
+| the CA policy layer | cocolog `library/ca.pl` | 170 | **61** |
+| the HTTP/HTTPS transport seam | cocolog `library(httpd)` | | **11 clauses** |
+
+The entire proof-of-authority consensus — block validity, sealing, the
+round-robin schedule, fork choice — is thirty-nine lines of code, and
+they are the same thirty-nine lines the auditor loads and the attacker
+is refused by. The other number in that table matters as much: poa.pl is
+140 lines of which **101 are prose**. The code is outnumbered by its own
+explanation nearly three to one, which is what "less code" actually
+buys — not typing saved, but room for every rule to carry its why.
+
+Two honest caveats on that table. First, nobody wrote the Python
+equivalent, so there is no second column to print, and this file does
+not invent one; what can be said checkably is that a Python PoA needs
+the same rules PLUS a storage layer, a serialisation and a schema,
+which are precisely the layers cocolog's position deletes — the
+biggest "less code" is the code that does not exist. Second, brevity
+cuts both ways: those 39 lines are dense, and a reader who does not yet
+think in clauses reads them slower than 200 lines of Python.
+
+**Good view: a clause reads as the spec.** The fork-choice rule IS its
+own documentation — `better_head/2` is five clauses that read as the
+five sentences of the rule, and the grant-checking core of the CA is:
+
+```prolog
+ca_may(Subject, Action) :-
+    ca_grants(Subject, Grant),
+    ca_covers(Grant, Action),
+    !.
+```
+
+which is the sentence "a subject may do what some grant of theirs
+covers", executable. When the program is the rule, review is reading,
+and an auditor loads the rules themselves rather than trusting a
+paraphrase — the aggregator rung is built on exactly that property.
+The honest counterpart: what reads beautifully at the clause level can
+be opaque at the flow level. A cut changes a predicate's meaning while
+changing one character of its text; Python's explicit `if`/`return`
+flow is far easier to trace for anyone not fluent. Prolog is a
+better language to READ RULES in; Python is a better language to READ
+EXECUTION in.
+
+**Applicability is where the adjectives usually cheat.** Python is
+applicable to everything shallowly — that is its genius. Prolog is
+applicable deeply where the problem is made of rules, relations and
+search, and MISAPPLIED where it is not: string munging, numeric loops
+and pixel pushing in Prolog are more code than Python, not less, and
+anyone comparing languages on their home ground alone is running
+`mallory.pl`'s eighth attack on themselves. This family's own division
+of labour says it plainly: the torch tutorials TRAIN in what is
+effectively Python's shape (tensors, epochs) through a module, and
+SETTLE in clauses — each language kept where it is short.
+
+**Complexity, over a program's life.** Python is simple on day one and
+accumulates complexity in program state — the objects, their mutations,
+the invariants held in comments. Prolog is complex on day one and then
+programs STAY small, because new knowledge is new clauses rather than
+new control flow. Which curve is right depends on how long the program
+will live and how often its rules change — and a consensus whose rules
+are data that hot-loads (every node invocation here loads its own
+rules, so upgrading the consensus rewrites no chain) is the case where
+the second curve wins by construction.
 
 ---
 
