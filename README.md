@@ -208,6 +208,18 @@ port reaches no chain, so the terminator really is TLS; a node whose
 rather than some; and it is told why by name — the refusal says
 `certificate`, not `read failed`.
 
+**And the public audit plane goes through a tunnel too.** The binary
+port is the writers' road; the chain's public face is Zeytun, read-only
+by construction, and behind a Cloudflare-shaped tunnel it is https-only.
+So the same case stands a TLS edge in front of Zeytun and reads alice's
+ledger through it both ways a public reader exists: `library(curl)`
+fetches the pages from inside a query (`curl_get` with an `https://`
+URL, the edge's certificate vouched for by name), and an `--https`
+auditor warms the whole knowledge base through the edge, loads the
+consensus rules from its **own** library path — never from the chain
+being audited — and re-verifies every block. An auditor does not need
+the writers' port, and that sentence is now tested rather than assumed.
+
 **A missing client certificate is not a failed handshake**, and anything
 built on this should know it. Under TLS 1.3 the server does not examine
 what the client sent until the client has finished talking, so the

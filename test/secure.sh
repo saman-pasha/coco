@@ -41,6 +41,16 @@
 # and every verdict above it. What it does not prove is ZiguratIP's own
 # server side.
 #
+# AND THE AUDIT PLANE, THROUGH THE SAME KIND OF TUNNEL. Zeytun is the
+# chain's read-only public face, and behind a Cloudflare-shaped tunnel an
+# https:// URL is the only kind it has. The last section stands a TLS
+# edge in front of Zeytun and reads the ledger through it BOTH ways a
+# public reader exists: `--https', the arrangement, re-verifying every
+# block of alice's chain from rules it loads itself; and library(curl),
+# a PROGRAM, fetching the pages a query needs. An auditor should not
+# need the binary port, and after this section that sentence is tested
+# rather than assumed.
+#
 # SKIPS without a server, without openssl, without python3, or without a
 # cocolog built with TLS.
 
@@ -59,7 +69,7 @@ fi
 
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/coco-secure-XXXXXX")
 TPORT=${COCO_TLS_PORT:-22162}
-trap 'kill $TERM_PID 2>/dev/null; rm -rf "$OUT"' EXIT INT TERM
+trap 'kill $TERM_PID $ZTERM_PID 2>/dev/null; rm -rf "$OUT"' EXIT INT TERM
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$OUT/s.pem" -out "$OUT/s.crt" \
   -days 2 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost' >/dev/null 2>&1 \
@@ -261,6 +271,62 @@ secure_env sh -c '
   . "$1/config.sh"
   timeout 30 "$2" $ZIGURAT_DIAL --timeout 30 --kb '"$MKB"' forget >/dev/null 2>&1
 ' sh "$HERE" "$C"
+
+# ---- 5. THE PUBLIC AUDIT PLANE, THROUGH A TUNNEL -----------------------
+#
+# Everything above encrypts the BINARY port -- the writers' road. The
+# chain's public face is Zeytun, read-only by construction, and behind a
+# Cloudflare-shaped tunnel it is reachable only as https. So: a TLS edge
+# in front of Zeytun, and alice's ledger -- the chain section 1's run
+# left behind -- read through it by both kinds of public reader.
+echo
+ZEYTUN=${ZEYTUN_PORT:-2190}
+ZPORT=$((TPORT + 1))
+AUDIT_KB=ledger_alice
+
+if ! timeout 20 "$C" query \
+     "use_module(library(curl)), curl_get('http://127.0.0.1:$ZEYTUN/cocolog/predicates.zt?kb=$AUDIT_KB', S, B), atom_codes(A, B), ( S == 200, sub_atom(A, _, _, _, block) -> write(ok) ; true ), nl" \
+     2>/dev/null | grep -aq '^ok$'; then
+  echo "audit plane: SKIP (no Zeytun on $ZEYTUN, no library(curl), or no chain in $AUDIT_KB -- run test/ledger.sh first)"
+else
+  python3 "$OUT/term.py" "$OUT/full.pem" "$ZPORT" "$ZEYTUN" > "$OUT/zterm.out" 2>&1 &
+  ZTERM_PID=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    grep -q up "$OUT/zterm.out" 2>/dev/null && break
+    sleep 0.3
+  done
+  if ! grep -q up "$OUT/zterm.out"; then
+    echo "audit plane: SKIP (the Zeytun terminator did not come up)"
+  else
+    # A PROGRAM reads the pages: library(curl), an https URL, the edge's
+    # certificate vouched for by name -- the reader cocolog's own
+    # test/tunnel.sh proves in the small, here reading a real chain.
+    got=$(timeout 60 "$C" query "use_module(library(curl)), \
+            curl_get('https://localhost:$ZPORT/cocolog/predicates.zt?kb=$AUDIT_KB', \
+                     [ca_info('$OUT/s.crt')], S, B), \
+            atom_codes(A, B), \
+            ( S == 200, sub_atom(A, _, _, _, block) -> write(answer(chain_listed)) \
+            ; write(answer(wrong(S))) ), nl" 2>/dev/null \
+          | grep -aoE 'answer\([^)]*\)' | head -1)
+    check "curl_get lists the chain through the Zeytun tunnel" \
+      "$got" "answer(chain_listed)"
+
+    # THE ARRANGEMENT audits: `--https' warms alice's whole knowledge
+    # base through the edge, loads the consensus rules ITSELF, and
+    # re-verifies every block it finds -- test/ledger.sh's part-five
+    # auditor, moved from the writers' port to the public one. The rules
+    # come from the auditor's own library path, never from the chain
+    # being audited, which is what makes the audit worth anything.
+    got=$(timeout 120 "$C" --host localhost --https "$ZPORT" --cacert "$OUT/s.crt" \
+            --kb "$AUDIT_KB" --timeout 60 query \
+            "use_module(library(poa)), ( forall(block(H,Pv,A,P,Sg,Hs), valid_block(H,Pv,A,P,Sg,Hs)) -> write(all_verified) ; write('SOME_INVALID') ), nl" \
+            2>/dev/null | grep -aoE '^(all_verified|SOME_INVALID)$' | head -1)
+    check "an --https auditor re-verifies every block through it" \
+      "$got" "all_verified"
+
+    kill "$ZTERM_PID" 2>/dev/null
+  fi
+fi
 
 echo
 if [ "$failures" -eq 0 ]; then

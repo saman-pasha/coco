@@ -317,6 +317,22 @@ port reaches no chain (so the terminator is really TLS); a node whose
 some; and it is told why, by name — the refusal says `certificate`
 rather than `read failed`.
 
+**AND THE AUDIT PLANE, THROUGH THE SAME KIND OF TUNNEL.** Everything
+above encrypts the binary port, which is the writers' road. The chain's
+public face is Zeytun — read-only by construction — and behind a
+Cloudflare-shaped tunnel an https URL is the only kind it has. So the
+case stands a second TLS edge in front of Zeytun and reads alice's
+ledger through it both ways a public reader exists. `library(curl)`,
+from inside a query: `curl_get` with an https URL and the edge's
+certificate vouched for by name lists the chain's predicates — the
+reader cocolog's own `test/tunnel.sh` proves in the small, here reading
+a real chain. And the `--https` ARRANGEMENT: an auditor warms alice's
+whole knowledge base through the edge, loads `library(poa)` from its
+OWN path — never from the chain being audited, which is what makes the
+audit worth anything — and re-verifies every block: `all_verified`,
+over an encrypted read-only plane, with the writers' port untouched.
+Two more checks; the case's tally is now eighteen.
+
 The terminator is a rehearsal and says so, exactly as cocolog's own
 `test/zigurat-tls.sh` does: turning `TLS_MODE` on means restarting the
 shared server with credentials every other case would then have to speak.
