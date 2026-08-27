@@ -78,13 +78,22 @@ The thesis picks a language, and the pick is argued rather than assumed:
 [bench/languages.md](bench/languages.md) compares Python, Prolog and
 cocolog across the language aspects, the backend work, and the four
 separate senses of "AI-friendly" — honestly, which means cocolog loses
-often and the file says where. What the thesis actually needs is the
+often and the file says where. It opens with the everyday row, where
+most language choices are actually made — ease, syntax weight,
+readability, how much code a thought costs — and there the "less code"
+claim is this repository's own measurement rather than an adjective:
+the whole of `library/poa.pl`'s consensus is 39 non-comment lines,
+outnumbered by its explanatory prose nearly three to one, with the
+concessions attached (Python wins ease of entry outright; Prolog's
+steepness lives in semantics, not syntax; misapplied Prolog is MORE
+code, not less). What the thesis actually needs is the
 rows where cocolog differs in POSITION rather than in language: a clause
 is a row other processes read, a turn is a transaction, a suspended
 proof is data any process can finish, and determinism and metering are
 the engine's guarantee rather than the application's promise. Those four
 rows are this repository's load-bearing wall; the rest of the comparison
-is there so nobody mistakes the wall for the whole house.
+— the everyday row included — is there so nobody mistakes the wall for
+the whole house.
 
 ## The ladder
 
