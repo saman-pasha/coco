@@ -29,7 +29,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../test/config.sh"
 C="$COCOLOG_BIN"
-B="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 300"
+B="$ZIGURAT_DIAL --timeout 300"
 FED="$ROOT/ledger/federation.pl"
 LEDGER="$ROOT/ledger/node.pl"
 HARNESS="$HERE/harness.pl"

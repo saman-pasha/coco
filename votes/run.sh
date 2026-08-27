@@ -41,7 +41,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../test/config.sh"
 C="$COCOLOG_BIN"
 
-BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 60"
+BASE="$ZIGURAT_DIAL --timeout 60"
 FED="$HERE/federation.pl"
 LEDGER="$ROOT/ledger/node.pl"
 NODE="$HERE/node.pl"

@@ -54,9 +54,28 @@ paths:
   library: ${ROOT}/library
 
 # ---- the knowledge base the wire cases speak to ----------------------
+#
+# TRANSPORT IS NAMED, NOT ASSUMED. `tcp' is the binary protocol in the
+# clear and `tls' is the same port with ZiguratIP's `SERVER/TLS_MODE:
+# TRUE' on the other end -- the same port, because TLS_MODE changes what
+# is ON 2160 rather than where it is. Every script here dials through the
+# one string config.sh builds from these (ZIGURAT_DIAL), so turning the
+# whole hub secure is this line or one export, never twelve edits.
+#
+# THE CERTIFICATES ARE OPTIONAL, and that is ZiguratIP's rule rather than
+# a convenience: SERVER/TLS_CLIENT_AUTH takes REQUIRED, OPTIONAL or NONE.
+# What a client certificate is MANDATORY for is SECURITY/PERMISSIONS_MODE
+# -- a TLS peer without one is identified with an empty subject and an
+# empty permission set, and reaches nothing. Leave them empty for an
+# encrypted link to a server that does not ask; fill them in to be a
+# named party the store can make decisions about.
 arrangement:
   host: 127.0.0.1
   port: 2160
+  transport: tcp     # tcp | tls
+  cacert:            # the authority to check the server against
+  cert:              # this node's own certificate, and
+  key:               #   its private key -- both or neither
   timeout: 15
   kb: coco_hello
 
@@ -144,6 +163,7 @@ suite:
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality
+    - secure         # the same three rungs over TLS: identical verdicts
     - hub            # rung 7: many chains, one node, none known in advance
     - token          # the two standards: conservation, one owner, and the thefts
     - uniswap        # v2: the quote, the invariant, and mallory at it

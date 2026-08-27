@@ -179,15 +179,84 @@ option and no predicate. Rung 8's speculative lane needed exactly that
 and so does not exist. It is cocolog's feature to build in cocolog, and
 the shape is already there.
 
-**TLS in cocolog's C client**, over Zigurat's own TLS/X509,
-so a cocolog node presents its certificate and the permission gate
-covers node-to-node links — a ledger node never listens in the clear,
-because the gate only judges what a TLS port presents. That is
-cocolog's feature to build in cocolog; The Coco uses it once it exists,
-and until then node-to-node links ride a TLS tunnel that presents the
-certificate.
+**TLS in cocolog's C client** was the other one, and it is DONE. cocolog
+ships `--tls` — the binary protocol on 2160 with ZiguratIP's
+`SERVER/TLS_MODE: TRUE` on the other end — with `--cacert`, `--capath`,
+`--cert`, `--key` and `--key-pass` beside it. This repository uses it
+now; what that changed, and what it deliberately did not, is the first
+entry below.
 
 ## Done here
+
+### The three rungs over TLS, and the verdicts that did not move
+
+cocolog grew `--tls`, so every node here can reach its chain over an
+encrypted, server-authenticated link. The question that raises is not
+whether it still works but whether it changes what is TRUE about the
+consensus — and the answer had to be demonstrated rather than asserted.
+
+**One dial string.** Twelve scripts wrote `--host H --port P` for
+themselves, which is twelve copies of one decision and twelve places to
+edit to try the hub secure. `test/config.sh` builds `$ZIGURAT_DIAL` once
+from `coco.yaml`'s `arrangement:` block — `transport: tcp | tls`, plus
+`cacert`, `cert` and `key` — and every script says that instead. So:
+
+```sh
+ZIGURAT_TRANSPORT=tls ZIGURAT_CACERT=/etc/ssl/ca.crt sh test/run.sh
+```
+
+It also retired `--port`, which cocolog now documents as deprecated:
+`--tcp PORT` is the same field and names the transport as well as the
+number, which is the point of having four of them.
+
+**A CLIENT CERTIFICATE IS OPTIONAL, AND MANDATORY FOR PERMISSIONS.**
+Read out of ZiguratIP rather than assumed: `loadzigurat.cpp` accepts
+REQUIRED (the default), OPTIONAL and NONE for `SERVER/TLS_CLIENT_AUTH`,
+and `require_security()` demands only the server's own credentials. What
+a certificate is required for is `SECURITY/PERMISSIONS_MODE`:
+`zigurat_tls_handler` identifies EVERY TLS peer, certificate or not, and
+`Globals::permits` opens `if (!_identified) return true;` — so a plain
+connection reaches everything, a certificated TLS peer reaches what its
+certificate grants, and an uncertificated one is identified with an empty
+permission set and reaches nothing. Turning TLS on is what turns access
+control on.
+
+**IT CHANGES THE LINK AND NOT ONE VERDICT.** `test/secure.sh` runs
+`ledger`, `spine` and `votes` again behind a TLS terminator and requires
+the verdict lines to come back byte for byte identical — 25, 16 and 37 of
+them, seventy-eight in all, including the three attacks that are supposed
+to succeed. That is not a formality. Every law those rungs enforce is a
+law about CONTENT: a hash recomputed from the block's own fields, a
+signature checked against the author's published key, a tick count
+re-run, a quorum weighed against a stake table read out of rows. Not one
+of them asks who handed the bytes over, so an encrypted link has nothing
+to say about any of them. A run where mallory suddenly failed to grind
+the leader draw would be as much of a failure as one where she got
+through.
+
+**AND THE TRAP THAT COMES WITH IT.** An encrypted transport invites a
+node to treat an AUTHENTICATED peer as a TRUSTED one, which would quietly
+undo rung 2. So the case makes mallory arrive over a verified TLS
+connection to the very store the honest nodes use — at the transport
+layer exactly as authenticated as alice — and offer a block signed with
+her own real secp256k1 key. `ledger_sync/1` refuses it, and
+`valid_block/6` refuses it directly, for the reason it always did: she is
+not in the federation. A handshake has no opinion about that. **Never add
+a "peer is authenticated, skip re-verification" path.**
+
+Three more that a plaintext run cannot make: plaintext against the TLS
+port reaches no chain (so the terminator is really TLS); a node whose
+`--cacert` names an unrelated authority reads ZERO blocks rather than
+some; and it is told why, by name — the refusal says `certificate`
+rather than `read failed`.
+
+The terminator is a rehearsal and says so, exactly as cocolog's own
+`test/zigurat-tls.sh` does: turning `TLS_MODE` on means restarting the
+shared server with credentials every other case would then have to speak.
+What is proved here is the client half and the consensus half; ZiguratIP's
+server side is ZiguratIP's suite's business.
+
+`sh test/run.sh`: 16 cases, red: 0, with `secure` GREEN among them.
 
 ### The TPS harness: the number, and the six ways it lies
 

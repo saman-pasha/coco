@@ -31,7 +31,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../test/config.sh"
 C="$COCOLOG_BIN"
 
-BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 120"
+BASE="$ZIGURAT_DIAL --timeout 120"
 KB="$BASE --kb spine_demo"
 F="$ROOT/spine/node.pl $ROOT/spine/mallory.pl"
 K="use_module(library(poh))"

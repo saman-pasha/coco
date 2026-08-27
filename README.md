@@ -121,6 +121,45 @@ module is a line there and nothing else — `build.sh` and `crypto.sh`
 both read it rather than carrying their own copy. Four copies of one
 fact drift; one does not.
 
+### Over an encrypted link
+
+Every node here reaches its chain through one dial string that
+`test/config.sh` builds from `coco.yaml`'s `arrangement:` block, so the
+whole hub goes secure with a line:
+
+```sh
+ZIGURAT_TRANSPORT=tls ZIGURAT_CACERT=/etc/ssl/ca.crt sh test/run.sh
+```
+
+`tcp` is the binary protocol in the clear; `tls` is the **same port**
+with ZiguratIP's `SERVER/TLS_MODE: TRUE` on the other end, because
+TLS_MODE changes what is on 2160 rather than where it is. A client
+certificate (`ZIGURAT_CERT` and `ZIGURAT_KEY`, both or neither) is
+**optional** — `SERVER/TLS_CLIENT_AUTH` takes REQUIRED, OPTIONAL or NONE
+— and **mandatory for permissions**: under
+`SECURITY/PERMISSIONS_MODE: TRUE` a TLS peer without one is identified
+with an empty permission set and reaches nothing, while a plain
+connection is not identified at all and reaches everything. Turning TLS
+on is what turns access control on.
+
+**It changes the link and not one verdict**, and `test/secure.sh` is
+where that is demonstrated rather than asserted: `ledger`, `spine` and
+`votes` run again behind a TLS terminator, and all seventy-eight verdict
+lines must come back byte for byte identical — including the three
+attacks that are supposed to succeed. Every law those rungs enforce is a
+law about *content*: a hash recomputed from the block's own fields, a
+signature checked against the author's published key, a tick count
+re-run, a quorum weighed against a stake table read out of rows. Not one
+of them asks who handed the bytes over.
+
+Which is also the trap the case exists to close. An encrypted transport
+invites a node to treat an authenticated peer as a trusted one, so
+mallory arrives over a **verified** TLS connection to the very store the
+honest nodes use — at the transport layer exactly as authenticated as
+alice — and offers a block signed with her own real key. It is refused,
+for the reason it was always refused: she is not in the federation, and a
+handshake has no opinion about that.
+
 ## Layout
 
 ```
@@ -163,7 +202,9 @@ docs/             diagrams worth keeping: seal-to-settlement.html traces
                   the stake's side, vote-to-settlement.html from the
                   vote's; rules-to-settlement.html for rung 7
 test/             the arrangements that hold it GREEN; config.sh reads
-                  coco.yaml and is sourced, not run
+                  coco.yaml and is sourced, not run, and builds the one
+                  dial string every node reaches its store through;
+                  secure.sh re-runs rungs 2, 5 and 6 over TLS
 art/              the banner -- Coco, the engineer, one of the three
 ```
 

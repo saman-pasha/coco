@@ -26,7 +26,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../test/config.sh"
 C="$COCOLOG_BIN"
 
-BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 30"
+BASE="$ZIGURAT_DIAL --timeout 30"
 KB="$BASE --kb contracts_demo"
 FILES="$ROOT/ledger/federation.pl $ROOT/ledger/node.pl $ROOT/contracts/sources.pl $ROOT/contracts/node.pl"
 K="use_module(library(poa)), use_module(library(contract))"

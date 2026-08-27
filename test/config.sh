@@ -124,5 +124,50 @@ ZIGURAT_PORT=${ZIGURAT_PORT:-$COCO_ARRANGEMENT_PORT};  export ZIGURAT_PORT
 ZIGURAT_TIMEOUT=${ZIGURAT_TIMEOUT:-$COCO_ARRANGEMENT_TIMEOUT}; export ZIGURAT_TIMEOUT
 ZIGURAT_KB=${ZIGURAT_KB:-$COCO_ARRANGEMENT_KB};        export ZIGURAT_KB
 
+# ---- how a node dials the store ---------------------------------------
+#
+# ONE STRING, BUILT ONCE. Every script here used to write
+# `--host $ZIGURAT_HOST --port $ZIGURAT_PORT' for itself -- twelve
+# copies of one decision, which is the drift this file exists to stop,
+# and twelve places to edit to try the hub over an encrypted link. They
+# say `$ZIGURAT_DIAL' now.
+#
+# `--port' IS DEPRECATED IN COCOLOG and this is where it stopped being
+# spelled: `--tcp PORT' is the same field and names the transport as
+# well as the number, which is the whole point of having four of them.
+#
+# THE CERTIFICATES ARE OPTIONAL, and only under `tls'. A cocolog with
+# neither `--cert' nor `--key' still speaks TLS -- ZiguratIP's
+# `SERVER/TLS_CLIENT_AUTH' takes NONE and OPTIONAL as well as its
+# REQUIRED default -- and what a certificate is MANDATORY for is
+# `SECURITY/PERMISSIONS_MODE', where an uncertificated TLS peer is
+# identified with an empty permission set and reaches nothing. Naming one
+# without the other is a mistake cocolog refuses by name, so this refuses
+# it here too, where the message can say which file is missing.
+ZIGURAT_TRANSPORT=${ZIGURAT_TRANSPORT:-$COCO_ARRANGEMENT_TRANSPORT}
+ZIGURAT_TRANSPORT=${ZIGURAT_TRANSPORT:-tcp};           export ZIGURAT_TRANSPORT
+ZIGURAT_CACERT=${ZIGURAT_CACERT:-$COCO_ARRANGEMENT_CACERT}; export ZIGURAT_CACERT
+ZIGURAT_CERT=${ZIGURAT_CERT:-$COCO_ARRANGEMENT_CERT};  export ZIGURAT_CERT
+ZIGURAT_KEY=${ZIGURAT_KEY:-$COCO_ARRANGEMENT_KEY};     export ZIGURAT_KEY
+
+case "$ZIGURAT_TRANSPORT" in
+  tcp) ZIGURAT_DIAL="--host $ZIGURAT_HOST --tcp $ZIGURAT_PORT" ;;
+  tls)
+    ZIGURAT_DIAL="--host $ZIGURAT_HOST --tls $ZIGURAT_PORT"
+    [ -n "$ZIGURAT_CACERT" ] && ZIGURAT_DIAL="$ZIGURAT_DIAL --cacert $ZIGURAT_CACERT"
+    if [ -n "$ZIGURAT_CERT" ] && [ -n "$ZIGURAT_KEY" ]; then
+      ZIGURAT_DIAL="$ZIGURAT_DIAL --cert $ZIGURAT_CERT --key $ZIGURAT_KEY"
+    elif [ -n "$ZIGURAT_CERT$ZIGURAT_KEY" ]; then
+      echo "config.sh: a client certificate needs both cert and key" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    ;;
+  *)
+    echo "config.sh: arrangement.transport is tcp or tls, not '$ZIGURAT_TRANSPORT'" >&2
+    return 1 2>/dev/null || exit 1
+    ;;
+esac
+export ZIGURAT_DIAL
+
 COCOLOG_BIN="$COCOLOG/cocolog"
 unset _coco_here _coco_yaml _coco_up

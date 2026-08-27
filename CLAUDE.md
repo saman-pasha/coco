@@ -62,6 +62,26 @@ export COCOLOG=/home/user/cocolog                # a BUILT cocolog checkout
 sh test/run.sh                                   # the suite
 ```
 
+**One dial string, in `config.sh`.** Every script reaches the store
+through `$ZIGURAT_DIAL`, built once from `arrangement:` — twelve copies
+of `--host H --port P` were twelve places to edit to try the hub over an
+encrypted link, and `--port` is deprecated in cocolog anyway (`--tcp
+PORT` is the same field and names the transport). `ZIGURAT_TRANSPORT=tls`
+turns the whole hub secure; `ZIGURAT_CACERT`, `ZIGURAT_CERT` and
+`ZIGURAT_KEY` are the rest of it, and cert/key go together or not at all.
+
+**TLS changes the link, not one verdict**, and `test/secure.sh` proves it
+by re-running `ledger`, `spine` and `votes` behind a terminator and
+requiring the verdict lines to be identical — including the deliberate
+successes. If a change here ever makes those two runs differ, the
+difference is the finding: a consensus law that depends on the transport
+is a consensus law that is wrong. The same case holds the converse, which
+is the one an encrypted transport invites you to forget: **an
+authenticated peer is not a trusted one.** Mallory over a verified TLS
+link is refused exactly as she was in the clear, because `valid_block/6`
+asks who signed the block and never who opened the socket. Never add a
+"peer is authenticated, skip re-verification" path.
+
 config.sh's parser is a small awk over a deliberately small subset:
 `key: value` two levels deep, `- item` lists, `#` comments after
 whitespace. It is not YAML and does not pretend to be. If a

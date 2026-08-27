@@ -142,6 +142,25 @@ else
   say votes RED; sed 's/^/   /' "$HERE/votes.out"; red=$((red + 1))
 fi
 
+# ---- secure: the three consensus rungs, over TLS ----------------------
+# cocolog grew `--tls', so every node here can reach its chain over an
+# encrypted link. This runs ledger, spine and votes AGAIN behind a TLS
+# terminator and requires the verdicts to be identical -- because every
+# law those rungs enforce is about content (a hash recomputed, a
+# signature checked, a tick count re-run) and none of them asks who
+# handed the bytes over. It also proves the converse, which is the one an
+# encrypted transport invites you to forget: mallory over a VERIFIED TLS
+# link is refused exactly as she was in the clear.
+if sh "$HERE/secure.sh" > "$HERE/secure.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/secure.out"; then
+    say secure "$(head -1 "$HERE/secure.out")"
+  else
+    say secure GREEN
+  fi
+else
+  say secure RED; sed 's/^/   /' "$HERE/secure.out"; red=$((red + 1))
+fi
+
 # ---- hub: rung 7 ------------------------------------------------------
 # The aggregator. Each chain publishes its own validity and fork-choice
 # rules as entries on itself, and the host verifies foreign chains by
@@ -247,7 +266,7 @@ else
 fi
 
 # ---- wire -----------------------------------------------------------
-W="--host $HOST --port $PORT --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
+W="$ZIGURAT_DIAL --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
 if timeout 20 "$C" $W list >/dev/null 2>&1; then
   timeout 60 "$C" $W forget >/dev/null 2>&1
   timeout 60 "$C" $W consult "$ROOT/modules/hello.pl" >/dev/null 2>&1

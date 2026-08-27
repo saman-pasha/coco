@@ -34,7 +34,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/config.sh"
 C="$COCOLOG_BIN"
 
-BASE="--host $ZIGURAT_HOST --port $ZIGURAT_PORT --timeout 60"
+BASE="$ZIGURAT_DIAL --timeout 60"
 F="$ROOT/ledger/federation.pl $ROOT/ledger/node.pl $ROOT/training/task.pl $ROOT/training/worker.pl $ROOT/training/mallory.pl"
 K="use_module(library(poa)), use_module(library(settle))"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/coco-tr-XXXXXX")
