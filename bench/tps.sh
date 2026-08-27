@@ -121,6 +121,38 @@ if ! timeout 20 "$C" $B --kb bench_probe list >/dev/null 2>&1; then
   exit 0
 fi
 
+# ---- RULE SEVEN: START FROM A KNOWN STORE ---------------------------
+#
+# Every store lane below wears the store out. Deleted rows are kept under
+# MVCC and nothing reclaims them on its own, so a second run of this file
+# walks past everything the first one left -- and `fresh' does not help,
+# because `forget' DELETES, which under MVCC is a write.
+#
+# FOUR CONSECUTIVE RUNS ON ONE CONTAINER, no code changed between them:
+#
+#     seal_batched        11.46  9.18  7.13  6.03
+#     parallel_own_kbs    21.00 17.63 15.45 12.53
+#     parallel_one_kb     12.92  9.22  7.25  5.82
+#     seal_batched_again  11.77  7.56  6.48  5.70
+#
+# Four lanes, four runs, monotone down every time -- and a `vacuum' put
+# them back to 15.73, 28.28, 20.33 and 13.25, HIGHER than the first run.
+# That is not noise. Noise does not move one direction four times in four
+# lanes, and cocolog's own CLAUDE.md names it: a slow suite is the store
+# ageing, and a slow benchmark is the same thing wearing a number.
+#
+# So the run starts from a vacuumed store, which is what test/groups.sh
+# and test/ruler.sh in cocolog already do for exactly this reason. It
+# does NOT make the lanes immune -- rule six still stands and the last
+# lane is still the first one over again, because the store ages WITHIN a
+# run too. It makes the starting point the same one every time, which is
+# the difference between a reading and an anecdote.
+#
+# The vacuum is not timed and is not a lane. It is setup.
+echo
+echo "== vacuuming first, so the run starts where the last one did"
+"$C" $B --kb bench_probe vacuum 2>&1 | tail -1 | sed 's/^/   /'
+
 echo
 echo "== the settlement lane: blocks onto a chain, through the store"
 fresh bench_warm; seal_n bench_warm 8                       # discarded

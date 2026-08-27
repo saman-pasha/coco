@@ -199,14 +199,46 @@ had stopped):
 |---|---|---|
 | `verify` | **387/s** | 2000 in 5.166s, local, no database |
 | `validate` | **394/s** | 2000 in 5.076s, local, no database |
-| `seal_batched` | 6.03/s | 30 in 4.977s, server, one kb, ONE turn |
-| `seal_per_turn` | 4.58/s | 30 in 6.554s, server, one kb, per turn |
-| `parallel_own_kbs` | 12.53/s | 60 in 4.788s, 4 kbs, one turn each |
-| `parallel_one_kb` | 5.82/s | 60 in 10.308s, 1 kb, 4 writers |
-| `seal_batched_again` | 5.70/s | the first lane over again, minutes later |
+| `seal_batched` | 15.37/s | 30 in 1.952s, server, one kb, ONE turn |
+| `seal_per_turn` | 7.50/s | 30 in 4.001s, server, one kb, per turn |
+| `parallel_own_kbs` | 25.66/s | 60 in 2.338s, 4 kbs, one turn each |
+| `parallel_one_kb` | 19.18/s | 60 in 3.129s, 1 kb, 4 writers |
+| `seal_batched_again` | 12.88/s | the first lane over again, minutes later |
 
 **And the sentence still is not written**, because what those lanes
 measure is that arrangement on that container.
+
+### Rule seven: start from a known store
+
+**The store lanes were sliding 2-3x over one afternoon and nothing in the
+harness noticed.** Four consecutive runs, no code changed between them:
+
+| lane | run 1 | run 2 | run 3 | run 4 |
+|---|---|---|---|---|
+| `seal_batched` | 11.46 | 9.18 | 7.13 | 6.03 |
+| `parallel_own_kbs` | 21.00 | 17.63 | 15.45 | 12.53 |
+| `parallel_one_kb` | 12.92 | 9.22 | 7.25 | 5.82 |
+| `seal_batched_again` | 11.77 | 7.56 | 6.48 | 5.70 |
+
+Four lanes, four runs, **monotone down every time** — and a `vacuum` put
+them back to 15.73, 28.28, 20.33 and 13.25, *higher than the first run*.
+Noise does not move one direction four times in four lanes. It is the
+hazard cocolog's CLAUDE.md names: deleted rows are kept under MVCC and
+nothing reclaims them, so every run walks past what the last one left.
+`fresh` does not help, because `forget` DELETES, and under MVCC a delete
+is a write.
+
+**So the run now vacuums first**, which is what cocolog's own
+`test/groups.sh` and `test/ruler.sh` already do for exactly this. Three
+consecutive runs afterwards agree within **6%** where four had drifted
+2-3x. The vacuum is setup: it is not timed and it is not a lane.
+
+**It does not make the lanes immune, and rule six still stands.** In the
+run recorded above `seal_batched` reads 15.37 and `seal_batched_again`
+12.88 — a 16% slide inside ONE run, on a fresh knowledge base, minutes
+apart. The store ages while you measure it. Starting from a known point
+is the difference between a reading and an anecdote; it is not the
+difference between a reading and a truth.
 
 **COCOLOG'S 300x ENGINE FIX MOVED NONE OF THIS, and it was checked
 rather than assumed.** cocolog made `coco_make` dereference its
