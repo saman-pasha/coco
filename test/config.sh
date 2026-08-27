@@ -99,7 +99,25 @@ COCOLOG=${COCOLOG:-$COCO_PILLARS_COCOLOG};             export COCOLOG
 # COCO_PATHS_LIBRARY stays ONE directory, and is what modules/*/build.sh
 # writes into. A build script that `mkdir -p'-s a colon-separated list
 # makes a directory named `library:', which is how this was found.
-COCOLOG_LIBRARY=${COCOLOG_LIBRARY:-$COCO_PATHS_LIBRARY:$COCO_PILLARS_COCOLOG/library}
+#
+# THE ENVIRONMENT IS APPENDED TO, NOT SUBSTITUTED FOR, and this is the one
+# variable in this file that works that way. Everywhere else `${VAR:-...}'
+# is right: a caller who names a cocolog binary means THAT binary, and the
+# file should get out of the way. But the two directories above are not a
+# default anybody could have meant to replace -- they are where The Coco's
+# own modules and cocolog's own libraries ARE, so a caller who set
+# COCOLOG_LIBRARY to add a path of their own would have silently removed
+# both and the suite would have gone SKIP with `red: 0' over it.
+#
+# So the answer to "how do I put my own modules on the path" is now just:
+#
+#     COCOLOG_LIBRARY=/opt/my/modules sh test/run.sh
+#
+# and it is APPENDED, behind the two that have to be there. Ours first is
+# deliberate for the same reason cocolog's own test/library-path.sh puts
+# its checkout first: a suite that let somebody else's `library(poa)' win
+# would be green about somebody else's code.
+COCOLOG_LIBRARY="$COCO_PATHS_LIBRARY:$COCO_PILLARS_COCOLOG/library${COCOLOG_LIBRARY:+:$COCOLOG_LIBRARY}"
 export COCOLOG_LIBRARY
 ZIGURAT_HOST=${ZIGURAT_HOST:-$COCO_ARRANGEMENT_HOST};  export ZIGURAT_HOST
 ZIGURAT_PORT=${ZIGURAT_PORT:-$COCO_ARRANGEMENT_PORT};  export ZIGURAT_PORT
