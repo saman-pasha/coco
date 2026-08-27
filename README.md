@@ -74,6 +74,18 @@ who may append — the certificate names the grants, and the server checks
 them per operation against the peer TLS identified — and the isolation
 ladder from READ_UNCOMMITTED to SERIALIZABLE, chosen per turn.
 
+The thesis picks a language, and the pick is argued rather than assumed:
+[bench/languages.md](bench/languages.md) compares Python, Prolog and
+cocolog across the language aspects, the backend work, and the four
+separate senses of "AI-friendly" — honestly, which means cocolog loses
+often and the file says where. What the thesis actually needs is the
+rows where cocolog differs in POSITION rather than in language: a clause
+is a row other processes read, a turn is a transaction, a suspended
+proof is data any process can finish, and determinism and metering are
+the engine's guarantee rather than the application's promise. Those four
+rows are this repository's load-bearing wall; the rest of the comparison
+is there so nobody mistakes the wall for the whole house.
+
 ## The ladder
 
 STATUS.md carries the missions in full — what stands under each and the
