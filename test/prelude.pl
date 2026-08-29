@@ -109,6 +109,26 @@ wire(KB, Goal, Pattern, A) :-
     re_lines(Pattern, Out, [L|_]),
     atom_codes(A, L).
 
+%% The same, as SOMEBODY: the spawned process inherits this one's
+%% environment, so `as/2' setting NODE_NAME and NODE_KEY here reaches the
+%% cocolog it starts.
+wire_as(Who, KB, Goal, Pattern, A) :- as(Who, wire(KB, Goal, Pattern, A)).
+
+solo_as(Who, Goal, Pattern, A) :- as(Who, solo_answer(Goal, Pattern, A)).
+
+%% every matching line, not just the first -- a report is many lines
+wire_lines(KB, Goal, Pattern, Ls) :-
+    coco_bin(C), dial(D),
+    ( is_list(Goal) -> sh_join(Goal, G) ; G = Goal ),
+    shl([C, ' ', D, ' --kb ', KB, ' query "', G, '" 2>/dev/null'], Out),
+    re_lines(Pattern, Out, Ls).
+
+%% one file into a shared knowledge base, the way `cocolog consult' does
+wire_consult(KB, File) :-
+    coco_bin(C), dial(D),
+    ( shl([C, ' ', D, ' --kb ', KB, ' consult ', File, ' >/dev/null 2>&1'])
+    -> true ; true ).
+
 wire_forget(KB) :-
     coco_bin(C), dial(D),
     ( shl([C, ' ', D, ' --kb ', KB, ' forget >/dev/null 2>&1']) -> true ; true ).
@@ -125,10 +145,23 @@ server_up :-
 %% ONE ISOLATED PROOF PER SCENE -- fresh machine, fresh store filled from
 %% the module registry -- with the comparison INSIDE it, so want/2 prints
 %% both values on a mismatch and fails the proof that carried it.
-iso(L, Goal) :-
+iso(L0, Goal) :-
+    label(L0, L),
     (   run_isolated(Goal, true)
     ->  format("ok   ~w~n", [L])
     ;   format("FAIL ~w~n", [L]), assertz('$check_failed'(L))
+    ).
+
+%% A LABEL WRITTEN WITH DOUBLE QUOTES IS A CODE LIST, because
+%% `double_quotes' is `codes' here and "a segment's end" is the only way
+%% to write an apostrophe without escaping it. Printed with ~w that is a
+%% row of numbers, which is what the first two converted cases did before
+%% anybody looked. The harness absorbs it: a code list becomes the text
+%% it spells, and every other term is left alone.
+label(L0, L) :-
+    (   is_list(L0), L0 = [C|_], integer(C)
+    ->  atom_codes(L, L0)
+    ;   L = L0
     ).
 
 want(Got, Want) :-
@@ -147,6 +180,44 @@ raises(Goal, Kind) :-
 %% every gate in this repository that reads a stranger's bytes must do
 %% this one rather than that one.
 refuses(Goal) :- \+ catch(Goal, _, fail).
+
+%% SH_JOIN CONCATENATES, IT DOES NOT SEPARATE, which is right for
+%% building one command out of fragments and wrong for a list of file
+%% names -- five paths came out as one word, and the process that got it
+%% printed nothing and failed in a way that named nothing. Where the
+%% parts are ARGUMENTS rather than fragments, this is the join.
+join_sp([], '').
+join_sp([X], X) :- !.
+join_sp([X|Xs], J) :- join_sp(Xs, R), sh_join([X, ' ', R], J).
+
+%% ---- who is asking ------------------------------------------------------
+
+%% NODE IDENTITY ARRIVES FROM THE ENVIRONMENT -- `ledger/node.pl' reads
+%% NODE_NAME and NODE_KEY with getenv/2, at call time -- so a scene that
+%% needs to BE somebody sets them first. The .sh cases did this by
+%% spawning a whole cocolog per identity, one process per check; setenv/2
+%% makes it a property of the scene instead.
+%%
+%% IT IS NOT A SUBSTITUTE FOR A SECOND PROCESS, and the distinction is
+%% the one this harness turns on: `as/2' changes WHO IS ASKING inside one
+%% process, which is what a settlement or a signature check needs.
+%% `wire/4' and `solo/3' are what a claim about two PROCESSES sharing a
+%% knowledge base needs, and no amount of setenv makes one into the
+%% other.
+node_key(alice, '1111111111111111111111111111111111111111111111111111111111111111').
+node_key(bob,   '2222222222222222222222222222222222222222222222222222222222222222').
+node_key(carol, '3333333333333333333333333333333333333333333333333333333333333333').
+node_key(dave,  '4444444444444444444444444444444444444444444444444444444444444444').
+node_key(mallory, '6666666666666666666666666666666666666666666666666666666666666666').
+
+as(Who, Goal) :-
+    ( node_key(Who, K) -> true ; K = Who ),
+    setenv('NODE_NAME', Who),
+    setenv('NODE_KEY', K),
+    call(Goal).
+
+%% the same, as a check: one isolated proof, run as somebody
+iso_as(Who, L, Goal) :- iso(L, as(Who, Goal)).
 
 section(S) :- format("~n-- ~w~n", [S]).
 
