@@ -25,6 +25,32 @@ red=0
 ran=""
 say() { ran="$ran $1"; printf '%-10s %s\n' "$1" "$2"; }
 
+# A CASE IS A COCOLOG SCRIPT WHERE test/<c>.pl EXISTS: `-s' loads it and
+# proves main, and THE EXIT CODE IS THE VERDICT -- 0 exactly when main
+# proved, which `checks_done' withholds on any red check. The .sh
+# spelling drives whatever has not been converted yet, so the suite is
+# green throughout the conversion rather than at the end of it. This is
+# CivV's line, and it is here for the reason it was there: eighteen
+# copies of one `if sh ... grep SKIP ... else RED' block were eighteen
+# places to get the SKIP handling subtly different.
+case_run() {
+  _c=$1
+  if [ -f "$HERE/$_c.pl" ]; then
+    ( cd "$ROOT" && timeout 3600 "$C" -s "test/$_c.pl" ) > "$HERE/$_c.out" 2>&1
+  else
+    sh "$HERE/$_c.sh" > "$HERE/$_c.out" 2>&1
+  fi
+  if [ $? -eq 0 ]; then
+    if grep -aq '^SKIP' "$HERE/$_c.out"; then
+      say "$_c" "$(grep -a '^SKIP' "$HERE/$_c.out" | head -1)"
+    else
+      say "$_c" GREEN
+    fi
+  else
+    say "$_c" RED; sed 's/^/   /' "$HERE/$_c.out"; red=$((red + 1))
+  fi
+}
+
 if [ ! -x "$C" ]; then
   echo "no cocolog binary at $C -- build cocolog first (or set COCOLOG)"; exit 1
 fi
@@ -45,58 +71,26 @@ fi
 # opens by pinning the wrong answer cocolog's own 64-bit is/2 gives for
 # the first product a swap computes, because that is why the module
 # exists.
-if sh "$HERE/math.sh" > "$HERE/math.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/math.out"; then
-    say math "$(head -1 "$HERE/math.out")"
-  else
-    say math GREEN
-  fi
-else
-  say math RED; sed 's/^/   /' "$HERE/math.out"; red=$((red + 1))
-fi
+case_run math
 
 # ---- crypto: the chains' primitives -----------------------------------
 # keccak256 and secp256k1 as loadable Cicili modules, and library(eth)
 # composing them into the question an EVM chain asks: who signed this.
 # test/crypto.sh has the vectors and says why each is there.
-if sh "$HERE/crypto.sh" > "$HERE/crypto.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/crypto.out"; then
-    say crypto "$(head -1 "$HERE/crypto.out")"
-  else
-    say crypto GREEN
-  fi
-else
-  say crypto RED; sed 's/^/   /' "$HERE/crypto.out"; red=$((red + 1))
-fi
+case_run crypto
 
 # ---- ledger: rung 2 ---------------------------------------------------
 # Three authorities on three knowledge bases seal in turn, gossip, fork,
 # and close the fork by rule -- and mallory attacks every law the chain
 # has. test/ledger.sh says what each check is for and why one attack is
 # supposed to succeed.
-if sh "$HERE/ledger.sh" > "$HERE/ledger.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/ledger.out"; then
-    say ledger "$(head -1 "$HERE/ledger.out")"
-  else
-    say ledger GREEN
-  fi
-else
-  say ledger RED; sed 's/^/   /' "$HERE/ledger.out"; red=$((red + 1))
-fi
+case_run ledger
 
 # ---- contracts: rung 3 ------------------------------------------------
 # A contract is a predicate, deployment is a block, the fence is a static
 # check and gas is the engine's own --steps. mallory writes contracts
 # too: seven refused, one admitted because only gas can answer it.
-if sh "$HERE/contracts.sh" > "$HERE/contracts.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/contracts.out"; then
-    say contracts "$(head -1 "$HERE/contracts.out")"
-  else
-    say contracts GREEN
-  fi
-else
-  say contracts RED; sed 's/^/   /' "$HERE/contracts.out"; red=$((red + 1))
-fi
+case_run contracts
 
 # ---- coco: the native token, and gas priced in inferences -------------
 # What the chain CHARGES IN, which a contract cannot be: the fence has no
@@ -106,15 +100,7 @@ fi
 # strictly more, the same call twice costs the same to the unit -- plus
 # the two laws gas exists for: work that failed still pays, and nobody
 # buys gas they cannot pay for.
-if sh "$HERE/coco.sh" > "$HERE/coco.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/coco.out"; then
-    say coco "$(head -1 "$HERE/coco.out")"
-  else
-    say coco GREEN
-  fi
-else
-  say coco RED; sed 's/^/   /' "$HERE/coco.out"; red=$((red + 1))
-fi
+case_run coco
 
 # ---- bond: the stake IS the coin --------------------------------------
 # Rung 6 read stake off the chain as a NUMBER and said outright that
@@ -124,15 +110,7 @@ fi
 # it. Weighted on the two attacks: unbonding first does not save a
 # culprit (the money is at risk until it lands), and two fabricated
 # certificates rob nobody.
-if sh "$HERE/bond.sh" > "$HERE/bond.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/bond.out"; then
-    say bond "$(head -1 "$HERE/bond.out")"
-  else
-    say bond GREEN
-  fi
-else
-  say bond RED; sed 's/^/   /' "$HERE/bond.out"; red=$((red + 1))
-fi
+case_run bond
 
 # ---- units: a game's units as NFTs ------------------------------------
 # The collection is FENCED and deployed, so it is reached by transaction
@@ -143,59 +121,27 @@ fi
 # holder's consent (and reaches no other match), and a kill burns the id
 # forever. Provenance is a query over the blocks, and keeps only what
 # took effect.
-if sh "$HERE/units.sh" > "$HERE/units.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/units.out"; then
-    say units "$(head -1 "$HERE/units.out")"
-  else
-    say units GREEN
-  fi
-else
-  say units RED; sed 's/^/   /' "$HERE/units.out"; red=$((red + 1))
-fi
+case_run units
 
 # ---- training: rung 4 -------------------------------------------------
 # Proof of USEFUL work. Every worker claims 0.99; settlement measures and
 # reaches different verdicts. test/training.sh says what each check is
 # for and which attack it answers.
-if sh "$HERE/training.sh" > "$HERE/training.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/training.out"; then
-    say training "$(head -1 "$HERE/training.out")"
-  else
-    say training GREEN
-  fi
-else
-  say training RED; sed 's/^/   /' "$HERE/training.out"; red=$((red + 1))
-fi
+case_run training
 
 # ---- spine: rung 5 ----------------------------------------------------
 # The PoH spine. Production is sequential and cannot be split; checking
 # is parallel. The suite checks the checkable half and pins the spine to
 # constants computed outside this project; the measured speedup lives in
 # spine/run.sh, because a timing is not a pass or a fail.
-if sh "$HERE/spine.sh" > "$HERE/spine.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/spine.out"; then
-    say spine "$(head -1 "$HERE/spine.out")"
-  else
-    say spine GREEN
-  fi
-else
-  say spine RED; sed 's/^/   /' "$HERE/spine.out"; red=$((red + 1))
-fi
+case_run spine
 
 # ---- votes: rung 6 ----------------------------------------------------
 # Stake is a query over the chain, a quorum is a counting rule, and a
 # block a quorum precommitted is final. mallory is an INSIDER here --
 # admitted, staked, entitled to vote -- and one of her eight attacks
 # succeeds, because a hash-seeded draw is grindable.
-if sh "$HERE/votes.sh" > "$HERE/votes.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/votes.out"; then
-    say votes "$(head -1 "$HERE/votes.out")"
-  else
-    say votes GREEN
-  fi
-else
-  say votes RED; sed 's/^/   /' "$HERE/votes.out"; red=$((red + 1))
-fi
+case_run votes
 
 # ---- secure: the three consensus rungs, over TLS ----------------------
 # cocolog grew `--tls', so every node here can reach its chain over an
@@ -206,15 +152,7 @@ fi
 # handed the bytes over. It also proves the converse, which is the one an
 # encrypted transport invites you to forget: mallory over a VERIFIED TLS
 # link is refused exactly as she was in the clear.
-if sh "$HERE/secure.sh" > "$HERE/secure.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/secure.out"; then
-    say secure "$(head -1 "$HERE/secure.out")"
-  else
-    say secure GREEN
-  fi
-else
-  say secure RED; sed 's/^/   /' "$HERE/secure.out"; red=$((red + 1))
-fi
+case_run secure
 
 # ---- hub: rung 7 ------------------------------------------------------
 # The aggregator. Each chain publishes its own validity and fork-choice
@@ -222,15 +160,7 @@ fi
 # reading those rules and running them under the fence contracts run
 # under. One of mallory's eight attacks succeeds, because an aggregator
 # cannot be stronger than the chains it aggregates.
-if sh "$HERE/hub.sh" > "$HERE/hub.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/hub.out"; then
-    say hub "$(head -1 "$HERE/hub.out")"
-  else
-    say hub GREEN
-  fi
-else
-  say hub RED; sed 's/^/   /' "$HERE/hub.out"; red=$((red + 1))
-fi
+case_run hub
 
 # ---- token: the two standards -----------------------------------------
 # contracts/token/{fungible,nonfungible}.pl -- what every protocol here
@@ -239,15 +169,7 @@ fi
 # the contract needs to be true for its own code to work. Two real
 # thefts are attempted and must fail: ERC-20's approve race, and taking
 # an NFT back with an approval that should have died with the sale.
-if sh "$HERE/token.sh" > "$HERE/token.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/token.out"; then
-    say token "$(head -1 "$HERE/token.out")"
-  else
-    say token GREEN
-  fi
-else
-  say token RED; sed 's/^/   /' "$HERE/token.out"; red=$((red + 1))
-fi
+case_run token
 
 # ---- uniswap: a pool as rules -----------------------------------------
 # contracts/dex/uniswap.pl -- a contract, reached by path. A
@@ -256,15 +178,7 @@ fi
 # a number from the world), the invariant is CHECKED on the reserves
 # that landed rather than trusted to the formula, and mallory tries to
 # drain it.
-if sh "$HERE/uniswap.sh" > "$HERE/uniswap.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/uniswap.out"; then
-    say uniswap "$(head -1 "$HERE/uniswap.out")"
-  else
-    say uniswap GREEN
-  fi
-else
-  say uniswap RED; sed 's/^/   /' "$HERE/uniswap.out"; red=$((red + 1))
-fi
+case_run uniswap
 
 # ---- uniswap-v3: concentrated liquidity -------------------------------
 # contracts/dex/uniswap-v3.pl -- ranges instead of the whole curve, and
@@ -275,15 +189,7 @@ fi
 # there, and the fees earned on each leg land only on the positions
 # that were in range for it -- checked against an independent SwapMath
 # reference, and summing to exactly the 0.3% charged.
-if sh "$HERE/uniswap-v3.sh" > "$HERE/uniswap-v3.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/uniswap-v3.out"; then
-    say uniswap-v3 "$(head -1 "$HERE/uniswap-v3.out")"
-  else
-    say uniswap-v3 GREEN
-  fi
-else
-  say uniswap-v3 RED; sed 's/^/   /' "$HERE/uniswap-v3.out"; red=$((red + 1))
-fi
+case_run uniswap-v3
 
 # ---- lending: a pot lent against collateral ---------------------------
 # contracts/lending/aave.pl -- the other half of a chain's economy, and
@@ -293,15 +199,7 @@ fi
 # asserted, and the suite shows that rather than hiding it. Interest
 # is a moving index against scaled balances, so a year passes and
 # every balance moves without a single account being written.
-if sh "$HERE/lending.sh" > "$HERE/lending.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/lending.out"; then
-    say lending "$(head -1 "$HERE/lending.out")"
-  else
-    say lending GREEN
-  fi
-else
-  say lending RED; sed 's/^/   /' "$HERE/lending.out"; red=$((red + 1))
-fi
+case_run lending
 
 # ---- bench: rung 8 ----------------------------------------------------
 # The TPS harness's RULES, not its timings. A timing is not a pass or a
@@ -310,15 +208,7 @@ fi
 # harness would have refused a dishonest reading. mallory attacks the
 # MEASUREMENT, and her eighth attempt -- choosing the workload --
 # succeeds, because it is upstream of every rule a harness can have.
-if sh "$HERE/bench.sh" > "$HERE/bench.out" 2>&1; then
-  if grep -q '^SKIP' "$HERE/bench.out"; then
-    say bench "$(head -1 "$HERE/bench.out")"
-  else
-    say bench GREEN
-  fi
-else
-  say bench RED; sed 's/^/   /' "$HERE/bench.out"; red=$((red + 1))
-fi
+case_run bench
 
 # ---- wire -----------------------------------------------------------
 W="$ZIGURAT_DIAL --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
