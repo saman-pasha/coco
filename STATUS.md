@@ -1374,23 +1374,61 @@ honest form of a clock here is rung 5's spine, not wall time.
 timestamped by being mixed in — `h(n+1) = sha256(h(n) ‖ event)` — so
 everything after that tick depends on the event having existed by then.
 
-**The asymmetry is the point, and it was measured rather than asserted.**
-At 32,000,000 ticks: produce in one process 9.3 s, verify in one process
-10.0 s, verify in four processes 3.5 s — **2.8× on four cores**. The work
-is paid once, in order, by one party, and audited by everybody at once.
+**The asymmetry is the point, and it was measured rather than asserted** —
+and RE-measured, by `bench/poh.sh`, which exists because the numbers below
+it did not survive being taken again. At 32,000,000 ticks: produce in one
+process **10.11 s**, verify in one process **10.08 s**, verify in four
+processes **2.58 s** — **3.9× on four cores**. The work is paid once, in
+order, by one party, and audited by everybody at once.
 
-**The speedup is 2.8× and not 4×, and the reason is in the README.** Every
-verifier pays about 0.4 s of process start-up, so the ratio depends on
-how much work it is amortised over: the same script reads 1.8× at 12M
-ticks and 2.8× at 32M. **The dilution is the harness, not the
-mechanism** — the tight loop alone runs at 2.57M ticks/s with start-up
-subtracted. Publishing 2.8× alone would have been true and misleading;
-the trend is what makes it a measurement.
+**The speedup is flat at 3.9× across both sizes** — 8M and 32M read the
+same — and that is the interesting change. The earlier reading was 1.8× at
+12M and 2.8× at 32M, and this file explained the slope correctly: every
+verifier paid about 0.4 s of process start-up, so the ratio depended on how
+much work it was amortised over, and the dilution was the harness rather
+than the mechanism. **Start-up is 0.01 s now**, so there is nothing left to
+amortise and the mechanism shows through undiluted at very nearly the four
+cores it runs on. The old reasoning was right; what changed is that the
+thing it was reasoning about went away.
 
-**A tick through the module seam costs about 600 µs** — a goal, an atom
-intern and a 64-character atom — against a hash over 32 bytes in C. That
-ratio is why the loop is Cicili and not clauses, and it is the clearest
-case yet for the second of The Coco's four materials.
+The tight loop runs at **3.17M ticks/s** with start-up subtracted, against
+2.57M when it was last taken.
+
+**AND TWO NUMBERS IN THIS SECTION WERE WRONG BY TWO ORDERS OF MAGNITUDE.**
+They are corrected here rather than quietly replaced, because how they came
+to be wrong is the more useful part:
+
+| | was written | measures |
+|---|---|---|
+| a tick through the module seam | ~600 µs | **~3.0 µs** |
+| `poh_slow_run/3` against the C loop | ~4000× slower | **9–10×** |
+
+The oracle runs at **326 000–331 000 ticks/s**, flat across 100 000,
+400 000 and 1 000 000 ticks, against the module's 3.08M — measured at sizes
+where BOTH lanes clear the clock, which the first attempt did not: at 2 000
+and 20 000 ticks the C lane reads 0.00 s and 0.01 s, and the 5× and 9× that
+came out of dividing by them were arithmetic on noise.
+
+**The likely cause is cocolog's deref fix, and this is an inference rather
+than a proof.** That change — an argument dereferenced as it is stored —
+took a 3 000-deep recursion's REF chain from 8 999 links to 2, and measured
+15 529 ms → 51 ms on a backtracking loop. Roughly 300×, which is the order
+of the gap here; `poh_slow_run/3` is a deterministic tail recursion a
+million deep, exactly the shape that bug punished. The evidence for it is
+that the oracle's rate is now FLAT across three sizes — a quadratic engine
+could not produce that — and the evidence against reading it as certain is
+that nobody re-took the PoH numbers after that fix, so the two were never
+measured on the same binary.
+
+**The architectural conclusion survives the correction, and it is worth
+saying that plainly rather than letting a smaller number pass unremarked.**
+9–10× is not 4000×, and an argument that rested on 4000× would be in
+trouble. It rests on the shape instead: at 32M ticks the module takes 10 s
+and the clauses would take about 97 s, and a spine is a thing you make
+LONG. The loop belongs in Cicili — but because a clock nobody can wind
+backwards has to be cheap per tick, not because the interpreter is
+hopeless. It is not; it is about ten times slower at this, which is the
+same band the language benchmark reports for everything else.
 
 **Three implementations, and two of them exist to disagree.**
 `library(poh)` keeps the same loop in clauses as `poh_slow_run/3`, roughly four

@@ -7,6 +7,7 @@ None produced a number.
 sh bench/tps.sh          # the lanes, measured and narrated
 sh test/bench.sh         # the harness's RULES, checked: 25 checks
 sh bench/solana.sh       # the other system on the same box (SKIPs without its toolchain)
+sh bench/poh.sh          # rung 5's clock: produce once, verify everywhere
 ```
 
 | file | what |
@@ -18,6 +19,7 @@ sh bench/solana.sh       # the other system on the same box (SKIPs without its t
 | `languages.md` | Python, Prolog and cocolog compared across the language aspects -- a benchmark of a different kind, under the same rule: no number that was not printed |
 | `langs.sh` | cocolog against CPython on five small programs, in all three arrangements -- the harness that finally printed the sentence `languages.md` had refused to write |
 | `langs/` | the ten programs, one pair per task, plus the sqlite implementation the store lanes are actually comparable to |
+| `poh.sh` | rung 5's asymmetry -- one producer against four parallel verifiers, at two sizes so the ratio is a trend and not an anecdote, plus the clause oracle against the C loop. It exists because two numbers written from an ad-hoc measurement were wrong by two orders of magnitude, and nothing standing could catch that |
 
 **THE TABLES BELOW ARE IN THE ORDER THEY WERE MEASURED, oldest first,
 and none of them is deleted when the next one disagrees.** That is rule

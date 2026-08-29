@@ -76,10 +76,19 @@ poh_anchor(Prev, BlockHash, Next) :- poh_mix(Prev, BlockHash, Next).
 %% ---- the oracle ------------------------------------------------------
 %%
 %% The same spine, one tick per Prolog goal, through `sha256_hex/2'. It
-%% is about four thousand times slower than the module and it exists to
-%% disagree: two implementations of the same definition, one in C and one
-%% in clauses, and the suite requires them to produce the same hash.
-%% A spine nobody can check independently is a number somebody made up.
+%% is about TEN times slower than the module -- 326 000 ticks/s against
+%% 3.08M, measured by `bench/poh.sh' at three sizes and flat across all
+%% three -- and it exists to disagree: two implementations of the same
+%% definition, one in C and one in clauses, and the suite requires them to
+%% produce the same hash. A spine nobody can check independently is a
+%% number somebody made up.
+%%
+%% THIS COMMENT SAID `four thousand times' AND THAT WAS WRONG BY TWO
+%% ORDERS OF MAGNITUDE. The likely cause is that it was written before
+%% cocolog's deref fix -- an argument dereferenced as it is stored, which
+%% took a deep recursion's REF chain from thousands of links to two -- and
+%% never re-taken. This loop is a deterministic tail recursion, exactly the
+%% shape that bug punished. Re-measure before quoting a ratio.
 poh_slow_run(H, 0, H) :- !.
 poh_slow_run(H0, N, H) :-
     N > 0,

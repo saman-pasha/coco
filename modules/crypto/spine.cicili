@@ -27,11 +27,19 @@
 ;;;;
 ;;;; WHY THE LOOP IS HERE AND NOT IN PROLOG. A tick through the module
 ;;;; seam costs a goal, an atom intern and a 64-character atom -- about
-;;;; 600 microseconds, measured. In C it is a hash over 32 bytes. The
-;;;; difference is what makes a spine of any length possible at all, and
-;;;; `library(poh)' -- the layer above this one -- keeps the same loop in
-;;;; clauses anyway, as an ORACLE: the two must agree, and the suite
-;;;; checks that they do.
+;;;; 3.0 MICROSECONDS, measured by `bench/poh.sh': the clause oracle runs
+;;;; at 326 000 ticks/s against this loop's 3.08M, flat across three
+;;;; sizes. In C it is a hash over 32 bytes.
+;;;;
+;;;; THIS COMMENT SAID 600 MICROSECONDS AND IT WAS WRONG BY TWO ORDERS OF
+;;;; MAGNITUDE -- the likely cause being that it predates cocolog's deref
+;;;; fix and was never re-taken; STATUS.md carries the reasoning. So the
+;;;; argument for the loop being here is TEN times and not two thousand,
+;;;; and it still holds, on the shape rather than the factor: a spine is a
+;;;; thing you make LONG, and at 32M ticks this loop takes 10 seconds
+;;;; where the clauses would take about 97. `library(poh)' -- the layer
+;;;; above this one -- keeps the same loop in clauses anyway, as an
+;;;; ORACLE: the two must agree, and the suite checks that they do.
 
 (DEFPARAMETER *spine-predicates*
   '(("poh_run"         3 ph_p_run)
