@@ -181,6 +181,18 @@ raises(Goal, Kind) :-
 %% this one rather than that one.
 refuses(Goal) :- \+ catch(Goal, _, fail).
 
+%% RUN IT AND KEEP THE OUTPUT, WHATEVER IT EXITED WITH. `shl/2' is
+%% `proc_run' expecting status 0, which is right for a command whose
+%% failure is a failure -- and wrong for one whose non-zero status is an
+%% ANSWER. `cocolog step' exits with the turn's outcome, so a machine
+%% that suspended at its budget -- the success this suite is checking for
+%% -- comes back non-zero and shl/2 fails on it. The .sh cases never saw
+%% this because they piped into grep and read GREP's status instead.
+sh_any(Parts, Out) :-
+    ( is_list(Parts) -> sh_join(Parts, C0) ; C0 = Parts ),
+    sh_join([C0, ' ; true'], C),
+    sh(C, Out).
+
 %% SH_JOIN CONCATENATES, IT DOES NOT SEPARATE, which is right for
 %% building one command out of fragments and wrong for a list of file
 %% names -- five paths came out as one word, and the process that got it
