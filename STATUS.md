@@ -354,6 +354,80 @@ ones cocolog was expected to lose.
 the five task pairs must keep answering the same value, and so must the
 dict and sqlite implementations of the store task. Thirty-one checks.
 
+#### And then cocolog fixed both of the findings
+
+**THE BENCHMARK WAS THE POINT, AND THIS IS WHAT IT WAS FOR.** The two
+sentences above that name a defect rather than a design -- the lookup being
+a slope, and writing costing a fortune -- were both diagnosed in cocolog and
+fixed THERE, on their own merits, behind that repository's own gate: 39 of
+39 GREEN, `red: 0`, no SKIPs, on a fresh store. The Coco modified nothing;
+it measured, and the pillar answered. That is the freeze working as designed
+rather than in spite of itself.
+
+* **The turn's writes are batched.** The batching that made a CONSULT cheap
+  was switched off before the goal ran, so `assertz` in a loop paid a
+  forget-and-resend of the whole predicate per clause: 200 cost 16.9s and
+  400 cost 85.4s, roughly N^2.4. They cost **0.050s and 0.088s** now.
+* **Clauses are indexed on their first argument.** A call used to COPY every
+  clause onto the heap and unify its head, so a probe into a table of facts
+  copied the table.
+
+The keyed lookup, in the four columns -- a thousand probes over 200 facts,
+per sweep:
+
+| | cocolog --local | CPython | cocolog --embed | CPython + sqlite3 |
+|---|---|---|---|---|
+| what it is | in memory, no database | dict, in memory | MVCCS in-process | file, indexed, one commit |
+| **before** | 0.005979s (79.7x) | 0.000075s | one rep, **17.18s wall** | 0.004530s (60.4x) |
+| **after** | 0.003614s (47.6x) | 0.000076s | **0.002291s (30.1x)** | 0.004432s (58.3x) |
+
+And the slope, on `--local`, where no store is involved:
+
+| facts | before | after |
+|---:|---:|---:|
+| 200 | 7x | **3x** |
+| 2 000 | 49x | **3x** |
+| 20 000 | 411x | **4x** |
+
+**A ratio that grew with N is the signature of a linear scan.** It is flat.
+
+The four other tasks, after, the same four columns -- only `lookup` has a
+durable-Python counterpart written, so the fourth is empty by construction:
+
+| task (one rep) | cocolog --local | CPython | cocolog --embed | CPython + sqlite3 |
+|---|---|---|---|---|
+| nrev, 400-element list | ~0.0387s (5.9x) † | 0.006611s | 0.035925s (5.4x) | -- |
+| queens, all 92 solutions | 0.025366s (14.3x) | 0.001772s | 0.024442s (13.8x) | -- |
+| loop, 100 000 additions | 0.106376s (33.9x) | 0.003141s | 0.124958s (39.8x) | -- |
+| lookup, 1000 probes / 200 facts | 0.003614s (47.6x) | 0.000076s | 0.002291s (30.1x) | 0.004432s (58.3x) |
+| sortnums, 5000 integers | 0.012735s (9.1x) | 0.001392s | 0.012850s (9.2x) | -- |
+
+**WHAT DID NOT CHANGE IS THE HEADLINE.** cocolog as a LANGUAGE is still
+6-34x CPython on the four compute tasks, because neither fix touches the
+per-inference cost of a continuation-passing interpreter with no
+compilation step. Search is still its best showing and the counting loop
+still its worst. Two defects moved; a design did not.
+
+Three things this run does not get to claim, on the page because a
+benchmark that reports only what flatters it is not one:
+
+* **† The `nrev --local` row the harness printed is wrong**, and its own
+  shape column said so -- `2R/R` of 3.36 where 2.0 is linear. Re-measured
+  at R=64, three runs: 0.039391, 0.039185, 0.038652, so about 5.9x against
+  6.9x before. The R=128 point swung 0.0387-0.0624 and poisoned the second
+  measurement. Container noise, not a regression, and the table carries the
+  re-measurement rather than the printed number.
+* **The server lane is CONFOUNDED and is not in these tables.** It went
+  from "one rep, no rate" and a REFUSAL on lookup to real rates -- but the
+  server was restarted on a fresh store between the runs while the earlier
+  one measured 76 MB of aged store. Some of that column is the fix and some
+  is the restart. `--embed` is clean: it builds a fresh store per run
+  either way.
+* **`--embed` beating `--local` on lookup is not a finding.** 0.002291
+  against 0.003614 with the local row's shape at 2.58 is inside the noise;
+  an in-memory lane cannot really be slower than the same lane with a
+  database under it.
+
 ### Units as NFTs, and the caller that lets a contract own anything
 
 The future-work page had this one written already: *"Units are NFTs by

@@ -308,6 +308,86 @@ queries, a turn that is the store's transaction. Those are not faster or
 slower than Python. They are absent from it, and a speed table has no
 way to say so.
 
+## Then cocolog fixed both of them
+
+**EVERY PARAGRAPH ABOVE THIS ONE IS RUN B, AND TWO OF ITS READINGS WERE
+DEFECTS RATHER THAN A SLOW INTERPRETER.** The benchmark said so, in the two
+sentences it was written to be able to say -- "the keyed lookup is a slope,
+not a factor" and "writing costs a fortune" -- and both were diagnosed in
+cocolog and fixed THERE, on their own merits, behind that repository's own
+gate: 39 of 39 GREEN, `red: 0`, no SKIPs, on a fresh store. The Coco
+modified nothing. It measured, and the pillar answered.
+
+* **The turn's writes are batched now.** Writing a clause through re-sends
+  the whole predicate, and the batching that made a CONSULT cheap was
+  switched off before the goal ran -- so `assertz` in a loop paid a
+  forget-and-resend per clause. 200 cost 16.9s and 400 cost 85.4s, roughly
+  N^2.4; they cost 0.050s and 0.088s now.
+* **Clauses are indexed on their first argument.** A call used to COPY each
+  clause onto the heap and unify its head, so a probe into a table of facts
+  copied the table.
+
+The keyed lookup, in the four columns -- a thousand probes over 200 facts,
+per sweep:
+
+| | cocolog --local | CPython | cocolog --embed | CPython + sqlite3 |
+|---|---|---|---|---|
+| what it is | in memory, no database | dict, in memory | MVCCS in-process | file, indexed, one commit |
+| **before** | 0.005979s (79.7x) | 0.000075s | one rep, **17.18s wall** | 0.004530s (60.4x) |
+| **after** | 0.003614s (47.6x) | 0.000076s | **0.002291s (30.1x)** | 0.004432s (58.3x) |
+
+And the slope this file named, re-measured on `--local`, where no store is
+involved at all:
+
+| facts | CPython | cocolog before | cocolog after | ratio before | ratio after |
+|---:|---:|---:|---:|---:|---:|
+| 200 | 0.02s | 0.13s | 0.06s | 7x | **3x** |
+| 2 000 | 0.02s | 0.82s | 0.06s | 49x | **3x** |
+| 20 000 | 0.02s | 7.95s | 0.09s | 411x | **4x** |
+
+**The slope is gone.** "First-argument indexing is the one change that would
+move this, and it is cocolog's to make" -- it was made, and this is the
+line that says so.
+
+The rest of the tasks, the same four columns, after (only `lookup` has a
+durable-Python counterpart written, so the fourth column is empty by
+construction):
+
+| task (one rep) | cocolog --local | CPython | cocolog --embed | CPython + sqlite3 |
+|---|---|---|---|---|
+| nrev, 400-element list | ~0.0387s (5.9x) † | 0.006611s | 0.035925s (5.4x) | -- |
+| queens, all 92 solutions | 0.025366s (14.3x) | 0.001772s | 0.024442s (13.8x) | -- |
+| loop, 100 000 additions | 0.106376s (33.9x) | 0.003141s | 0.124958s (39.8x) | -- |
+| lookup, 1000 probes / 200 facts | 0.003614s (47.6x) | 0.000076s | 0.002291s (30.1x) | 0.004432s (58.3x) |
+| sortnums, 5000 integers | 0.012735s (9.1x) | 0.001392s | 0.012850s (9.2x) | -- |
+
+**WHAT DID NOT CHANGE IS THE SENTENCE THIS FILE EXISTS FOR.** cocolog as a
+LANGUAGE is still 6-34x CPython on the four compute tasks, because neither
+fix touches the per-inference cost of a continuation-passing interpreter
+with no compilation step. "Search is its best showing, a counting loop its
+worst" still holds, and start-up is still not the reason. What moved was
+the database half and the clause walk -- two defects -- and not the engine's
+per-step cost, which is a design.
+
+Three things this run does not get to claim, recorded because a benchmark
+that reports only what flatters it is not one:
+
+* **† The `nrev --local` row the harness printed is wrong**, and its own
+  shape column said so: `2R/R` of 3.36, where 2.0 is linear. Re-measured at
+  R=64, three runs: 0.039391, 0.039185, 0.038652 -- about 5.9x, an
+  improvement on 6.9x. The R=128 point swung 0.0387-0.0624, which poisoned
+  the second measurement. Container noise, not a regression.
+* **The server lane is CONFOUNDED and is not in the tables.** It went from
+  "one rep, no rate" and a REFUSAL on lookup to real rates, but the server
+  was restarted on a FRESH store between the runs while the earlier one
+  measured a 76 MB aged store. Some of that is the fix and some is the
+  restart; this run cannot separate them. `--embed` is clean, because it
+  builds a fresh store per run either way.
+* **`--embed` beating `--local` on lookup is not a finding** -- 0.002291
+  against 0.003614 with the local row's shape at 2.58 is inside the noise,
+  and an in-memory lane cannot really be slower than the same lane with a
+  database under it.
+
 Where cocolog deliberately wins is the floor under the numbers: the
 whole stack is one toolchain (clang, workspace-wide, checked), so a
 measurement is of the code rather than of a mixed build.

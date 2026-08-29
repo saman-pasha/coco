@@ -631,3 +631,144 @@ machine code, so only order-of-magnitude claims are safe:
   `languages.md`'s "no clause indexing" sentence with numbers on it, and
   first-argument indexing is the one change that would move it. It is
   cocolog's to make.
+
+### Run C: cocolog made both changes, and the two worst readings are gone
+
+**THE BENCHMARK WAS THE POINT.** Two of Run B's readings named specific
+defects rather than a slow interpreter, both were diagnosed in cocolog, and
+both were fixed THERE on their own merits with that repository's own gate --
+39 of 39 GREEN, `red: 0`, no SKIPs, on a fresh store. The Coco changed
+nothing; it measured, and the pillar answered.
+
+* **The turn's writes are batched.** Writing a clause through re-sends the
+  whole predicate, and the batching that made a CONSULT cheap was switched
+  off before the goal ran -- so `assertz` in a loop paid a
+  forget-and-resend per clause.
+* **Clauses are indexed on their first argument.** A call used to COPY each
+  clause onto the heap and unify its head, so a probe into a table of facts
+  copied the table.
+
+The run as it printed:
+
+```
+
+cocolog vs CPython -- same task, same answer, four arrangements
+python3 3.11.15, cocolog cocolog at /home/user/cocolog/cocolog
+wall clock, median of three timed runs at each of two sizes
+a lane calibrated to ONE rep prints its wall time instead of a rate:
+at one rep the fixed cost and the work cannot be told apart
+
+-- nrev: one naive reverse of a 400-element list
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python        256    0.01     0.006611      1.0x    1.99  cpython_process
+   local          64    0.00     0.102208     15.5x    3.36  cocolog_local_in_memory_no_database
+   embed          32    0.06     0.035925      5.4x    1.95  cocolog_embedded_mvccs_fresh_store
+   zigurat        32    0.00     0.041589      6.3x    2.08  cocolog_server_one_kb_emptied
+
+-- queens: one full 8-queens search, all 92 solutions
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python       1024    0.06     0.001772      1.0x    1.97  cpython_process
+   local          64    0.04     0.025366     14.3x    1.97  cocolog_local_in_memory_no_database
+   embed          64    0.03     0.024442     13.8x    1.98  cocolog_embedded_mvccs_fresh_store
+   zigurat        64    0.02     0.026193     14.8x    1.99  cocolog_server_one_kb_emptied
+
+-- loop: one hundred thousand additions, one at a time
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python        512    0.04     0.003141      1.0x    1.98  cpython_process
+   local          16    0.00     0.106376     33.9x    2.07  cocolog_local_in_memory_no_database
+   embed          16    0.00     0.124958     39.8x    2.22  cocolog_embedded_mvccs_fresh_store
+   zigurat        16    0.00     0.117044     37.3x    2.22  cocolog_server_one_kb_emptied
+
+-- lookup: a thousand key lookups over 200 facts
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python      16384    0.00     0.000076      1.0x    2.00  cpython_process
+   local        1024    0.00     0.003614     47.6x    2.58  cocolog_local_in_memory_no_database
+   embed         512    0.06     0.002291     30.1x    1.95  cocolog_embedded_mvccs_fresh_store
+   zigurat       512    0.23     0.002494     32.8x    1.85  cocolog_server_one_kb_emptied
+   sqlite        512    0.06     0.004432     58.3x    1.97  cpython_sqlite3_file_indexed_committed
+
+-- sortnums: one generate-and-sort of 5000 integers
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python       1024    0.07     0.001392      1.0x    1.96  cpython_process
+   local         128    0.04     0.012735      9.1x    1.98  cocolog_local_in_memory_no_database
+   embed         128    0.00     0.012850      9.2x    2.00  cocolog_embedded_mvccs_fresh_store
+   zigurat       128    0.22     0.013391      9.6x    1.89  cocolog_server_one_kb_emptied
+
+start-up alone, the same wall clock, nothing but boot and exit:
+   python         0.01 s
+   local          0.01 s
+   embed          0.01 s
+   zigurat        0.01 s
+
+the shape of the lookup gap -- a thousand probes, three sizes:
+      facts     python s    cocolog s      ratio
+        200         0.02         0.06         3x
+       2000         0.02         0.06         3x
+      20000         0.02         0.09         4x
+```
+
+The four columns, on the lookup task -- a thousand key lookups over 200
+facts, per sweep, Run B against Run C:
+
+| | cocolog --local | cpython | cocolog --embed | cpython + sqlite3 |
+|---|---|---|---|---|
+| arrangement | in memory, no database | dict, in memory | MVCCS in-process | file, PRIMARY KEY index, one commit |
+| **Run B** | 0.005979 s (79.7x) | 0.000075 s | one rep, **17.18 s wall** | 0.004530 s (60.4x) |
+| **Run C** | 0.003614 s (47.6x) | 0.000076 s | **0.002291 s (30.1x)** | 0.004432 s (58.3x) |
+
+And the slope, which is the reading this whole file existed to produce --
+`--local`, so no store is in it at all:
+
+| facts | Run B | Run C |
+|---|---|---|
+| 200 | 7x | **3x** |
+| 2 000 | 49x | **3x** |
+| 20 000 | 411x | **4x** |
+
+**A ratio that grew with N was the signature.** It is flat now, and that is
+the whole of the first-argument index in one line.
+
+The other four tasks, per rep, the same four columns (only `lookup` has a
+durable-Python counterpart written, so the fourth column is empty by
+construction rather than by omission):
+
+| task (one rep) | cocolog --local | cpython | cocolog --embed | cpython + sqlite3 |
+|---|---|---|---|---|
+| nrev, 400-element list | ~0.0387 s (5.9x) † | 0.006611 s | 0.035925 s (5.4x) | -- |
+| queens, all 92 solutions | 0.025366 s (14.3x) | 0.001772 s | 0.024442 s (13.8x) | -- |
+| loop, 100 000 additions | 0.106376 s (33.9x) | 0.003141 s | 0.124958 s (39.8x) | -- |
+| lookup, 1000 probes / 200 facts | 0.003614 s (47.6x) | 0.000076 s | 0.002291 s (30.1x) | 0.004432 s (58.3x) |
+| sortnums, 5000 integers | 0.012735 s (9.1x) | 0.001392 s | 0.012850 s (9.2x) | -- |
+
+**Three things this run does NOT get to claim**, and they are here because
+a benchmark that reports only what flatters it is not one:
+
+* **† The `nrev local` row the harness printed is wrong**, and its own
+  shape column said so: `2R/R` of **3.36**, where 2.0 is linear. It printed
+  0.102208 s and 15.5x. Re-measured at R=64, three runs: 0.039391,
+  0.039185, 0.038652 -- so about **5.9x**, an improvement on Run B's 6.9x.
+  The R=128 point swung 0.0387-0.0624 across three runs, which is what
+  poisoned the second measurement. Container noise, not a regression, and
+  the table above carries the re-measurement with a dagger rather than the
+  harness's number.
+* **The whole `zigurat` column is CONFOUNDED and is not in the tables.**
+  It went from "one rep, no rate" (5-11 s wall each, and a REFUSAL on
+  lookup) to real rates -- nrev 0.041589, queens 0.026193, loop 0.117044,
+  lookup 0.002494, sortnums 0.013391. But the server was restarted on a
+  FRESH store between the two runs and Run B measured a 76 MB aged one.
+  Some of that column is the fix and some is the restart, and this run
+  cannot separate them. `--embed` is clean, because it builds a fresh store
+  per run in both.
+* **`embed` beating `local` on lookup is not a finding.** 0.002291 against
+  0.003614, with the local row's shape at 2.58 -- inside the noise. An
+  in-memory lane cannot really be slower than the same lane with a database
+  under it.
+
+What DID change, stated as narrowly as the evidence allows: the lookup
+slope is flat, the embedded store went from refusing to give a rate at all
+to beating Python's own durable store on the same task, and the server lane
+answers a task it could not finish inside a 300-second cap. What did NOT
+change is cocolog as a LANGUAGE -- 6-34x CPython on the four compute tasks,
+because neither fix touches the per-inference cost of a
+continuation-passing interpreter with no compilation step. That number is
+still the honest one, and it is still the one nobody has attacked.
