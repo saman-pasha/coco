@@ -251,6 +251,90 @@ in the three repositories names clang — and the lanes that moved most
 are the ones with the most compiled arithmetic in them. That is a
 consistent story, not a proof.
 
+## Run F and G: the write batching lands, and three lanes had to be resized
+
+cocolog batched the whole turn's writes (its STATUS.md carries the change;
+`bench/langs.sh`'s Run C is what found it). The first thing that happened
+here was not a bigger number -- it was **three lanes REFUSING**:
+
+```
+  seal_batched                REFUSED   server_one_kb_ONE_TURN
+     why: the run was too short to mean anything
+  parallel_own_kbs            REFUSED   server_4_kbs_ONE_TURN_each
+  parallel_one_kb             REFUSED   server_1_kb_4_writers
+```
+
+**Rule 2 fired because the work got FASTER**, which is the first time that
+has happened in this file. Thirty blocks in one turn used to take 1.6
+seconds; they take **0.154**. A run under a second is not a measurement, so
+the harness threw three lanes away rather than print them -- and it was
+right to. So the counts went up, the third such raise here and the first
+for this reason: `seal_batched` 30 -> **480**, the two parallel lanes 15 ->
+**240 per writer**, `seal_batched_again` with the first, since it is the
+first lane over again and has to move with it.
+
+Two runs, both printed (rule 6), against run E:
+
+| lane | run E | run F | run G | arrangement |
+|---|---:|---:|---:|---|
+| `verify` | 537.35 | 492.73 | 490.44 | `local_no_database` |
+| `validate` | 530.22 | 492.37 | 492.73 | `local_no_database` |
+| `seal_batched` | 18.38 | **239.40** | **196.32** | `server_one_kb_ONE_TURN` |
+| `seal_per_turn` | 7.96 | 8.68 | 8.09 | `server_one_kb_per_turn` |
+| `parallel_own_kbs` | 32.77 | **428.38** | **339.58** | `server_4_kbs_ONE_TURN_each` |
+| `parallel_one_kb` | 22.89 | **363.09** | **230.44** | `server_1_kb_4_writers` |
+| `seal_batched_again` | 16.18 | **221.10** | **196.96** | `server_one_kb_ONE_TURN` |
+
+**THE STORE LANES' COUNTS CHANGED, SO THOSE COLUMNS ARE NOT DIRECTLY
+COMPARABLE**, and saying so is the whole reason the count is part of the
+arrangement: 480 blocks in one turn amortise the turn's fixed cost better
+than 30 did, so some of that rise is the batch and not the fix. **The
+control is a same-count reading**: thirty blocks, one turn, measured today
+at **194.84/s** against run E's 18.38 -- **10.6x at an identical
+arrangement.** The rest of the rise, 18.38 -> 239.40, is that number plus a
+bigger batch, and the table above is honest only when read with this
+paragraph.
+
+**AND VERIFY AND VALIDATE WENT DOWN 7-8%, WHICH IS NOT EXPLAINED.** They
+are the two lanes this file said it would defend, they are stable across
+both runs (492.73/490.44 and 492.37/492.73 -- half a percent apart), and
+across four gcc runs they historically sat within a couple of percent of
+each other. So 7-8% is outside their own band and is recorded rather than
+rounded off. What the evidence says: `bench/langs.sh` measured four
+pure-engine tasks across the same cocolog change and none regressed --
+queens 0.025445 -> 0.025366, and nrev, loop and sortnums all improved -- so
+a per-call cost from the new clause index, the obvious suspect, would have
+shown there and did not. What the evidence does not say is what DID cause
+it. Run E is many commits and a different container state ago, and these
+two lanes are mostly secp256k1 in C. **Unexplained, flagged, and not
+attributed to anything.**
+
+### The other system, re-measured beside it
+
+`bench/solana.sh`, same box, same agave 4.2.1 (checked, not assumed), three
+runs:
+
+| lane | runs 2-3, before | runs 1-3, now | arrangement |
+|---|---:|---:|---|
+| `solana_per_process` | 1.93, 1.93 | 1.95, 1.95, 1.95 | `solana_1node_one_process_per_txn`, 10 of 10 confirmed |
+| `solana_pipelined` | 31.7, 32.5 | 39.48, 39.08, 38.77 | `solana_1node_pipelined_submits`, 100 of 100 confirmed |
+
+The per-process lane did not move. The pipelined lane reads about 20%
+higher, on an unchanged binary -- which is this container, not Solana, and
+this file has already measured 39-56% swings between runs of byte-identical
+machine code. Nothing in The Coco's changes touches this lane; it is here
+because a comparison drawn against a table measured on a different day is
+the error the arrangement column exists to prevent.
+
+**Both tables are above, arrangements and all, and this file still does not
+write the sentence.** The units differ -- an ed25519-signed transfer
+between accounts against a secp256k1-sealed append to a hash chain -- and
+`parallel_one_kb`'s own note remains the most honest line here: every block
+committed, so rule 1 passed and the rate is real, and it is also nearly
+worthless, because four writers reading the head independently seal the
+SAME heights and fork choice will discard three blocks in four. A verified
+count is not a useful count.
+
 ## Seven rules
 
 Five are in `harness.pl` and a reading that breaks one prints REFUSED

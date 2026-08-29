@@ -157,9 +157,18 @@ echo
 echo "== the settlement lane: blocks onto a chain, through the store"
 fresh bench_warm; seal_n bench_warm 8                       # discarded
 fresh bench_batch
-t0=$(now); seal_n bench_batch 30; t1=$(now)
-say seal_batched 30 "$(count_blocks bench_batch)" "$(secs $t0 $t1)" server_one_kb_ONE_TURN
-echo "     ^ thirty blocks, ONE transaction. Not thirty transactions."
+t0=$(now); seal_n bench_batch 480; t1=$(now)
+say seal_batched 480 "$(count_blocks bench_batch)" "$(secs $t0 $t1)" server_one_kb_ONE_TURN
+echo "     ^ four hundred and eighty blocks, ONE transaction. Not 480"
+echo "       transactions."
+echo "     ^ THIRTY BECAME 480, the third time this file has had to raise a"
+echo "       count and the first time it was raised because something got"
+echo "       FASTER. cocolog's turn-wide write batching landed -- a clause"
+echo "       written through used to re-send its whole predicate, and the"
+echo "       batching that made a consult cheap was switched off before the"
+echo "       goal ran -- and thirty blocks stopped taking 1.6 seconds and"
+echo "       started taking 0.154. Rule 2 then refused the lane, correctly:"
+echo "       a run under a second is not a measurement. 480 takes 2.1s."
 
 fresh bench_turn
 t0=$(now)
@@ -184,21 +193,21 @@ echo "   single-appender, nothing contended -- an owned-object fast path"
 echo "   that needs no coordination because there is none to need."
 i=0; while [ $i -lt "$CORES" ]; do fresh "bench_p$i"; i=$((i+1)); done
 t0=$(now)
-i=0; while [ $i -lt "$CORES" ]; do ( seal_n "bench_p$i" 15 ) & i=$((i+1)); done
+i=0; while [ $i -lt "$CORES" ]; do ( seal_n "bench_p$i" 240 ) & i=$((i+1)); done
 wait
 t1=$(now)
 tot=0; i=0
 while [ $i -lt "$CORES" ]; do tot=$((tot + $(count_blocks "bench_p$i"))); i=$((i+1)); done
-say parallel_own_kbs $((CORES * 15)) "$tot" "$(secs $t0 $t1)" "server_${CORES}_kbs_ONE_TURN_each"
+say parallel_own_kbs $((CORES * 240)) "$tot" "$(secs $t0 $t1)" "server_${CORES}_kbs_ONE_TURN_each"
 
 echo
 echo "== the contended lane: $CORES writers, ONE knowledge base"
 fresh bench_one
 t0=$(now)
-i=0; while [ $i -lt "$CORES" ]; do ( seal_n bench_one 15 ) & i=$((i+1)); done
+i=0; while [ $i -lt "$CORES" ]; do ( seal_n bench_one 240 ) & i=$((i+1)); done
 wait
 t1=$(now)
-say parallel_one_kb $((CORES * 15)) "$(count_blocks bench_one)" "$(secs $t0 $t1)" "server_1_kb_${CORES}_writers"
+say parallel_one_kb $((CORES * 240)) "$(count_blocks bench_one)" "$(secs $t0 $t1)" "server_1_kb_${CORES}_writers"
 printf '     depth of the chain those blocks made: '
 timeout 180 "$C" $B --kb bench_one query \
   "$K, findall(H,block(H,_,_,_,_,_),Hs), sort(Hs,U), length(U,N), format(\"~w distinct heights~n\",[N])" \
@@ -297,8 +306,8 @@ echo "      what it saves. It was reverted rather than shipped."
 echo
 echo "== the same lane again, at the end of the run"
 fresh bench_again
-t0=$(now); seal_n bench_again 30; t1=$(now)
-say seal_batched_again 30 "$(count_blocks bench_again)" "$(secs $t0 $t1)" server_one_kb_ONE_TURN
+t0=$(now); seal_n bench_again 480; t1=$(now)
+say seal_batched_again 480 "$(count_blocks bench_again)" "$(secs $t0 $t1)" server_one_kb_ONE_TURN
 echo "   -- THE SIXTH RULE, and it is not in harness.pl because no predicate"
 echo "      can enforce it: a store reading is only comparable to another"
 echo "      store reading FROM THE SAME RUN. This is the first lane over"
