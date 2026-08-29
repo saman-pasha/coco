@@ -2,9 +2,10 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and **all ten rungs**: `test/run.sh` GREEN with a server up —
-local, math, crypto, ledger, contracts, coco, bond, training, spine,
-votes, secure, hub, token, uniswap, uniswap-v3, lending, bench, wire —
+assembly and **all eleven rungs**: `test/run.sh` GREEN with a server up —
+local, math, crypto, ledger, contracts, coco, bond, units, training,
+spine, votes, secure, hub, token, uniswap, uniswap-v3, lending, bench,
+wire —
 which is sixty-two crypto checks against numbers published by other
 people, plus a federation ledger, contracts under a fence, **a native
 token whose gas price is the engine's own inference count rather than a
@@ -229,6 +230,32 @@ the three pillars used and unmodified.
     there is no delegation, which needs a rule about who bears a
     delegator's share of a loss; and a slash is total rather than a
     percentage, because a percentage is a number somebody has to justify.
+11. **A game's units as NFTs, and the caller that lets a contract own
+    them** (`contracts/token/units.pl`, and `caller/1` in
+    `library/contract.pl`) — **DONE**. The future-work page said units are
+    NFTs by construction: production mints, capture transfers, the kill
+    burns. Building it found that no contract here could own anything —
+    every ownership predicate takes its owner as an ARGUMENT, which is
+    safe only while the caller is the node itself, and rung 9 made a
+    transaction able to reach a contract. So the fence gained `caller/1`,
+    answered by `coco_apply/5` out of the signature it had already
+    verified; a direct call reports `nobody`, and every guard refuses it.
+    The collection is FENCED and deployed like any other contract: a
+    match's referee mints into its own match and no other, capture moves
+    a unit without the holder's consent (the one deliberate departure
+    from ERC-721, whose whole structure is consent), the holder keeps the
+    ordinary trade, a kill burns the id forever, and provenance is a
+    QUERY over the blocks that keeps only what took effect. Twenty
+    checks. Still ahead, and it is the honest limit of the whole idea:
+    **the chain cannot check the game's rules** — a referee's signature
+    is the only evidence a unit was produced legally, so a referee who
+    lies mints an army. The answer is the plan's last rung, a dispute
+    verifier that replays the order log; until it exists a unit NFT is
+    exactly as honest as its referee. Also ahead: contract STATE is
+    isolated but contract PREDICATE NAMES are not, so two contracts
+    defining one name would have their clauses tried together — rung 3's
+    property, mitigated here by prefixing and worth a namespace of its
+    own one day.
 
 Two capabilities on the ladder's path belong to a pillar, not to this
 repository.
@@ -249,6 +276,84 @@ now; what that changed, and what it deliberately did not, is the first
 entry below.
 
 ## Done here
+
+### Units as NFTs, and the caller that lets a contract own anything
+
+The future-work page had this one written already: *"Units are NFTs by
+construction — CivV's capture clause already retracts one `unit_owner`
+row and asserts another, which IS transfer; production mints, the kill
+burns."* Building it turned up something the plan had not noticed, and it
+is the more interesting half.
+
+**No contract in this repository could own anything.** Look at what the
+ownership predicates take: `nft_transfer_from(Collection, Caller, From,
+To, Id)` names the caller *in the call*; `ft_transfer(Token, From, To,
+Amount)` names the payer. That is safe exactly as long as the caller is
+the node, which knows who it is. Rung 9 ended that: `call(Contract,
+Goal)` is a transaction action, so the argument a contract trusts became
+a field a stranger writes. The escrow had already felt the gap from the
+other side and paid for it in machinery — `release/2` carries a
+SIGNATURE over the escrow id, which is an entire signature scheme built
+to answer a question the fence could not ask.
+
+So the fence gained one word. `caller/1` is in the vocabulary,
+`contract_call/3` takes who is calling, and `coco_apply/5` supplies it
+out of the signature it verified before running anything — **the node's
+answer, never the caller's claim**. A contract can read it and cannot set
+it: `contract_enter/2` is not in the vocabulary and `nb_setval` was
+already forbidden, which the case checks by handing the fence a contract
+that tries. A direct call reports `nobody`, and every guard here refuses
+`nobody`, so ownership can only be exercised through a signed
+transaction.
+
+**Then the collection is ordinary.** `contracts/token/units.pl` is a
+fenced contract, deployed as a block payload like escrow and registry,
+holding everything in scoped state. Opening a match makes the caller its
+referee, permissionless and first come. Only that referee mints into that
+match. A kill burns the id — and because state is append-only, a burnt id
+is never reissued, so two units can never share one provenance.
+
+**Capture is the one place this leaves ERC-721 on purpose.** The
+standard's entire structure is consent: the owner moves their own, or
+somebody they approved does. A captured unit is *taken*. So a referee
+moves a unit without asking its holder — and the two fences that make
+that bearable are checked: a referee is named per MATCH and reaches
+nothing outside it, and a unit carries its match for life. The holder
+keeps the ordinary consented move, and a non-holder calling it fails.
+
+**Provenance is a query, not a table.** The chain already carries every
+transaction, signed and hash-chained; a history table beside it would be
+the copy that goes stale. `coco_unit_history/2` walks the chain fork
+choice agreed on and keeps the calls about one id — **and only the ones
+that took effect**, because the receipt says whether the contract
+succeeded. The stranger's refused mint is in the blocks, was paid for,
+and is in nobody's history. Gas is charged for work; history records
+consequences; the case pins both halves of that sentence at once.
+
+**What the chain cannot check is the game.** A referee's signature is the
+only evidence a unit was produced legally — that the side had the
+production, the technology, the room. A referee who lies mints an army
+out of nothing and this contract will hold it, correctly, forever. No
+amount of rules here fixes that; the answer is the plan's last rung, a
+bare process that replays the match's order log while the signatures
+decide who lied. Until it exists, a unit NFT is exactly as honest as its
+referee, and this page says so rather than implying otherwise. The
+smaller sibling: a unit crossing into another match must pass THAT
+match's production fences, which the chain cannot enforce either —
+owning a Musketeer is not permission to field one.
+
+One property found while naming things, worth writing down: **contract
+state is isolated and contract predicate NAMES are not.** Rung 3 proved
+two contracts can keep separate keys called `n`, because `state_put/2`
+takes no contract argument; but installed clauses go into one knowledge
+base, so two contracts defining `mint/4` would have both sets tried. The
+units contract prefixes everything `unit_` and that is a mitigation
+rather than a fix. A real one is a namespace at install time, which is a
+change to rung 3 and wants its own case.
+
+**Twenty checks**, the chain half against a real server: the collection
+deployed as a block, a unit minted, captured and killed by transactions,
+and a bare process reading its whole life back out of the blocks.
 
 ### The stake is the coin, and rung 6's evidence finally bites
 

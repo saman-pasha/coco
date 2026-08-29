@@ -150,6 +150,12 @@ contracts:
   token:
     - fungible       # ERC-20's shape: balances, allowances, conservation
     - nonfungible    # ERC-721's: one owner per id, and who may move it
+    # A GAME'S UNITS, and the one collection here that is FENCED and
+    # deployed rather than called by the node: production mints, capture
+    # transfers without consent, the kill burns. It is reachable by
+    # transaction, which is why it needed `caller/1' underneath it -- a
+    # contract that cannot ask who is calling cannot own anything.
+    - units
   dex:
     - uniswap        # v2: constant-product pools, the quote, the invariant
     - uniswap-v3     # v3: concentrated liquidity, positions as NFTs
@@ -169,6 +175,7 @@ suite:
     - contracts      # rung 3: a contract is a predicate; mallory writes them too
     - coco           # COCO: the native token, and gas priced in inferences
     - bond           # the stake IS the coin, and rung 6's evidence bites
+    - units          # a game's units as NFTs, and the caller that owns them
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality

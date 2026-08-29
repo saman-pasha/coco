@@ -650,7 +650,14 @@ coco_run_action(From, Author, call(C, G), GasLimit, _,
     coco_intrinsic(Flat),
     coco_affordable(From, Steps),
     Ceiling is min(GasLimit, Steps - Flat),
-    call_metered(catch(contract_call(C, G), _, fail), Ceiling, Spent, Result),
+    %% THE SENDER IS THE CALLER, and this is the one line that makes a
+    %% contract able to own things. `coco_apply/5' verified the signature
+    %% over the whole transaction before anything ran, so the address it
+    %% hands in is the node's own answer to "who is spending" -- never
+    %% the sender's claim, which is an argument they could have written
+    %% anything into. `library(contract)' says the rest.
+    call_metered(catch(contract_call(C, G, From), _, fail),
+                 Ceiling, Spent, Result),
     contract_leave,                 % a ceiling can stop it mid-call
     Used is Flat + min(Spent, Ceiling),
     coco_fee(Used, Fee),

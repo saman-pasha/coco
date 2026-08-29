@@ -115,6 +115,22 @@ therefore inside `forall/2`) end the query with a message no `catch/3`
 sees — its own MODULES.md says so — which is why `sound_qc/1` verifies
 each vote separately instead of wrapping `qc_valid/1`.
 
+**A CONTRACT KNOWS WHO IS CALLING NOW, and nothing else may answer that
+question.** `caller/1` is in the fence's vocabulary, `contract_call/3`
+carries it, and the only thing that supplies it is `coco_apply/5`, out of
+the signature it verified over the whole transaction. Never add a path
+that lets a caller name itself — an ownership predicate taking its owner
+as an ARGUMENT (`nft_transfer_from/5`, `ft_transfer/4`) is safe only
+while the node is the caller, which stopped being true the moment a
+transaction could reach a contract. A direct call reports `nobody`, and
+anything that guards ownership must refuse `nobody`.
+
+**Contract STATE is isolated; contract PREDICATE NAMES are not.**
+Installed clauses land in one knowledge base, so two contracts defining
+`mint/4` would have both sets tried on every call. Prefix a contract's
+predicates with its own name (`unit_mint/4`, not `mint/4`) until there is
+a namespace at install time.
+
 Two shapes to keep straight, because both are called tokens.
 `contracts/token/` is ERC-20's and ERC-721's, deployed ON a chain and
 fenced. `library(coco)` is what the chain CHARGES IN, and it cannot be a
@@ -183,6 +199,15 @@ nothing, and see which names still load. cocolog's own CLAUDE.md has the
 two lines.
 
 ## The hazards, inherited
+
+**ONE SERVER SITS UNDER EVERY SUITE IN THE FAMILY, and separate cores do
+not separate it.** Running this suite while CivV's runs is two whole
+suites against one ZiguratIP, and it took the server down mid-run --
+`secure` red on its TLS half, then `wire` reporting no server at all.
+Nothing crashed loudly; the log simply stops. The symptom to recognise
+is a case that fails on a scene it has passed a hundred times, followed
+by a SKIP that says there is no server: that is the store, not the
+change. Restart it, and gate a rung with nothing else running.
 
 cocolog's CLAUDE.md hazards all apply here, because the same store and
 server sit underneath: **a slow suite is the store ageing** (restart from

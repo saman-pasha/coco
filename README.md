@@ -124,6 +124,14 @@ validator's weight is coin it has locked and `library(bft)`'s evidence
 has something to take. Two signed votes that cannot both be honest cost
 their author the whole bond.
 
+Above that, assets: a game's units as **NFTs the chain carries** —
+production mints, capture transfers without the holder's consent, the
+kill burns the id forever, and a unit's whole life is a query over the
+blocks. Which needed the capability none of the contracts had: a
+contract that cannot ask **who is calling** cannot own anything, so the
+fence gained `caller/1`, answered by the node out of the signature it
+already verified rather than by an argument a stranger could write.
+
 One arrangement runs **across** rungs rather than being one of them.
 `test/secure.sh` re-runs the three consensus rungs — 2, 5 and 6 — with
 the node-to-store link encrypted, and requires every verdict to be

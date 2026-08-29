@@ -134,6 +134,25 @@ else
   say bond RED; sed 's/^/   /' "$HERE/bond.out"; red=$((red + 1))
 fi
 
+# ---- units: a game's units as NFTs ------------------------------------
+# The collection is FENCED and deployed, so it is reached by transaction
+# -- which is why it needed `caller/1' first: every ownership predicate
+# here took its owner as an ARGUMENT, safe only while the caller was the
+# node itself. Weighted on the three powers and their fences: only a
+# match's referee mints into it, capture moves a unit without the
+# holder's consent (and reaches no other match), and a kill burns the id
+# forever. Provenance is a query over the blocks, and keeps only what
+# took effect.
+if sh "$HERE/units.sh" > "$HERE/units.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/units.out"; then
+    say units "$(head -1 "$HERE/units.out")"
+  else
+    say units GREEN
+  fi
+else
+  say units RED; sed 's/^/   /' "$HERE/units.out"; red=$((red + 1))
+fi
+
 # ---- training: rung 4 -------------------------------------------------
 # Proof of USEFUL work. Every worker claims 0.99; settlement measures and
 # reaches different verdicts. test/training.sh says what each check is

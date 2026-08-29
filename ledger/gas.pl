@@ -125,6 +125,44 @@ coco_authority_account(Name, Addr) :-
     authority(Name, Pub),
     eth_address(Pub, Addr).
 
+%% ---- what happened to a unit, off the chain --------------------------
+%%
+%% `coco_unit_history(+Id, -Events)' -- every transaction that actually
+%% MOVED this unit, oldest first, as `event(Height, Sender, Goal)'.
+%%
+%% There is no history table, and there must not be one: the chain
+%% already carries every transaction, signed and hash-chained, and a
+%% second copy kept beside it is the copy that goes stale. So provenance
+%% is a QUERY -- walk the chain fork choice agreed on, read the payloads
+%% back, and keep the ones about this id.
+%%
+%% AND ONLY THE ONES THAT TOOK EFFECT. The receipt says whether the
+%% contract call succeeded, so a stranger's refused mint and a captured
+%% unit's failed second capture are in the blocks but not in the history.
+%% They were paid for -- gas is charged for work, not for outcomes -- and
+%% they changed nothing, which is exactly the distinction a provenance
+%% answer has to make.
+coco_unit_history(Id, Events) :-
+    ledger_head(head(_, Hash, _)),
+    chain_from(Hash, Blocks),
+    reverse(Blocks, Oldest),
+    findall(event(H, From, Goal),
+            ( member(block(H, _, _, Payload, _, BHash), Oldest),
+              coco_receipt(BHash, receipt(From, ok, _, _)),
+              %% parse into a FRESH variable and unify after: cocolog's
+              %% term_to_atom/2 only READS into an unbound first argument
+              %% -- hand it a bound one and it writes and compares, which
+              %% would quietly match nothing here
+              coco_payload(Payload, P),
+              P = coco_send(tx(_, _, call(units, Goal), _), _),
+              coco_unit_goal(Goal, Id) ),
+            Events).
+
+coco_unit_goal(unit_mint(Id, _, _, _), Id).
+coco_unit_goal(unit_capture(Id, _), Id).
+coco_unit_goal(unit_give(Id, _), Id).
+coco_unit_goal(unit_kill(Id), Id).
+
 %% ---- reporting, for the choreography ---------------------------------
 
 coco_report :-

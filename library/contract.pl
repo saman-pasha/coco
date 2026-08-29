@@ -98,8 +98,13 @@ allowed(keccak256/2).  allowed(blake2b256/2).   allowed(ripemd160/2).
 allowed(secp256k1_verify/3).  allowed(ed25519_verify/3).
 allowed(block_hash/5). allowed(valid_block/6).  allowed(in_turn/2).
 %% The one write path, and the one read path, both scoped to the calling
-%% contract by `contract_enter/1' -- a contract cannot name another.
+%% contract by `contract_enter/2' -- a contract cannot name another.
 allowed(state_put/2).  allowed(state_get/2).    allowed(state_has/1).
+%% WHO IS CALLING. A contract that cannot ask this cannot own anything --
+%% see `caller/1' below, and the header. It is in the vocabulary for the
+%% same reason everything else here is: deterministic, total, and unable
+%% to see anything but the call it is inside.
+allowed(caller/1).
 
 %% Meta-predicates whose goal arguments are checked rather than trusted.
 meta((','), 2, [1,2]).
@@ -225,11 +230,41 @@ contract_of_payload(Payload, Name, Clauses) :-
 %% throw, and it is dropped -- nothing reached the chain and there is
 %% nothing to undo, which also keeps the state append-only, because
 %% rolling back by retracting would not be.
-contract_call(Name, Goal) :-
+%% ---- WHO IS CALLING, and why a contract needs to know ---------------
+%%
+%% `contract_call(Name, Goal, Caller)' -- and `contract_call/2' is it
+%% with a caller of `nobody'.
+%%
+%% A CONTRACT THAT CANNOT ASK WHO IS CALLING CANNOT OWN ANYTHING, and
+%% until this rung none of them could. Every ownership predicate in this
+%% repository takes its owner as an ARGUMENT --
+%% `nft_transfer_from(Collection, Caller, From, To, Id)' names the caller
+%% in the call, `ft_transfer(Token, From, To, Amount)' names the payer --
+%% which is safe only while the caller is the node itself. The moment a
+%% TRANSACTION can reach a contract (rung 9's `call(Contract, Goal)'), a
+%% stranger writes whatever name they like into that argument and the
+%% token is theirs. The escrow felt the same gap from the other side and
+%% paid for it in machinery: `release/2' carries a SIGNATURE over the
+%% escrow id, which is an entire signature scheme built to answer a
+%% question the fence could not.
+%%
+%% THE CALLER IS THE NODE'S ANSWER, NEVER THE CALLER'S CLAIM. It comes
+%% from `coco_apply/5', which knows the sender because it verified the
+%% signature over the whole transaction before running anything. A
+%% contract reads it with `caller/1' and cannot set it: `contract_enter/2'
+%% is not in the vocabulary, and `nb_setval' is forbidden outright.
+%%
+%% `nobody' is what a direct call reports, and it is a real answer rather
+%% than a missing one: a contract that guards anything refuses it, so
+%% ownership cannot be exercised except through a signed transaction.
+contract_call(Name, Goal) :- contract_call(Name, Goal, nobody).
+
+contract_call(Name, Goal, Caller) :-
     nonvar(Goal),
+    atomic(Caller),
     functor(Goal, F, A),
     entry_point(Name, F, A),
-    contract_enter(Name),
+    contract_enter(Name, Caller),
     catch(( call(Goal) -> Ok = true ; Ok = fail ),
           E,
           ( contract_leave, throw(E) )),
@@ -262,14 +297,26 @@ entry_point(Name, F, A) :-
 %% contract's state it means, so it cannot mean another's. The name is
 %% supplied by the caller, who is the node -- never by the contract, who
 %% is the thing being fenced.
-contract_enter(Name) :-
+contract_enter(Name) :- contract_enter(Name, nobody).
+
+contract_enter(Name, Caller) :-
     nb_setval(contract_current, Name),
+    nb_setval(contract_caller, Caller),
     nb_setval(contract_pending, []).
 contract_leave :-
     nb_setval(contract_current, none),
+    nb_setval(contract_caller, nobody),
     nb_setval(contract_pending, []).
 
 current_contract(Name) :- nb_getval(contract_current, Name), Name \== none.
+
+%% The caller, as the running contract sees it. Outside a contract there
+%% is nobody calling and this fails rather than answering `nobody' -- the
+%% two are different questions, and a contract asking it is always inside
+%% one.
+caller(Who) :-
+    current_contract(_),
+    nb_getval(contract_caller, Who).
 
 %% Staged, not written. See `contract_call/2'.
 state_put(Key, Value) :-
