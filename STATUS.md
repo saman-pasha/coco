@@ -1362,6 +1362,85 @@ microseconds and does not try to be; for a hub verifying headers and
 settlement proofs it is the right trade, and when it stops being one
 the replacement will arrive with its own measurement.
 
+## Future work, recorded before it is built: COCO, and a game as a chain
+
+Nothing in this section exists yet. It is the owner's plan for the
+cooperation between The Coco and CivV, written down the day it was
+designed so the rungs can land against a stated shape — and so the
+parts that were argued OUT of the design stay out.
+
+**COCO, the native token.** Accounts pay COCO for the compute their
+turns consume. The gas meter is cocolog's own inference counter — the
+engine already counts (`step` answers "suspended at N inference(s)");
+pricing a turn by it is a seam in the machine runner, not a VM. The
+debit rides INSIDE the turn's transaction — CivV's `take_turn/1` is
+already claim-play-hand-over in one commit, so pay-or-roll-back comes
+from the existing shape. Charged per TURN, never per engine step: a
+turn is atomic, so the gas check is before it, with a bounded worst
+case. Genesis of a match escrows the players' stakes and dispatches
+each side's gas allowance in block 1.
+
+**Consensus: signed halves, not proof-of-work — and why.** CivV's
+engine is deterministic and replayable (two processes produce
+bit-identical games, pinned in its suite), which means in-game
+production is WORK THAT COSTS NOTHING TO COUNTERFEIT — an attacker
+simulates a million turns for free, so production can never decide
+which history is true. What secures a match instead is what CivV
+already has: real X.509 identities (the fog rungs' own mechanism) and
+deterministic replay. A match is a TWO-PARTY STATE CHANNEL — each
+committed half carries the mover's signature over its order list and
+`versus_state` hash; the opponent's next half counter-signs; a
+disputed block is settled by a bare process replaying the order log,
+which is this family's founding claim doing consensus duty. The COCO
+ledger orders and checkpoints match-blocks across matches; no match
+mines.
+
+**Production-weighted EMISSION — the owner's proof-of-work idea, in
+the seat where it is sound.** Work decides who gets PAID; signatures
+decide what HAPPENED. Each round (both halves) closes one match-block,
+and the right to mint that block's reward goes to the cities that
+produced that turn, weighted by the yield rows the game already
+commits (`city_prod`, `research_progress`, `city_food`). Milestones
+mint NFTs on their own committing transactions: a finished wonder, a
+completed tech, a promoted veteran. Units are NFTs by construction —
+CivV's capture clause already retracts one `unit_owner` row and
+asserts another, which IS transfer; production mints, the kill burns.
+A hash stamp on blocks, if wanted, is difficulty-1 spam control and
+never the security.
+
+**Movement priced in COCO.** Per-terrain movement cost already exists
+(`unit_mp` spends by terrain); the fee is MP-consumed times the
+terrain's price, debited in the same turn transaction — roads join
+when CivV grows the road improvement's movement bonus. Two balance
+laws, stated now: each turn's gas grant INCLUDES a movement allowance,
+because naked pay-per-step biases the game toward the fortress its own
+rung 27 measured; and ENDING A TURN IS ALWAYS FREE — a drained wallet
+must never stall a match and hold the opponent hostage.
+
+**Argued out, deliberately.** Gold is NOT COCO: the Warrior-at-200
+price is the vendored reference's game balance, and a token peg would
+turn every balance tweak into monetary policy and every exploit into
+theft — stake-and-settle instead, the escrow released by
+`match_over/1`'s own committing transaction. Tech NFTs are out: Civ V
+removed tech trading for balance, the snapshot's counts are pinned,
+and any unit crossing matches must pass the same `production_unlocked`
+fences production does — a bridge that skips the game's own laws
+breaks the game. Fog versus a public ledger is the real tension: posted
+orders leak positions the opponent's `fog_sees/3` forbids, so the
+store remains the referee and the chain is NOTARY AND SETTLEMENT —
+order hashes live during play, the full log revealed at match end for
+verification. Commit-reveal per half is the fallback; zk proofs are
+named and deferred.
+
+**The rungs, when this work opens**: (1) the COCO ledger — accounts,
+u256 balances, the inference-priced gas schedule, debit-in-turn; (2)
+the order log — signed halves appended per commit, sha over
+`versus_state`; (3) genesis and settlement — escrow, gas dispatch,
+release on the crown; (4) unit NFTs riding enroll, capture and kill;
+(5) the dispute verifier — a bare process replays a challenged block
+and the signatures decide who lied, and that case is the suite pin.
+Each lands with its GREEN line or it is not on this page.
+
 ## The disciplines
 
 They hold across every rung, and every one was already paid for in
