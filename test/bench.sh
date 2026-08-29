@@ -117,6 +117,44 @@ check "the spread she is choosing from is real" \
   "$(q "workload_spread(B,W), R is B / W, ( R > 100 -> write(hundredfold) ; write('NARROW')), nl" '^(hundredfold|NARROW)$')" \
   "hundredfold"
 
+# ---- the language comparison's own rule -------------------------------
+#
+# `bench/langs.sh' times cocolog against CPython on five tasks, and its
+# first rule is that every lane must answer the SAME value or nothing is
+# printed. That rule protects a run; it does not protect the FILES, and
+# the likeliest way for this comparison to go quietly wrong is somebody
+# improving one side of a pair and not the other. So the pairs are
+# checked here, at a size small enough to cost nothing: same task, same
+# answer, both languages -- and the sqlite implementation of the store
+# task against the dict one, because those two must also stay the same
+# question asked twice.
+echo
+echo "-- the language pairs still compute the same thing"
+LB="$ROOT/bench/langs"
+pair() {
+  _t=$1; shift
+  _pl=$(timeout 60 "$C" run "$LB/$_t.pl" "main($1,$2)" 2>/dev/null \
+        | grep -aoE '^answer\([^)]*\)' | head -1)
+  _py=$(timeout 60 python3 "$LB/$_t.py" "$1" "$2" 2>/dev/null \
+        | grep -aoE '^answer\([^)]*\)' | head -1)
+  check "$_t: cocolog and python answer the same" "${_pl:-NONE}" "${_py:-NONE}"
+}
+if command -v python3 >/dev/null 2>&1; then
+  pair nrev 60 2
+  pair queens 6 1
+  pair loop 1000 1
+  pair lookup 200 1
+  pair sortnums 300 1
+  _dict=$(timeout 60 python3 "$LB/lookup.py" 200 1 2>/dev/null \
+          | grep -aoE '^answer\([^)]*\)' | head -1)
+  _sq=$(timeout 60 python3 "$LB/lookup_sqlite.py" 200 1 "${TMPDIR:-/tmp}/coco-benchpair.db" 2>/dev/null \
+        | grep -aoE '^answer\([^)]*\)' | head -1)
+  rm -f "${TMPDIR:-/tmp}/coco-benchpair.db"
+  check "lookup: the dict and the sqlite store answer the same" "${_sq:-NONE}" "${_dict:-NONE}"
+else
+  echo "skip no python3 -- the language pairs are not checked"
+fi
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "GREEN: 0 failure(s)"; exit 0

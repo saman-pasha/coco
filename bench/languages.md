@@ -241,9 +241,72 @@ everything fast and one thing wrong would pass every timing check.
 The numbers this family HAS printed, with their arrangements: cocolog's
 local verify lane at **537/s** and validate at **530/s** (2000 blocks,
 4-core container, everything -O3, no database), and the server lanes
-above. What those measure is that arrangement on that container; the
-sentence "cocolog is faster/slower than X" is not written here because
-no harness printed it.
+above.
+
+**And the sentence this file refused to write is now written, because a
+harness printed it.** `bench/langs.sh` runs five small programs in both
+languages -- naive reverse, all-solutions 8-queens, a tight counting
+loop, a keyed lookup, a generate-and-sort -- checks that every lane
+answers the same value, and times them at two sizes so a fixed cost can
+be told from a per-unit one. `bench/README.md` has the tables and the
+runs. The short of it, in memory, nothing kept, against CPython 3.11:
+
+| task | cocolog vs CPython |
+|---|---:|
+| naive reverse of a 400-list | **7-11x** slower |
+| 8-queens, all 92 solutions | **13-15x** slower |
+| generate and sort 5000 ints | **11-14x** slower |
+| a hundred thousand additions | **35-62x** slower |
+| a thousand keyed lookups, 200 facts | **80-83x** slower |
+
+So: **cocolog is slow, by between one and two orders of magnitude, and
+the spread is the interesting part.** Search -- the thing a Prolog engine
+is for -- is its best showing. A counting loop is its worst, which is the
+per-inference cost of a continuation-passing interpreter with no
+compilation step. Start-up is NOT the reason and the guess that it was
+is dead: every arrangement boots in **0.01s**, the same as Python.
+
+**THE KEYED LOOKUP IS NOT A FACTOR, IT IS A SLOPE**, and it is this
+file's own "no clause indexing" sentence with numbers on it. The same
+thousand probes over a growing database:
+
+| facts | CPython | cocolog | ratio |
+|---:|---:|---:|---:|
+| 200 | 0.02s | 0.13s | 7x |
+| 2 000 | 0.02s | 0.82s | 49x |
+| 20 000 | 0.02s | 7.95s | **411x** |
+
+Python's dict is flat; cocolog walks the clauses. First-argument
+indexing is the one change that would move this, and it is cocolog's to
+make.
+
+**BUT PYTHON IS A LANGUAGE AND COCOLOG IS A LANGUAGE AND A STATE
+MACHINE**, and the table above compares only the half they share. A dict
+is memory: not durable, not transactional, invisible to every other
+process, gone at exit. cocolog's `--embed` and server arrangements are a
+database. Timing those against a dict measures the guarantees rather
+than the engine, so the harness pairs them with the nearest thing Python
+already has -- `sqlite3`, a file, an index, one committed transaction --
+and that lane is itself **60x** slower than the dict. Durability is not
+free in either language; it is simply usually invisible in Python
+because nobody asks a dict for it.
+
+What the same measurement says about the store, and it is the most
+useful line here: **reading costs a constant, writing costs a fortune.**
+On every compute task the embedded store and the in-memory arrangement
+are within a few percent of each other -- 6.5 against 6.9, 14.7 against
+14.5, 32.6 against 34.6 -- so the database does not slow the *thinking*
+down at all. But asserting 200 facts and probing them cost **17.2
+seconds** embedded, and over the server the same work did not finish
+inside a five-minute cap and the harness refused to print a number for
+it. Assert-heavy loops do not belong inside a turn, which this family
+already knew as a discipline and can now say as a measurement.
+
+And the third column has no counterpart to compare at all: a suspended
+machine any process can finish, a clause that IS a row another program
+queries, a turn that is the store's transaction. Those are not faster or
+slower than Python. They are absent from it, and a speed table has no
+way to say so.
 
 Where cocolog deliberately wins is the floor under the numbers: the
 whole stack is one toolchain (clang, workspace-wide, checked), so a

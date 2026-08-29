@@ -277,6 +277,83 @@ entry below.
 
 ## Done here
 
+### cocolog against CPython, measured -- and yes, it is slow
+
+`bench/languages.md` compared the two languages across every aspect and
+stopped one sentence short, deliberately: *"the sentence `cocolog is
+faster/slower than X' is not written here because no harness printed
+it."* `bench/langs.sh` is the harness. It prints it, and the answer is
+that **cocolog is between one and two orders of magnitude slower than
+CPython, and the spread across tasks is the useful part.**
+
+Five small programs, written twice each and checked against each other:
+naive reverse, all-solutions 8-queens, a tight counting loop, a keyed
+lookup, a generate-and-sort. In memory, nothing kept, against CPython
+3.11 -- 7-11x on list building, 13-15x on backtracking search, 11-14x on
+generate-and-sort, 35-62x on the counting loop, 80-83x on the keyed
+lookup. Search is cocolog's best showing, which is the thing a Prolog
+engine is for; the counting loop is its worst, which is the
+per-inference cost of a continuation-passing interpreter with no
+compilation step.
+
+**The guess that it was start-up is dead.** Every arrangement boots in
+0.01s, the same as Python. That was the first hypothesis and the
+measurement refused it.
+
+**THE KEYED LOOKUP IS A SLOPE, NOT A FACTOR**, and it is the one finding
+worth acting on: the same thousand probes cost 7x at 200 facts, 49x at
+2000 and **411x at 20 000**, against a Python dict that is flat at every
+size. That is `languages.md`'s own "no clause indexing" sentence with
+numbers under it. First-argument indexing is the change that would move
+it, and it is cocolog's to make, not this repository's.
+
+**PYTHON IS A LANGUAGE; COCOLOG IS A LANGUAGE AND A STATE MACHINE**, and
+the harness is built around that rather than despite it. A dict is
+memory -- not durable, not transactional, invisible to another process,
+gone at exit -- so timing `--embed` against it measures the guarantees
+and not the engine. The store lanes are paired with `sqlite3` instead: a
+file, an index, one committed transaction. **That lane is itself 60x
+slower than the dict it replaces**, which is the honest frame for every
+store number here: durability is not free in Python either, it is just
+usually invisible because nobody asks a dict for it.
+
+And what the same run says about the store is the most useful line of
+the exercise: **reading costs a constant, writing costs a fortune.** On
+every compute task the embedded store lands within a few percent of the
+in-memory arrangement -- 6.5 against 6.9, 14.7 against 14.5, 32.6
+against 34.6 -- so the database does not slow the thinking down at all.
+But 200 `assertz` plus a thousand probes cost **17.2 seconds** embedded,
+and over the server the same work did not finish inside a 300-second cap
+and the answer gate refused to print a number for it. "Long compute
+never inside a turn" was a discipline this family learned in blood; it
+is a measurement now.
+
+**Two runs are on the page and the first is not deleted**, per the
+bench file's own rule that a superseded reading is a different claim
+rather than a wrong one. Run A is there because it is instructive about
+benchmarks: it printed a lookup ratio of **1163220x** and a sort ratio
+of **0.0x**, both arithmetic squeezed out of two runs that were entirely
+fixed cost, and its store lanes came out FASTER than memory -- which is
+impossible, and which turned out to be a stray `--embed` process from a
+killed run burning a core for eighteen minutes. `pkill` had killed the
+script and not its child. So the harness now caps every run, kills what
+a previous run may have left (bracketed, or the pattern matches the
+shell running it), and REFUSES to print a rate for any lane that
+calibrated to a single rep. Three rules that exist because the first
+draft got three numbers wrong.
+
+The rest of the discipline is `harness.pl`'s, adapted: every lane must
+answer the same value or nothing is printed, reps are calibrated per
+lane so no reading is start-up wearing a number's clothes, the
+arrangement is named on every row, and the clock is the wall. And what
+no rule can catch is still which tasks were chosen -- five small
+programs are not a language, and these five were picked to include the
+ones cocolog was expected to lose.
+
+`test/bench.sh` grew six checks so the comparison cannot rot quietly:
+the five task pairs must keep answering the same value, and so must the
+dict and sqlite implementations of the store task. Thirty-one checks.
+
 ### Units as NFTs, and the caller that lets a contract own anything
 
 The future-work page had this one written already: *"Units are NFTs by
