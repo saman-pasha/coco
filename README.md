@@ -103,10 +103,11 @@ arrangement that ends in a GREEN line before it is claimed: crypto as
 The Coco's own Parsi objects; the PoA federation ledger; contracts as
 predicates under `max_steps`; **COCO, the native token, where gas is the
 engine's own inference count rather than a price list somebody
-maintains**; training as settlement; a PoH spine; PoS and BFT votes
-where the trust model wants them; the aggregator, where a chain carries
-its own light client; and the TPS harness, whose number is printed
-before any sentence uses it.
+maintains, and where a validator's weight is coin it can lose**;
+training as settlement; a PoH spine; PoS and BFT votes where the trust
+model wants them; the aggregator, where a chain carries its own light
+client; and the TPS harness, whose number is printed before any sentence
+uses it.
 
 The token rung is where the thesis pays a bill. Every other chain has to
 *write down* what each operation costs, and keep that table in step with
@@ -115,6 +116,13 @@ every proof and `call_metered/4` hands the count to the clause that
 charges for it — deterministically, so two nodes that never met compute
 the same fee. Gas stops being a specification and becomes a
 measurement.
+
+And once the chain has money, the rung above it is the one proof of
+stake was missing: `stake_entry/2` — the table `library(pos)` demands
+and refuses to own — becomes a **rule over bonded COCO**, so a
+validator's weight is coin it has locked and `library(bft)`'s evidence
+has something to take. Two signed votes that cannot both be honest cost
+their author the whole bond.
 
 One arrangement runs **across** rungs rather than being one of them.
 `test/secure.sh` re-runs the three consensus rungs — 2, 5 and 6 — with

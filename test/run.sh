@@ -116,6 +116,24 @@ else
   say coco RED; sed 's/^/   /' "$HERE/coco.out"; red=$((red + 1))
 fi
 
+# ---- bond: the stake IS the coin --------------------------------------
+# Rung 6 read stake off the chain as a NUMBER and said outright that
+# nobody is slashed, because nothing had been put up. Here `stake_entry/2'
+# is a RULE over bonded COCO -- so `quorum/2' and the leader draw weigh
+# money somebody can lose -- and `library(bft)''s evidence finally takes
+# it. Weighted on the two attacks: unbonding first does not save a
+# culprit (the money is at risk until it lands), and two fabricated
+# certificates rob nobody.
+if sh "$HERE/bond.sh" > "$HERE/bond.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/bond.out"; then
+    say bond "$(head -1 "$HERE/bond.out")"
+  else
+    say bond GREEN
+  fi
+else
+  say bond RED; sed 's/^/   /' "$HERE/bond.out"; red=$((red + 1))
+fi
+
 # ---- training: rung 4 -------------------------------------------------
 # Proof of USEFUL work. Every worker claims 0.99; settlement measures and
 # reaches different verdicts. test/training.sh says what each check is

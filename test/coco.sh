@@ -148,19 +148,19 @@ echo
 echo "-- a transaction: signed, nonced, and paid for"
 TX="Tx = tx(AP, 0, transfer(B, '$HALF'), 5000), coco_tx_seal('$ANN', Tx, Sig)"
 check "a native transfer moves the money and pays the sealer" \
-  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, receipt(_, O, U, _)),
+  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, 0, receipt(_, O, U, _)),
           coco_balance(A, X), coco_balance(B, Y), coco_balance(AU, Z),
           write(answer(O-U-X-Y-Z)), nl")" \
   "ok-1200-499998800000000000-$HALF-$FEE_XFER"
 check "and the supply is untouched by all of it" \
-  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, _),
+  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, 0, _),
           ( coco_conservation -> W = conserved ; W = 'BROKEN' ),
           coco_supply(T), write(answer(W-T)), nl")" "conserved-$ONE"
 # THE NONCE IS WHAT MAKES A SIGNATURE USABLE ONCE. It is inside the
 # signed text, so a replay carries the number it was signed with.
 check "the same transaction twice: the second is refused, and free" \
-  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, _),
-          coco_apply(Tx, Sig, AU, receipt(_, O2, U2, F2)),
+  "$(loc "$WHO, $FUND, $TX, coco_apply(Tx, Sig, AU, 0, _),
+          coco_apply(Tx, Sig, AU, 0, receipt(_, O2, U2, F2)),
           coco_balance(A, X), write(answer(O2-U2-F2-X)), nl")" \
   "refused(nonce)-0-0-499998800000000000"
 # Every field a node acts on is in the signed text, so moving one breaks
@@ -168,22 +168,40 @@ check "the same transaction twice: the second is refused, and free" \
 # most like to raise after the fact.
 check "a raised gas limit does not survive the signature" \
   "$(loc "$WHO, $FUND, $TX, Tx2 = tx(AP, 0, transfer(B, '$HALF'), 900000),
-          coco_apply(Tx2, Sig, AU, receipt(_, O, _, _)),
+          coco_apply(Tx2, Sig, AU, 0, receipt(_, O, _, _)),
           coco_balance(A, X), write(answer(O-X)), nl")" \
   "refused(signature)-$ONE"
 check "and neither does a raised amount" \
   "$(loc "$WHO, $FUND, $TX, Tx2 = tx(AP, 0, transfer(B, '$ONE'), 5000),
-          coco_apply(Tx2, Sig, AU, receipt(_, O, _, _)), write(answer(O)), nl")" \
+          coco_apply(Tx2, Sig, AU, 0, receipt(_, O, _, _)), write(answer(O)), nl")" \
   "refused(signature)"
+# RUBBISH IS A REFUSAL, NOT AN EMERGENCY. Both the curve and the money
+# RAISE on malformed input rather than failing -- `secp256k1_verify/3'
+# answers domain_error('a 64-byte signature', deadbeef) and `u256_cmp/3'
+# throws on an amount that is not a number -- and both are right to,
+# because a program handing them rubbish has a bug. A transaction is not
+# a program: it is bytes somebody else chose, and the one thing they must
+# not be able to choose is whether this node finishes its turn. So the
+# two gates are total, and these are the checks that say so.
+check "a garbage signature is refused, and the node answers afterwards" \
+  "$(loc "$WHO, $FUND, Tx = tx(AP, 0, transfer(B, '$HALF'), 5000),
+          coco_apply(Tx, deadbeef, AU, 0, receipt(_, O, _, _)),
+          coco_balance(A, X), write(answer(O-X)), nl")" \
+  "refused(signature)-$ONE"
+check "and an amount that is not a number is refused, not fatal" \
+  "$(loc "$WHO, $FUND, Tx = tx(AP, 0, transfer(B, lots), 5000),
+          coco_tx_seal('$ANN', Tx, S2), coco_apply(Tx, S2, AU, 0, receipt(_, O, _, _)),
+          coco_balance(A, X), write(answer(O-X)), nl")" \
+  "refused(malformed)-$ONE"
 check "a transfer of nothing is not a transaction" \
   "$(loc "$WHO, $FUND, Tx = tx(AP, 0, transfer(B, '0'), 5000),
-          coco_tx_seal('$ANN', Tx, S2), coco_apply(Tx, S2, AU, receipt(_, O, _, _)),
+          coco_tx_seal('$ANN', Tx, S2), coco_apply(Tx, S2, AU, 0, receipt(_, O, _, _)),
           write(answer(O)), nl")" "refused(malformed)"
 
 # ---- part four: GAS FOR STEPS ----------------------------------------
 echo
 echo "-- gas for steps: the engine counts, and the count is the price"
-CALL="coco_tx_seal('$ANN', Tx, Sig), coco_apply(Tx, Sig, AU, receipt(_, O, U, F))"
+CALL="coco_tx_seal('$ANN', Tx, Sig), coco_apply(Tx, Sig, AU, 0, receipt(_, O, U, F))"
 INST="contract_source(adder, Cs), contract_install(adder, Cs)"
 check "a fenced call runs, and is billed for what it spent" \
   "$(loc "$WHO, $FUND, $INST, Tx = tx(AP, 0, call(adder, sum_to(10, _)), 100000),
@@ -197,7 +215,7 @@ check "ten times the work costs strictly more COCO" \
   "$(loc "$WHO, $FUND, $INST,
           Tx = tx(AP, 0, call(adder, sum_to(10, _)), 100000), $CALL,
           Tx2 = tx(AP, 1, call(adder, sum_to(100, _)), 100000),
-          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, receipt(_, _, U2, F2)),
+          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, 0, receipt(_, _, U2, F2)),
           ( u256_cmp(F2, F, '>'), U2 > U -> W = dearer ; W = U-U2 ),
           write(answer(W)), nl")" "dearer"
 # ...and the same call twice costs the same to the unit, which is what
@@ -206,7 +224,7 @@ check "the same call twice is the same bill, to the unit" \
   "$(loc "$WHO, $FUND, $INST,
           Tx = tx(AP, 0, call(adder, sum_to(50, _)), 100000), $CALL,
           Tx2 = tx(AP, 1, call(adder, sum_to(50, _)), 100000),
-          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, receipt(_, _, U2, F2)),
+          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, 0, receipt(_, _, U2, F2)),
           ( U =:= U2, F == F2 -> W = identical ; W = U-U2 ), write(answer(W)), nl")" \
   "identical"
 check "a call that fails still pays: a search is work" \
@@ -226,7 +244,7 @@ check "a runaway is stopped, and charged its ceiling exactly" \
 check "and the node is unharmed and still answers afterwards" \
   "$(loc "$WHO, $FUND, $RUN, Tx = tx(AP, 0, call(runaway, spin(0)), 5000), $CALL,
           $INST, Tx2 = tx(AP, 1, call(adder, sum_to(10, S)), 100000),
-          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, receipt(_, O2, _, _)),
+          coco_tx_seal('$ANN', Tx2, S2), coco_apply(Tx2, S2, AU, 0, receipt(_, O2, _, _)),
           write(answer(O2-S)), nl")" "ok-55"
 
 echo
@@ -238,7 +256,7 @@ POORW="secp256k1_pubkey('$POOR', PP), eth_address(PP, P)"
 check "a poor sender's runaway costs exactly everything, and no more" \
   "$(loc "$POORW, coco_authority_account(alice, AU), coco_genesis([P-'3000000000000']),
           $RUN, Tx = tx(PP, 0, call(runaway, spin(0)), 100000),
-          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, receipt(_, O, U, F)),
+          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, 0, receipt(_, O, U, F)),
           coco_balance(P, X), write(answer(O-U-F-X)), nl")" \
   "out_of_gas-3000-3000000000000-0"
 # ...and below the intrinsic there is no transaction at all: nobody may
@@ -246,13 +264,13 @@ check "a poor sender's runaway costs exactly everything, and no more" \
 check "below the intrinsic it is refused, and nothing is taken" \
   "$(loc "$POORW, coco_authority_account(alice, AU), coco_genesis([P-'500000000000']),
           $RUN, Tx = tx(PP, 0, call(runaway, spin(0)), 100000),
-          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, receipt(_, O, _, F)),
+          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, 0, receipt(_, O, _, F)),
           coco_balance(P, X), coco_nonce(P, N), write(answer(O-F-X-N)), nl")" \
   "refused(gas)-0-500000000000-0"
 check "conservation survives every one of those" \
   "$(loc "$POORW, coco_authority_account(alice, AU), coco_genesis([P-'3000000000000']),
           $RUN, Tx = tx(PP, 0, call(runaway, spin(0)), 100000),
-          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, _),
+          coco_tx_seal('$POOR', Tx, Sig), coco_apply(Tx, Sig, AU, 0, _),
           ( coco_conservation -> W = conserved ; W = 'BROKEN' ), write(answer(W)), nl")" \
   "conserved"
 

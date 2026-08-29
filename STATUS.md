@@ -2,13 +2,15 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and **all nine rungs**: `test/run.sh` GREEN with a server up —
-local, math, crypto, ledger, contracts, coco, training, spine, votes,
-secure, hub, token, uniswap, uniswap-v3, lending, bench, wire — which is
-sixty-two crypto checks against numbers published by other people, plus a
-federation ledger, contracts under a fence, **a native token whose gas
-price is the engine's own inference count rather than a table somebody
-maintains**, settlement that measures rather than believes, a
+assembly and **all ten rungs**: `test/run.sh` GREEN with a server up —
+local, math, crypto, ledger, contracts, coco, bond, training, spine,
+votes, secure, hub, token, uniswap, uniswap-v3, lending, bench, wire —
+which is sixty-two crypto checks against numbers published by other
+people, plus a federation ledger, contracts under a fence, **a native
+token whose gas price is the engine's own inference count rather than a
+table somebody maintains** and whose bonded coin is what a validator
+weighs — so a vote that cannot be honest costs its author real money —
+settlement that measures rather than believes, a
 proof-of-history spine held to constants computed outside this project, a
 stake-weighted BFT vote whose safety arithmetic names the validators who
 break it, an aggregator that verifies three chains under three regimes by
@@ -156,10 +158,11 @@ the three pillars used and unmodified.
    Thirty-seven checks, finality that beats length, and mallory is an
    INSIDER for the first time — admitted, staked, voting, with one of
    her eight attacks succeeding because a hash-seeded draw is grindable.
-   Still ahead: nobody is SLASHED (the evidence is produced; burning a
-   bond is a policy question), and there is no round timer, so no
-   liveness argument — the honest form of a clock here is rung 5's
-   spine, not wall time.
+   **Nobody was SLASHED, and now somebody is**: the evidence this rung
+   produces is spent in rung 10, where the stake is bonded COCO and
+   `culprits/3`'s names have money behind them. Still ahead: there is no
+   round timer, so no liveness argument — the honest form of a clock
+   here is rung 5's spine, not wall time.
 7. **The aggregator** (`hub/`) — **DONE**. A chain is a kb, so one node
    hosts many under different consensus regimes; each chain publishes
    its own validity and fork-choice rules as entries on itself, and a
@@ -199,7 +202,7 @@ the three pillars used and unmodified.
    over the ENGINE's own inference count**, which meant a pillar
    capability first: cocolog counted every proof and told no program, so
    `call_metered/4` was built there, on its own merits, with its own
-   case. Thirty checks. Still ahead: an inference is an inference,
+   case. Thirty-two checks. Still ahead: an inference is an inference,
    so a `sha256/2` costs what a `between/3` step costs and work done
    inside a crypto module is under-priced — pricing a builtin by weight
    is a table in the engine and belongs to cocolog; there is no fee
@@ -208,6 +211,24 @@ the three pillars used and unmodified.
    until the chain is long enough that this repository's own "no long
    compute inside a turn" applies to it. The mark is per block, so
    settling in ranges is a change to one predicate.
+10. **The stake IS the coin** (`votes/bond.pl`, and the bond half of
+    `library/coco.pl`) — **DONE**. Rung 6 asked what a validator weighs
+    and rung 9 made something worth weighing: `stake_entry/2` — the table
+    `library(pos)` demands and refuses to own — is now a RULE over bonded
+    COCO, so `quorum/2`, `total_stake/1` and the leader draw go on
+    working unchanged over money somebody actually put up. Bonding and
+    unbonding are transaction actions; leaving takes
+    `coco_unbonding_delay/1` BLOCKS, the chain's own clock, and the money
+    is slashable the whole way. `library(bft)`'s closing sentence — "a
+    name is what a slashing rule needs" — is spent: equivocation and two
+    certificates at one height both take the whole bond, a tenth to
+    whoever proved it and nine tenths burnt. Twenty-five checks, the
+    chain half against a real server. Still ahead: nobody is REWARDED for
+    validating (an emission schedule is monetary policy, and this rung
+    takes no position, the way rung 4 took none on paying a trainer);
+    there is no delegation, which needs a rule about who bears a
+    delegator's share of a loss; and a slash is total rather than a
+    percentage, because a percentage is a number somebody has to justify.
 
 Two capabilities on the ladder's path belong to a pillar, not to this
 repository.
@@ -228,6 +249,84 @@ now; what that changed, and what it deliberately did not, is the first
 entry below.
 
 ## Done here
+
+### The stake is the coin, and rung 6's evidence finally bites
+
+Rung 6 built proof of stake honestly and said what it had not done:
+stake was a NUMBER read off a block — a block said alice weighs 40, so
+alice weighed 40 — and *"nobody is SLASHED (the evidence is produced;
+burning a bond is a policy question this rung takes no position on)"*.
+The evidence was real. There was simply nothing to take. Rung 9 made
+something to take, and this rung is the join: `stake_entry/2`, the table
+`library(pos)` insists is not its business, is a RULE over bonded COCO —
+so `stake_of/2`, `total_stake/1`, `quorum/2` and the leader draw go on
+working with **nothing changed**, over numbers somebody actually put up.
+
+`library(bft)`'s header ends with "a name is what a slashing rule needs".
+It now has one, and money behind it: equivocation — two signed votes at
+one height and round for different blocks — and two quorum certificates
+at one height, whose voter INTERSECTION is provably more than the fault
+bound. Both take the whole bond: a tenth to whoever proved it, nine
+tenths burnt.
+
+**Why not pay the reporter everything**, which is the obvious rule: a
+validator would equivocate and report ITSELF, and the bond would come
+straight home. A slash the culprit can collect is not a slash. Burning
+the rest is what makes the loss real; the tenth is what makes carrying
+evidence worth doing. The burn is why `coco_conservation/0` grew a fourth
+term — a COCO is in a balance, a bond, an unbonding on its way home, or
+the burn, and the four still add to the supply exactly.
+
+**Two findings came out of building it, and both were bugs before they
+were paragraphs.**
+
+**WEIGHT IS MONEY AT RISK, NOT MONEY BONDED.** The obvious rule is that
+asking for your money back drops your voting weight at once — it is what
+Cosmos does. Reading `library(bft)` killed it: `valid_vote/1` opens with
+`has_stake(Who)`, so a validator with no weight cannot cast a vote
+anybody will look at, and `equivocation/3` validates both votes before it
+names anybody. Under the obvious rule the attack is two lines long —
+equivocate, unbond in the same breath, and the evidence against you stops
+being *readable* while your money sits there waiting to mature. Tying the
+weight to `coco_at_risk/2` closes it by construction and leaves the
+simpler sentence: **you weigh what you can lose.** The weight goes to
+zero at exactly the moment the money stops being takeable, which is when
+it lands back in a balance. `test/bond.sh` pins the attack itself —
+equivocate, unbond everything, and the slash still lands.
+
+**RUBBISH IS A REFUSAL, NOT AN EMERGENCY**, and this was a real hole in
+what rung 9 shipped. `secp256k1_verify/3` RAISES on a malformed signature
+(`domain_error('a 64-byte signature', deadbeef)`) and `u256_cmp/3` throws
+on an amount that is not a number. Both are right to — a program handing
+them rubbish has a bug — but a transaction is not a program: it is bytes
+somebody else chose, and the one thing they must not be able to choose is
+whether this node finishes its turn. `coco_tx_valid/2` and
+`coco_well_formed/1` are total now, the receipt says `refused(signature)`
+or `refused(malformed)`, and the same rule covers evidence: a vote that
+raises is dropped, a certificate that raises is not a certificate.
+
+**And the fence made of `catch/3` leaks in one place**, which cost a
+debugging round: `catch(qc_valid(QC), _, fail)` does not hold, because
+`qc_valid/1` checks its votes with `forall/2`, `forall/2` is built on
+`findall/3`, and cocolog's `findall/3` lets an uncaught throw end the
+query with a message no `catch/3` sees — which cocolog's own MODULES.md
+says outright and files as a change wanting its own case. So the catch
+goes INSIDE the findall, per vote, and what reaches `qc_valid/1` cannot
+raise inside anybody's `forall`. The workaround is three lines and it is
+labelled; the pillar fix is cocolog's to make.
+
+One more that is a design decision rather than a bug: **a fabricated
+certificate must rob nobody.** `culprits/3` intersects two lists of
+NAMES and takes no position on whether either certificate is real — it
+is not its job — so a stranger could hand a node two fabrications naming
+whoever they liked. Both certificates go through the sound-QC gate
+before a name is read: every signature, every vote matching the
+certificate it is in, and a quorum of the stake behind each.
+
+**Twenty-five checks**, the chain half against a real server: a bond
+sealed as a block, an unbonding maturing three blocks later because no
+node claims it and every node moves the same rows at the same height,
+and the money home with the weight gone.
 
 ### COCO: the native token, and a gas price that is a measurement
 

@@ -18,7 +18,11 @@
 %%   coco_tx_hash(+Tx, -Hash)        coco_tx_seal(+Priv, +Tx, -Sig)
 %%   coco_tx_valid(+Tx, +Sig)        coco_tx_from(+Tx, -Addr)
 %%   coco_nonce(+Who, -N)
-%%   coco_apply(+Tx, +Sig, +Author, -Receipt)
+%%   coco_apply(+Tx, +Sig, +Author, +Height, -Receipt)
+%%
+%%   coco_bond(+Who, +Amount)        coco_unbond(+Who, +Amount, +Height)
+%%   coco_mature(+Height)            coco_at_risk(+Who, -Amount)
+%%   coco_slash(+Culprit, +Reporter, -Taken, -Reward)
 %%
 %% GAS IS THE ENGINE'S COUNT, NOT AN ESTIMATE OF IT. cocolog meters every
 %% proof -- `call_metered/4' answers what a goal spent -- so a fee here is
@@ -30,7 +34,8 @@
 %% across processes, which is the property this file spends.
 %%
 %% A TRANSACTION IS `tx(Pub, Nonce, Action, GasLimit)', and an Action is
-%% one of exactly two things:
+%% one of exactly four things -- two that move money and two that decide
+%% whether it is spendable:
 %%
 %%   transfer(To, Amount)    the native move. NOT metered: it is the
 %%                           token's own operation, it is bounded, and it
@@ -39,6 +44,14 @@
 %%                           that could cut it in half -- money debited
 %%                           and never credited -- which is the one thing
 %%                           a ledger may not do.
+%%   bond(Amount)            balance -> BOND: the money stops being
+%%                           spendable and starts being at risk. This is
+%%                           what makes COCO the chain's stake as well as
+%%                           its fee -- see `votes/bond.pl', where a
+%%                           bond becomes voting weight.
+%%   unbond(Amount)          bond -> maturing, and home only after
+%%                           `coco_unbonding_delay/1' more blocks. Still
+%%                           slashable the whole way, which is the point.
 %%   call(Contract, Goal)    a fenced contract entry, metered. The fence
 %%                           is why a stranger's transaction is safe to
 %%                           run at all, and `contract_call/2' stages its
@@ -46,7 +59,7 @@
 %%                           a ceiling that stops it mid-proof leaves
 %%                           nothing behind.
 %%
-%% There is deliberately no third shape. A transaction carrying a BARE
+%% There is deliberately no fifth shape. A transaction carrying a BARE
 %% GOAL would be `assertz' from anybody who can afford the fee.
 %%
 %% AN ACCOUNT IS AN ADDRESS, derived Ethereum's way -- the last twenty
@@ -61,10 +74,15 @@
 %% raises the supply, it refuses to run twice, and nothing else creates a
 %% unit of COCO -- so the total is decided in one block and afterwards
 %% only moves. A fee is not burnt either: it goes to the authority that
-%% sealed the block, which is who spent the compute. Both halves are one
-%% invariant, `coco_conservation/0': the balances sum to the supply,
-%% always, and an auditor can check it without believing any of the code
-%% above it.
+%% sealed the block, which is who spent the compute.
+%%
+%% ONE RULE DESTROYS, and it is `coco_slash/4': nine tenths of a
+%% dishonest validator's bond are burnt, because a slash whose proceeds
+%% somebody collects can be collected by the culprit. So a COCO is in
+%% exactly one of four places -- a balance, a bond, an unbonding on its
+%% way home, or the burn -- and `coco_conservation/0' is the sentence
+%% that they add up to the supply, always. An auditor can check it
+%% without believing a line of the code above it.
 %%
 %% WHAT THE METER DOES NOT SEE, stated because it is the honest limit of
 %% this rung: an inference is an inference. A `sha256/2' or an
@@ -92,6 +110,9 @@
 :- dynamic coco_bal/2.          % coco_bal(Address, Amount)
 :- dynamic coco_total/1.        % the supply, written once by genesis
 :- dynamic coco_nonce_at/2.     % coco_nonce_at(Address, NextNonce)
+:- dynamic coco_bonded/2.       % coco_bonded(Address, Amount) -- at risk
+:- dynamic coco_unbonding/3.    % coco_unbonding(Address, Amount, ReadyHeight)
+:- dynamic coco_burnt/1.        % what a slash has destroyed, in total
 
 %% ---- the units -------------------------------------------------------
 %%
@@ -122,8 +143,34 @@ coco_intrinsic(1000).
 
 %% A native move is bounded work: two balance reads, two writes, a nonce.
 %% It is charged as a constant because it IS a constant, and because it
-%% is done outside the meter for the reason the header gives.
+%% is done outside the meter for the reason the header gives. Bonding and
+%% unbonding are the same shape of work and pay the same constant.
 coco_transfer_steps(200).
+
+%% ---- the bond --------------------------------------------------------
+%%
+%% HOW LONG THE MONEY STAYS AT RISK AFTER YOU ASK FOR IT BACK, counted in
+%% BLOCKS, because the chain's height is the only clock this repository
+%% trusts (rung 5 said the honest form of a clock here is work, not wall
+%% time, and a height is the ledger's own answer of that shape).
+%%
+%% Without a delay the whole rung would be theatre: a validator would
+%% equivocate, unbond in the same breath, and the evidence would arrive
+%% at an empty bond. Three blocks is a demonstration's number and it is
+%% one clause; a real chain writes weeks here.
+coco_unbonding_delay(3).
+
+%% WHAT A SLASHED BOND PAYS THE PERSON WHO PROVED IT: one part in ten,
+%% and the other nine are BURNT.
+%%
+%% Paying the whole bond to the reporter is the obvious rule and it is
+%% wrong, for a reason worth writing down: a validator could equivocate
+%% and report ITSELF, and the bond would come straight home. A slash a
+%% culprit can collect is not a slash. Burning the rest is what makes the
+%% loss real, and the tenth is what makes reporting worth doing -- the
+%% evidence `library(bft)' produces has to reach somebody who gains by
+%% carrying it.
+coco_slash_share(10).
 
 %% NO TRANSACTION MAY BUY MORE THAN THIS, however rich its sender. A
 %% block that one account can occupy for as long as it can pay is a block
@@ -226,15 +273,145 @@ coco_transfer(From, To, Amount) :-
         coco_set_balance(To, NewTo)
     ).
 
-%% THE INVARIANT, and the reason the fee is paid rather than burnt: no
-%% rule here destroys a unit or creates one, so the balances sum to the
-%% supply at every moment, and this predicate is that sentence. Anyone
-%% can run it; nothing above it needs it to be true in order to work,
-%% which is exactly what makes it worth checking.
+%% ---- the bond: money that stops being spendable ----------------------
+%%
+%% A validator's weight has to be something it can LOSE, or it is not a
+%% stake, it is a claim. Bonded COCO is exactly that: moved out of the
+%% balance so it cannot be spent, still owned, and reachable by a slash.
+%%
+%%   coco_bond(+Who, +Amount)           balance -> bond
+%%   coco_unbond(+Who, +Amount, +H)     bond -> maturing at H + delay
+%%   coco_mature(+Height)               maturing -> balance, when ready
+%%   coco_bond_of(+Who, -Amount)        coco_unbonding_of(+Who, -Amount)
+%%   coco_at_risk(+Who, -Amount)        what a slash would take: BOTH
+%%   coco_slash(+Culprit, +Reporter, -Taken, -Reward)
+%%
+%% UNBONDING IS NOT INSTANT, and the money is still at risk while it
+%% waits -- see `coco_unbonding_delay/1'. Both halves matter: a bond you
+%% can withdraw the instant before the evidence arrives protects nobody,
+%% and money that stopped being slashable the moment you asked for it
+%% back would be the same hole with a form to fill in.
+
+coco_bond(Who, Amount) :-
+    ground(Who),
+    u256_cmp(Amount, '0', '>'),
+    coco_balance(Who, Bal),
+    \+ u256_cmp(Amount, Bal, '>'),
+    coco_bond_of(Who, B0),
+    u256_sub(Bal, Amount, NewBal),
+    u256_add(B0, Amount, NewBond),
+    coco_set_balance(Who, NewBal),
+    coco_set_bond(Who, NewBond).
+
+coco_unbond(Who, Amount, Height) :-
+    ground(Who),
+    integer(Height), Height >= 0,
+    u256_cmp(Amount, '0', '>'),
+    coco_bond_of(Who, B0),
+    \+ u256_cmp(Amount, B0, '>'),
+    coco_unbonding_delay(D),
+    Ready is Height + D,
+    u256_sub(B0, Amount, NewBond),
+    u256_dec(Amount, Canonical),
+    coco_set_bond(Who, NewBond),
+    assertz(coco_unbonding(Who, Canonical, Ready)).
+
+%% RELEASING IS THE NODE'S, NOT THE OWNER'S. Nobody claims a matured
+%% unbonding: any node settling a block at this height moves it back,
+%% every node moves the same rows at the same height, and running it
+%% twice releases nothing twice because the row is gone.
+coco_mature(Height) :-
+    integer(Height),
+    findall(W-A, ( coco_unbonding(W, A, R), R =< Height ), Ready),
+    coco_release_each(Ready).
+
+coco_release_each([]).
+coco_release_each([W-A|T]) :-
+    ( retract(coco_unbonding(W, A, _)) -> true ; true ),
+    coco_credit(W, A),
+    coco_release_each(T).
+
+coco_bond_of(Who, Amount) :-
+    ( coco_bonded(Who, A) -> Amount = A ; Amount = '0' ).
+
+coco_unbonding_of(Who, Amount) :-
+    findall(A, coco_unbonding(Who, A, _), As),
+    coco_sum256(As, '0', Amount).
+
+%% What a slash can take, which is BOTH -- see the header above.
+coco_at_risk(Who, Amount) :-
+    coco_bond_of(Who, B),
+    coco_unbonding_of(Who, U),
+    u256_add(B, U, Amount).
+
+coco_set_bond(Who, Amount) :-
+    ( retract(coco_bonded(Who, _)) -> true ; true ),
+    (   u256_cmp(Amount, '0', '=')
+    ->  true                      % no row for a bond of nothing
+    ;   assertz(coco_bonded(Who, Amount))
+    ).
+
+coco_credit(Who, Amount) :-
+    coco_balance(Who, Bal),
+    u256_add(Bal, Amount, New),
+    coco_set_balance(Who, New).
+
+coco_bonders(Addrs) :-
+    findall(W, coco_bonded(W, _), Ws),
+    sort(Ws, Addrs).
+
+%% ---- the slash -------------------------------------------------------
+%%
+%% THE MECHANISM IS HERE AND THE POLICY IS NOT. This predicate knows how
+%% to take a bond; it does not know what deserves taking, and it must not
+%% -- `votes/bond.pl' is where evidence is weighed, because the evidence
+%% is `library(bft)''s and the money is this file's. A token with an
+%% opinion about who lied would be a token with an opinion about
+%% consensus.
+%%
+%% One part in ten to whoever proved it and nine burnt, for the reason
+%% `coco_slash_share/1' gives: a slash the culprit can collect by
+%% reporting itself is not a slash. Which is also why the reporter may
+%% not BE the culprit -- stated as a goal rather than left to the
+%% arithmetic.
+coco_slash(Culprit, Reporter, Taken, Reward) :-
+    ground(Culprit), ground(Reporter),
+    Culprit \== Reporter,
+    coco_at_risk(Culprit, Taken),
+    u256_cmp(Taken, '0', '>'),
+    coco_slash_share(D),
+    u256_div(Taken, D, Reward),
+    u256_sub(Taken, Reward, Burn),
+    retractall(coco_bonded(Culprit, _)),
+    retractall(coco_unbonding(Culprit, _, _)),
+    coco_credit(Reporter, Reward),
+    coco_burn(Burn).
+
+coco_burn(Amount) :-
+    coco_burnt_total(B0),
+    u256_add(B0, Amount, B1),
+    ( retract(coco_burnt(_)) -> true ; true ),
+    assertz(coco_burnt(B1)).
+
+coco_burnt_total(B) :- ( coco_burnt(A) -> B = A ; B = '0' ).
+
+%% THE INVARIANT, and the reason a fee is PAID rather than burnt: no rule
+%% here creates a unit, and the only rule that destroys one moves it
+%% somewhere the sum still counts. So the four places a COCO can be -- a
+%% balance, a bond, an unbonding on its way home, and the burn -- add up
+%% to the supply at every moment, and this predicate is that sentence.
+%% Anyone can run it; nothing above it needs it to be true in order to
+%% work, which is exactly what makes it worth checking.
 coco_conservation :-
     coco_total(Total),
-    findall(A, coco_bal(_, A), Amounts),
-    coco_sum256(Amounts, '0', Sum),
+    findall(A, coco_bal(_, A), Balances),
+    findall(A, coco_bonded(_, A), Bonds),
+    findall(A, coco_unbonding(_, A, _), Maturing),
+    coco_burnt_total(Burnt),
+    coco_sum256(Balances, '0', S1),
+    coco_sum256(Bonds, S1, S2),
+    coco_sum256(Maturing, S2, S3),
+    u256_add(S3, Burnt, Sum),
     u256_cmp(Sum, Total, '=').
 
 coco_sum256([], Acc, Acc).
@@ -273,7 +450,23 @@ coco_tx_seal(Priv, Tx, Sig) :-
 coco_tx_from(tx(Pub, _, _, _), Addr) :-
     eth_address(Pub, Addr).
 
-coco_tx_valid(Tx, Sig) :-
+%% EVERYTHING A STRANGER SENT IS CHECKED UNDER A `catch/3', and that is
+%% not defensive habit -- it is the difference between a refusal and a
+%% dead node. The crypto and the money both RAISE on malformed input
+%% rather than failing: `secp256k1_verify/3' answers
+%% `domain_error('a 64-byte signature', deadbeef)' and `u256_cmp/3'
+%% throws on an amount that is not a number. Both are right to -- a
+%% program that hands them rubbish has a bug -- but a TRANSACTION is not
+%% a program, it is bytes somebody else chose, and the one thing they
+%% must not be able to choose is whether this node finishes its turn.
+%%
+%% So the two gates below are total: they fail where they used to throw,
+%% the receipt says `refused(malformed)' or `refused(signature)', and the
+%% node goes on to the next transaction. Everything downstream of them
+%% may raise freely, because by then the fields have been checked.
+coco_tx_valid(Tx, Sig) :- catch(coco_verified(Tx, Sig), _, fail).
+
+coco_verified(Tx, Sig) :-
     coco_well_formed(Tx),
     Tx = tx(Pub, _, _, _),
     coco_tx_hash(Tx, Hash),
@@ -283,7 +476,9 @@ coco_tx_valid(Tx, Sig) :-
 %% on it. Shape first, signature second: verifying the signature of a
 %% term that is not a transaction is work done for a sender who has not
 %% even claimed to be one.
-coco_well_formed(tx(Pub, Nonce, Action, GasLimit)) :-
+coco_well_formed(Tx) :- catch(coco_shaped(Tx), _, fail).
+
+coco_shaped(tx(Pub, Nonce, Action, GasLimit)) :-
     atom(Pub),
     integer(Nonce), Nonce >= 0,
     integer(GasLimit), GasLimit > 0,
@@ -294,6 +489,8 @@ coco_well_formed(tx(Pub, Nonce, Action, GasLimit)) :-
 %% same reason a zero-amount move is refused in every token in this
 %% repository.
 coco_action(transfer(To, Amount)) :- ground(To), u256_cmp(Amount, '0', '>').
+coco_action(bond(Amount)) :- u256_cmp(Amount, '0', '>').
+coco_action(unbond(Amount)) :- u256_cmp(Amount, '0', '>').
 coco_action(call(C, G)) :- ground(C), nonvar(G).
 
 %% An account that has never sent anything is at nonce zero. The nonce is
@@ -311,9 +508,16 @@ coco_bump_nonce(Who) :-
 
 %% ---- applying one ----------------------------------------------------
 %%
-%% `coco_apply(+Tx, +Sig, +Author, -Receipt)' -- Author is the account of
-%% whoever sealed the block this transaction arrived in, and is who the
-%% fee is paid to.
+%% `coco_apply(+Tx, +Sig, +Author, +Height, -Receipt)' -- Author is the
+%% account of whoever sealed the block this transaction arrived in, and
+%% is who the fee is paid to. Height is the block's own height.
+%%
+%% A TRANSACTION IS APPLIED AT A HEIGHT, which is true of every chain and
+%% is carried explicitly here rather than read off a "current height"
+%% somewhere. Only bonding needs it -- an unbonding matures at a height
+%% and the chain's height is the only clock this repository trusts -- but
+%% a caller that had to know WHICH actions need it would be a caller that
+%% learns the answer the day it is wrong.
 %%
 %% IT ALWAYS ANSWERS, and the answer is a receipt:
 %%
@@ -336,8 +540,10 @@ coco_bump_nonce(Who) :-
 %% A refusal is RECORDED rather than dropped -- the reason travels in the
 %% receipt -- because a node that silently ignores a transaction is a
 %% node nobody can ask why.
-coco_apply(Tx, Sig, Author, Receipt) :-
-    (   \+ coco_well_formed(Tx)
+coco_apply(Tx, Sig, Author, Height, Receipt) :-
+    (   \+ integer(Height)
+    ->  Receipt = receipt(unknown, refused(height), 0, '0')
+    ;   \+ coco_well_formed(Tx)
     ->  Receipt = receipt(unknown, refused(malformed), 0, '0')
     ;   \+ coco_tx_valid(Tx, Sig)
     ->  Receipt = receipt(unknown, refused(signature), 0, '0')
@@ -349,7 +555,7 @@ coco_apply(Tx, Sig, Author, Receipt) :-
         ->  Receipt = receipt(From, refused(gas), 0, '0')
         ;   \+ coco_funded(From, Action)
         ->  Receipt = receipt(From, refused(funds), 0, '0')
-        ;   coco_run_action(From, Author, Action, GasLimit, Receipt)
+        ;   coco_run_action(From, Author, Action, GasLimit, Height, Receipt)
         )
     ).
 
@@ -360,12 +566,22 @@ coco_affordable_intrinsic(From) :-
     coco_affordable(From, Steps),
     Steps > Flat.
 
-%% ...and a transfer must be funded for its VALUE as well, which is a
+%% ...and a move must be funded for its VALUE as well, which is a
 %% separate question from the fee and asked before the fee is taken: a
 %% transfer that could not have moved its amount is refused whole rather
-%% than charged for discovering that.
-coco_funded(From, transfer(_, Amount)) :-
+%% than charged for discovering that. Bonding is the same question about
+%% the same balance; unbonding asks it of the BOND instead, because that
+%% is where the money is coming from.
+coco_funded(From, transfer(_, Amount)) :- !, coco_covers(From, Amount).
+coco_funded(From, bond(Amount)) :- !, coco_covers(From, Amount).
+coco_funded(From, unbond(Amount)) :-
     !,
+    coco_covers(From, '0'),
+    coco_bond_of(From, B),
+    \+ u256_cmp(Amount, B, '>').
+coco_funded(_, _).
+
+coco_covers(From, Amount) :-
     coco_balance(From, Bal),
     coco_intrinsic(Flat),
     coco_transfer_steps(Move),
@@ -373,16 +589,12 @@ coco_funded(From, transfer(_, Amount)) :-
     coco_fee(Total, Fee),
     u256_add(Amount, Fee, Needed),
     \+ u256_cmp(Needed, Bal, '>').
-coco_funded(_, _).
 
 %% THE NATIVE MOVE: constant-priced, and done OUTSIDE the meter so that a
 %% ceiling can never sit between the debit and the credit.
-coco_run_action(From, Author, transfer(To, Amount), _, receipt(From, ok, Used, Fee)) :-
+coco_run_action(From, Author, transfer(To, Amount), _, _, receipt(From, ok, Used, Fee)) :-
     !,
-    coco_intrinsic(Flat),
-    coco_transfer_steps(Move),
-    Used is Flat + Move,
-    coco_fee(Used, Fee),
+    coco_move_cost(Used, Fee),
     %% ONE GOAL, so ONE TRANSACTION: the move, the fee and the nonce
     %% commit together or not at all. That is the store's property rather
     %% than care taken here, and it is why the debit can ride at the end
@@ -390,6 +602,36 @@ coco_run_action(From, Author, transfer(To, Amount), _, receipt(From, ok, Used, F
     ( coco_transfer(From, To, Amount),
       coco_pay_fee(From, Author, Fee),
       coco_bump_nonce(From) ).
+
+%% BONDING AND UNBONDING ARE NATIVE MOVES TOO, and outside the meter for
+%% exactly the transfer's reason: a ceiling landing between the debit of
+%% a balance and the credit of a bond would make money disappear. They
+%% are the same bounded work and pay the same constant.
+%%
+%% The height is the unbonding's whole point -- `coco_unbond/3' writes
+%% down when the money may come home, and until then it is still
+%% slashable. Bonding takes no height because becoming at risk is
+%% immediate; only leaving is slow, which is the asymmetry a stake needs.
+coco_run_action(From, Author, bond(Amount), _, _, receipt(From, ok, Used, Fee)) :-
+    !,
+    coco_move_cost(Used, Fee),
+    ( coco_bond(From, Amount),
+      coco_pay_fee(From, Author, Fee),
+      coco_bump_nonce(From) ).
+
+coco_run_action(From, Author, unbond(Amount), _, Height,
+                receipt(From, ok, Used, Fee)) :-
+    !,
+    coco_move_cost(Used, Fee),
+    ( coco_unbond(From, Amount, Height),
+      coco_pay_fee(From, Author, Fee),
+      coco_bump_nonce(From) ).
+
+coco_move_cost(Used, Fee) :-
+    coco_intrinsic(Flat),
+    coco_transfer_steps(Move),
+    Used is Flat + Move,
+    coco_fee(Used, Fee).
 
 %% THE FENCED CALL: metered, and the count is the engine's own.
 %%
@@ -403,7 +645,8 @@ coco_run_action(From, Author, transfer(To, Amount), _, receipt(From, ok, Used, F
 %% The `catch/3' is INSIDE the meter deliberately -- that is what turns a
 %% contract that throws into an outcome that pays, rather than an escape
 %% that costs the node the work and the sender nothing.
-coco_run_action(From, Author, call(C, G), GasLimit, receipt(From, Outcome, Used, Fee)) :-
+coco_run_action(From, Author, call(C, G), GasLimit, _,
+                receipt(From, Outcome, Used, Fee)) :-
     coco_intrinsic(Flat),
     coco_affordable(From, Steps),
     Ceiling is min(GasLimit, Steps - Flat),

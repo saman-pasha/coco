@@ -76,11 +76,16 @@ coco_settle_chain :-
     coco_settle_blocks(Oldest).
 
 coco_settle_blocks([]).
-coco_settle_blocks([block(_, _, Author, Payload, _, Hash)|T]) :-
+coco_settle_blocks([block(Height, _, Author, Payload, _, Hash)|T]) :-
+    %% THE HEIGHT IS THE CLOCK, so every block ticks it -- an unbonding
+    %% matures against the chain's own growth and not against whether the
+    %% block that matured it happened to carry money. Running this twice
+    %% releases nothing twice: a released row is retracted.
+    coco_mature(Height),
     (   coco_settled(Hash)
     ->  true
     ;   coco_payload(Payload, What)
-    ->  coco_settle_one(What, Author, Hash)
+    ->  coco_settle_one(What, Author, Height, Hash)
     ;   true                        % an ordinary payload: not ours
     ),
     coco_settle_blocks(T).
@@ -95,7 +100,7 @@ coco_payload(Payload, T) :-
     nonvar(T),
     ( T = coco_genesis(_) -> true ; T = coco_send(_, _) ).
 
-coco_settle_one(coco_genesis(Allocs), _, Hash) :-
+coco_settle_one(coco_genesis(Allocs), _, _, Hash) :-
     !,
     (   coco_genesis(Allocs)
     ->  R = receipt(genesis, ok, 0, '0')
@@ -103,12 +108,12 @@ coco_settle_one(coco_genesis(Allocs), _, Hash) :-
     ),
     ( assertz(coco_receipt(Hash, R)),
       assertz(coco_settled(Hash)) ).
-coco_settle_one(coco_send(Tx, Sig), Author, Hash) :-
+coco_settle_one(coco_send(Tx, Sig), Author, Height, Hash) :-
     (   coco_authority_account(Author, Acct)
     ->  true
     ;   Acct = unknown
     ),
-    coco_apply(Tx, Sig, Acct, R),
+    coco_apply(Tx, Sig, Acct, Height, R),
     %% ONE GOAL, so ONE TRANSACTION: the money moved by `coco_apply/4',
     %% the receipt and the mark that says this block is spent all commit
     %% together. A node that dies here settles nothing and will settle

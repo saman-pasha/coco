@@ -168,6 +168,7 @@ suite:
     - ledger         # rung 2: the PoA federation, and mallory attacking it
     - contracts      # rung 3: a contract is a predicate; mallory writes them too
     - coco           # COCO: the native token, and gas priced in inferences
+    - bond           # the stake IS the coin, and rung 6's evidence bites
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality

@@ -91,6 +91,30 @@ answers `existence_error(procedure, call_metered/4)` from the middle of
 `coco_apply/4`, which names the predicate and not the cause. Rebuild the
 pillar.
 
+**THE STAKE IS THE SAME COIN.** `votes/bond.pl` defines `stake_entry/2`
+— the table `library(pos)` declares dynamic and refuses to own — as a
+RULE over bonded COCO. Two consequences to keep in mind before touching
+either file: do not load it and rung 6's `stake_from_chain/0` into one
+knowledge base (two sources for one table, and the weights would add);
+and the weight is `coco_at_risk/2`, the bond PLUS every unbonding still
+in flight, not the bond alone. That second one is load-bearing rather
+than tidy — `valid_vote/1` opens with `has_stake(Who)`, so a validator
+whose weight dropped when it asked for its money back could make the
+evidence against it unreadable by unbonding. You weigh what you can
+lose.
+
+**UNTRUSTED INPUT MUST FAIL, NOT RAISE.** The crypto and the money both
+throw on malformed arguments — `secp256k1_verify/3` answers
+`domain_error('a 64-byte signature', …)`, `u256_cmp/3` throws on an
+amount that is not a number — and they are right to. But a transaction
+or a piece of evidence is bytes a stranger chose, so every gate that
+reads one is total: `coco_tx_valid/2`, `coco_well_formed/1`,
+`sound_votes/2`, `sound_qc/1`. **And the catch must be INSIDE the
+`findall/3`**: cocolog lets an uncaught throw inside `findall/3` (and
+therefore inside `forall/2`) end the query with a message no `catch/3`
+sees — its own MODULES.md says so — which is why `sound_qc/1` verifies
+each vote separately instead of wrapping `qc_valid/1`.
+
 Two shapes to keep straight, because both are called tokens.
 `contracts/token/` is ERC-20's and ERC-721's, deployed ON a chain and
 fenced. `library(coco)` is what the chain CHARGES IN, and it cannot be a
