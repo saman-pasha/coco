@@ -247,6 +247,11 @@ skip(Why) :- format("SKIP ~w~n", [Why]).
 %% no CICILI checkout, which is a SKIP with its reason and not a red line.
 have_module(M) :- coco_lib(M, P), atom_concat(P, '.so', S), exists_file(S).
 
+%% A TOOL THIS SUITE NEEDS, looked for along PATH by library(os) --
+%% access(2), no shell, and one spelling for `command -v X >/dev/null
+%% 2>&1'. The .sh cases each carried their own.
+have_tool(Tool) :- os_has(Tool).
+
 build_modules(Group) :-
     coco_root(R), sh_join([R, '/modules/', Group, '/build.sh'], B),
     ( exists_file(B) -> catch(shl(['sh ', B, ' >/dev/null 2>&1']), _, true) ; true ).
