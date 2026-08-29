@@ -82,6 +82,23 @@ link is refused exactly as she was in the clear, because `valid_block/6`
 asks who signed the block and never who opened the socket. Never add a
 "peer is authenticated, skip re-verification" path.
 
+**THE MONEY IS `library(coco)`, AND IT NEEDS A COCOLOG NEW ENOUGH.**
+COCO is the chain's native token and its gas is the ENGINE's inference
+count, read with cocolog's `call_metered/4` — a builtin that did not
+exist until this repository needed it and was built over there, on its
+own merits, with `test/meter.sh` beside it. A cocolog older than that
+answers `existence_error(procedure, call_metered/4)` from the middle of
+`coco_apply/4`, which names the predicate and not the cause. Rebuild the
+pillar.
+
+Two shapes to keep straight, because both are called tokens.
+`contracts/token/` is ERC-20's and ERC-721's, deployed ON a chain and
+fenced. `library(coco)` is what the chain CHARGES IN, and it cannot be a
+contract for a reason worth remembering rather than looking up: the fence
+has no way to price its own execution, and a contract able to move the
+billing currency would be a contract that pays itself. So no `coco_*`
+predicate is in `library(contract)`'s vocabulary, and none may be added.
+
 config.sh's parser is a small awk over a deliberately small subset:
 `key: value` two levels deep, `- item` lists, `#` comments after
 whitespace. It is not YAML and does not pretend to be. If a

@@ -98,6 +98,24 @@ else
   say contracts RED; sed 's/^/   /' "$HERE/contracts.out"; red=$((red + 1))
 fi
 
+# ---- coco: the native token, and gas priced in inferences -------------
+# What the chain CHARGES IN, which a contract cannot be: the fence has no
+# way to price its own execution. The fee is arithmetic over the ENGINE's
+# own inference count (cocolog's `call_metered/4'), so the checks are the
+# ones that tell a meter from a constant -- ten times the work costs
+# strictly more, the same call twice costs the same to the unit -- plus
+# the two laws gas exists for: work that failed still pays, and nobody
+# buys gas they cannot pay for.
+if sh "$HERE/coco.sh" > "$HERE/coco.out" 2>&1; then
+  if grep -q '^SKIP' "$HERE/coco.out"; then
+    say coco "$(head -1 "$HERE/coco.out")"
+  else
+    say coco GREEN
+  fi
+else
+  say coco RED; sed 's/^/   /' "$HERE/coco.out"; red=$((red + 1))
+fi
+
 # ---- training: rung 4 -------------------------------------------------
 # Proof of USEFUL work. Every worker claims 0.99; settlement measures and
 # reaches different verdicts. test/training.sh says what each check is

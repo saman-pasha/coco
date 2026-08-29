@@ -128,6 +128,13 @@ libraries:
     - bft            # rung 6: votes, quorum certificates, the lock, the evidence
     - hub            # rung 7: rules as entries, the namespace, the anchor, the bridge
     - tickmath       # prices as ticks, ticks as square roots: v3's arithmetic
+    # COCO, the native token: what the chain CHARGES IN, which no contract
+    # can be -- the fence cannot price its own execution, and a contract
+    # able to move the billing currency would be one that pays itself.
+    # Gas is the ENGINE's inference count, read with cocolog's
+    # `call_metered/4', so a fee is arithmetic over a number the engine
+    # produced rather than an estimate of it.
+    - coco
 
 # ---- the contracts ---------------------------------------------------
 # CONTRACTS ARE NOT LIBRARIES, and they do not live in library/. A
@@ -160,6 +167,7 @@ suite:
     - wire           # one process writes, a second reads it back
     - ledger         # rung 2: the PoA federation, and mallory attacking it
     - contracts      # rung 3: a contract is a predicate; mallory writes them too
+    - coco           # COCO: the native token, and gas priced in inferences
     - training       # rung 4: train freely, verify deterministically, commit rows
     - spine          # rung 5: a clock nobody can wind backwards
     - votes          # rung 6: stake off the chain, quorums, finality

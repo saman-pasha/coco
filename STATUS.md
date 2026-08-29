@@ -2,18 +2,19 @@
 
 Where this stands, what is proven, and what is not. Written to be picked
 up again rather than to look finished. What is proven HERE is the
-assembly and **all eight rungs**: `test/run.sh` GREEN with a server up —
-local, math, crypto, ledger, contracts, training, spine, votes, secure,
-hub, token, uniswap, uniswap-v3, lending, bench, wire — which is
+assembly and **all nine rungs**: `test/run.sh` GREEN with a server up —
+local, math, crypto, ledger, contracts, coco, training, spine, votes,
+secure, hub, token, uniswap, uniswap-v3, lending, bench, wire — which is
 sixty-two crypto checks against numbers published by other people, plus a
-federation ledger, contracts under a fence, settlement that measures
-rather than believes, a proof-of-history spine held to constants computed
-outside this project, a stake-weighted BFT vote whose safety arithmetic
-names the validators who break it, an aggregator that verifies three
-chains under three regimes by reading each chain's own rules off its own
-blocks, and a harness that prints transactions per second with the
-arrangement on every line. The ladder is walked; what is left is depth,
-not rungs.
+federation ledger, contracts under a fence, **a native token whose gas
+price is the engine's own inference count rather than a table somebody
+maintains**, settlement that measures rather than believes, a
+proof-of-history spine held to constants computed outside this project, a
+stake-weighted BFT vote whose safety arithmetic names the validators who
+break it, an aggregator that verifies three chains under three regimes by
+reading each chain's own rules off its own blocks, and a harness that
+prints transactions per second with the arrangement on every line. The
+ladder is walked; what is left is depth, not rungs.
 
 **And one arrangement that runs across rungs rather than being one of
 them**: `secure` re-runs proof of authority, proof of history and proof
@@ -128,10 +129,10 @@ the three pillars used and unmodified.
    static check over every clause body, and gas is the engine's own
    `--steps`. Twenty-seven checks, and mallory writes contracts too.
    The story below says what holds, and corrects one thing this rung
-   claimed before it was built. Still ahead: a gas *price* and metering
-   per call (`--steps` is the mechanism; who pays is policy), and
-   contract-to-contract calls, which need a rule about whose state is
-   entered.
+   claimed before it was built. **The gas price and the metering per
+   call this rung left ahead are rung 9's**, and they arrived as a
+   measurement rather than a table. Still ahead: contract-to-contract
+   calls, which need a rule about whose state is entered.
 4. **Training as settlement — proof of useful work** (`training/`) —
    **DONE**. A task names data, architecture, seed, a hash-committed
    holdout and a threshold; workers train in `--local` and publish
@@ -186,6 +187,27 @@ the three pillars used and unmodified.
    capability, filed below beside TLS. The two-lane comparison became
    the one that exists today: disjoint single-appender knowledge bases
    against one contended base.
+9. **COCO, the native token, and gas priced in inferences**
+   (`library/coco.pl`, `ledger/gas.pl`) — **DONE**. What the chain
+   charges in, which no contract can be: the fence cannot price its own
+   execution, and a contract able to move the billing currency would be
+   one that pays itself. Accounts are Ethereum-shaped addresses, balances
+   are u256, the supply is minted by one genesis block and afterwards
+   only moves — there is no mint — and the fee is paid to the sealing
+   authority rather than burnt, so conservation is exact and checkable
+   by somebody who does not believe the code. **The fee is arithmetic
+   over the ENGINE's own inference count**, which meant a pillar
+   capability first: cocolog counted every proof and told no program, so
+   `call_metered/4` was built there, on its own merits, with its own
+   case. Thirty checks. Still ahead: an inference is an inference,
+   so a `sha256/2` costs what a `between/3` step costs and work done
+   inside a crypto module is under-priced — pricing a builtin by weight
+   is a table in the engine and belongs to cocolog; there is no fee
+   market, one stated price rather than a bid; and `coco_settle_chain/0`
+   settles everything unsettled in ONE turn, which is atomic and right
+   until the chain is long enough that this repository's own "no long
+   compute inside a turn" applies to it. The mark is per block, so
+   settling in ranges is a change to one predicate.
 
 Two capabilities on the ladder's path belong to a pillar, not to this
 repository.
@@ -206,6 +228,105 @@ now; what that changed, and what it deliberately did not, is the first
 entry below.
 
 ## Done here
+
+### COCO: the native token, and a gas price that is a measurement
+
+Every chain that charges for compute has to know what the compute cost,
+and every chain answers that the same way: a table. Ethereum's yellow
+paper assigns a number to each opcode, the client implements the table,
+and the table and the implementation have to be kept in step by people —
+a gas cost is a *specification*, and a specification can disagree with
+what the machine actually did.
+
+Here it does not have to be one. cocolog meters every proof: the engine
+counts inferences because it must, for its own budget arithmetic, and
+`cocolog step` has printed `finished after N inference(s)` since the day
+it was written. **So a fee can be arithmetic over a number the engine
+produced rather than an estimate of it**, and that is the whole of this
+rung's claim. The price list is one clause — one inference costs 10^9 of
+the smallest unit — and the quantity is not anybody's opinion.
+
+**Which needed a pillar capability first, and it was built as one.** The
+count was kept in C and on a terminal, and nothing a *program* ran could
+read it: `call_limited/3` answered whether a goal fitted under a ceiling,
+never what it spent. So `call_metered/4` was written in cocolog, on its
+own merits, with `test/meter.sh` beside it — fourteen checks, and
+cocolog's suite is **39/39 GREEN, `red: 0`, no SKIPs** with it in.
+
+One decision in that builtin is load-bearing here: **it succeeds where
+`call_limited/3` fails.** `/3` fails when the goal fails, which is right
+for something that drops in where `once/1` was and wrong for a meter — a
+failed search is real work, and it is precisely the work an attacker
+would like to be free. `call_metered/4` answers `true`, `failed` or
+`inference_limit_exceeded`, and fills in the count for all three. The
+other decision is what it does *not* do: an exception is re-thrown and
+its count lost, because which exceptions are failures is the caller's
+policy. `library(coco)` puts its own `catch/3` inside the meter, which is
+what turns a contract that throws into an outcome that pays.
+
+**The coin.** Accounts are Ethereum-shaped addresses (`library(eth)`,
+already pinned to published vectors), balances are u256, and the supply
+is written by one genesis block and never again — **there is no mint** in
+the file, which is a property you can check by reading rather than a
+promise. The fee is *paid* to the sealing authority rather than burnt,
+because burning would be monetary policy and this rung is not making
+any; so `coco_conservation/0` is exact at every moment, and an auditor
+who believes none of the code above it can run it.
+
+**A transaction is two things and deliberately not three.** A
+`transfer(To, Amount)` is the token's own move: bounded, constant-priced,
+and done OUTSIDE the meter, because a ceiling that landed between the
+debit and the credit would destroy money. A `call(Contract, Goal)` is a
+fenced contract entry, metered, and safe under a ceiling because
+`contract_call/2` already stages its writes and flushes them only on
+success. There is no third shape, and the reason is short: a transaction
+carrying a *bare goal* would be `assertz` from anybody who can afford the
+fee.
+
+**Nobody buys gas they cannot pay for**, which is why nothing is taken up
+front and there is no refund to get wrong. The ceiling is the lower of
+what the sender asked for and what the balance already covers, so the
+bill is payable when it arrives. Two numbers from the case say it
+exactly: a sender holding 3 000 inferences' worth who asks for 100 000
+and runs a contract that never stops is charged **3000000000000 and left
+holding 0** — its last unit and not one more; and a sender below the
+intrinsic is `refused(gas)`, its balance and nonce untouched, because
+nobody may be billed for a transaction the node declined to run. A
+runaway with money behind it pays its ceiling exactly — 6000 inferences,
+**6000000000000** — since the charge is capped at what was *bought*, and
+`call_metered/4` can overshoot by the one inference that noticed the
+budget was gone.
+
+**And the chain is the only way in.** A transaction is a block payload,
+so it inherits every law the ledger already had: mallory is not an
+authority, her block never joins the chain, and the transaction inside it
+is never seen by the gas layer at all. Two layers asking two questions —
+who may seal, and who may spend — which is `contracts/node.pl`'s
+arrangement doing a second job. Settlement is marked per block hash, so
+settling twice moves nothing, and a bare process that consulted nothing
+reads the balances, the receipts and the conservation back out of the
+knowledge base.
+
+**Thirty checks**, the chain half against a real server.
+
+**What the meter does not see, and it is worth stating plainly**: an
+inference is an inference. A `sha256/2` is one C call and counts as one,
+a `between/3` step counts as one, so work done inside a crypto module is
+under-priced against work done in clauses. `coco_intrinsic/1` answers
+that for the *transaction's* own crypto — the signature verify the node
+pays for out of its own pocket — and nothing answers it inside a contract
+yet. Pricing a builtin by weight is a table in the engine, which is a
+change to cocolog and belongs there with its own case; naming it here is
+cheaper than pretending the number is finer than it is. Also absent by
+choice: a fee market (one stated price, not a bid) and account
+abstraction.
+
+For scale, since the number should be on the page: the `adder` contract's
+`sum_to(10, S)` settles at **1114 inferences** including the intrinsic —
+0.000001114 COCO. It is an engine-dependent number and will move when
+cocolog's engine does, which is why the suite pins the *relations* (ten
+times the work costs strictly more; the same call twice costs the same to
+the unit) and the two fees that are exact by construction.
 
 ### The comparison, and its rule
 
@@ -1440,6 +1561,21 @@ release on the crown; (4) unit NFTs riding enroll, capture and kill;
 (5) the dispute verifier — a bare process replays a challenged block
 and the signatures decide who lied, and that case is the suite pin.
 Each lands with its GREEN line or it is not on this page.
+
+**Rung (1) has landed, HERE rather than in the game** — see "COCO: the
+native token, and a gas price that is a measurement" above, and ladder
+rung 9. The accounts, the u256 balances, the inference-priced schedule
+and the debit riding inside the turn's own transaction all exist and are
+checked; what is written above about the gas meter turned out to be true
+in one respect the plan did not know, and that respect is the rung's
+whole point: the engine's count was not readable from Prolog at all, so
+the seam was not "in the machine runner" but a new builtin in cocolog
+(`call_metered/4`), built there on its own merits. What is still ahead
+for the GAME is everything that makes a match a chain — the order log,
+the escrow, the unit NFTs, the dispute verifier — and the movement fee,
+which now has a currency to be denominated in. CivV is untouched by this
+rung, deliberately: a token nobody can spend yet is a smaller claim than
+a token wired into a game that has not agreed to it.
 
 ## The disciplines
 

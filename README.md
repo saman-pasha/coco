@@ -101,10 +101,20 @@ STATUS.md carries the missions in full — what stands under each and the
 disciplines that hold across all of them. The short of it, each rung an
 arrangement that ends in a GREEN line before it is claimed: crypto as
 The Coco's own Parsi objects; the PoA federation ledger; contracts as
-predicates under `max_steps`; training as settlement; a PoH spine; PoS
-and BFT votes where the trust model wants them; the aggregator, where a
-chain carries its own light client; and the TPS harness, whose number
-is printed before any sentence uses it.
+predicates under `max_steps`; **COCO, the native token, where gas is the
+engine's own inference count rather than a price list somebody
+maintains**; training as settlement; a PoH spine; PoS and BFT votes
+where the trust model wants them; the aggregator, where a chain carries
+its own light client; and the TPS harness, whose number is printed
+before any sentence uses it.
+
+The token rung is where the thesis pays a bill. Every other chain has to
+*write down* what each operation costs, and keep that table in step with
+an implementation nobody can check it against; here the engine meters
+every proof and `call_metered/4` hands the count to the clause that
+charges for it — deterministically, so two nodes that never met compute
+the same fee. Gas stops being a specification and becomes a
+measurement.
 
 One arrangement runs **across** rungs rather than being one of them.
 `test/secure.sh` re-runs the three consensus rungs — 2, 5 and 6 — with
