@@ -231,7 +231,13 @@ as(Who, Goal) :-
 %% the same, as a check: one isolated proof, run as somebody
 iso_as(Who, L, Goal) :- iso(L, as(Who, Goal)).
 
-section(S) :- format("~n-- ~w~n", [S]).
+%% A SECTION HEADING IS A LABEL TOO, and a heading written with double
+%% quotes -- the only way to put an apostrophe in one without escaping it
+%% -- is a code list, printed by ~w as a row of numbers. label/2 absorbs
+%% it here for the same reason it does in iso/2, and for the same reason
+%% it exists at all: the first case to write one found out by reading the
+%% output, which is not a thing a suite should rely on.
+section(S0) :- label(S0, S), format("~n-- ~w~n", [S]).
 
 skip(Why) :- format("SKIP ~w~n", [Why]).
 
