@@ -100,8 +100,10 @@ And the harness has printed its sentence on two computers now:
 latest box cocolog runs the same five programs at 6-19x CPython as a
 language; its server arrangement sits within a few percent of its own
 in-memory one on every task (a turn over a socket, committed, at
-in-memory price); its embedded store answers the one task both systems
-keep durably 6.6x faster than python + sqlite3; and the PoH spine
+in-memory price); its embedded store answers the probe-heavy task
+6.5x faster than python + sqlite3's indexed file, while on the
+compute-heavy tasks a store attached costs BOTH sides almost nothing
+over their own memory; and the PoH spine
 produces at 4.1M ticks/s while four verifiers audit it 3.1-3.6x faster
 than one produced it.
 
