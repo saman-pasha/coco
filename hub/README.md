@@ -4,7 +4,7 @@ Rung 7. Many chains, one node, and **none of them known in advance**.
 
 ```sh
 sh hub/run.sh            # three chains, one host, narrated
-sh test/hub.sh           # the same rules, checked: 41 checks
+cocolog -s test/hub.pl           # the same rules, checked: 41 checks
 ```
 
 | file | what |

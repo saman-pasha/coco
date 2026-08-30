@@ -70,7 +70,7 @@ PORT` is the same field and names the transport). `ZIGURAT_TRANSPORT=tls`
 turns the whole hub secure; `ZIGURAT_CACERT`, `ZIGURAT_CERT` and
 `ZIGURAT_KEY` are the rest of it, and cert/key go together or not at all.
 
-**TLS changes the link, not one verdict**, and `test/secure.sh` proves it
+**TLS changes the link, not one verdict**, and `test/secure.pl` proves it
 by re-running `ledger`, `spine` and `votes` behind a terminator and
 requiring the verdict lines to be identical — including the deliberate
 successes. If a change here ever makes those two runs differ, the

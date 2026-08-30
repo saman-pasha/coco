@@ -5,7 +5,7 @@ None produced a number.
 
 ```sh
 sh bench/tps.sh          # the lanes, measured and narrated
-sh test/bench.sh         # the harness's RULES, checked: 25 checks
+cocolog -s test/bench.pl         # the harness's RULES, checked: 30 checks
 sh bench/solana.sh       # the other system on the same box (SKIPs without its toolchain)
 sh bench/poh.sh          # rung 5's clock: produce once, verify everywhere
 ```

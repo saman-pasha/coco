@@ -5,7 +5,7 @@ rule; and a block a quorum has precommitted is **final**.
 
 ```sh
 sh votes/run.sh          # the choreography, four validators, narrated
-sh test/votes.sh         # the same rules, checked: 37 checks
+cocolog -s test/votes.pl         # the same rules, checked: 37 checks
 ```
 
 | file | what |

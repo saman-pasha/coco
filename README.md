@@ -133,7 +133,7 @@ fence gained `caller/1`, answered by the node out of the signature it
 already verified rather than by an argument a stranger could write.
 
 One arrangement runs **across** rungs rather than being one of them.
-`test/secure.sh` re-runs the three consensus rungs — 2, 5 and 6 — with
+`test/secure.pl` re-runs the three consensus rungs — 2, 5 and 6 — with
 the node-to-store link encrypted, and requires every verdict to be
 unchanged. A ladder whose rungs meant something different over TLS would
 not be a ladder worth climbing.
@@ -196,7 +196,7 @@ with an empty permission set and reaches nothing, while a plain
 connection is not identified at all and reaches everything. Turning TLS
 on is what turns access control on.
 
-**It changes the link and not one verdict**, and `test/secure.sh` is
+**It changes the link and not one verdict**, and `test/secure.pl` is
 where that is demonstrated rather than asserted. `ledger`, `spine` and
 `votes` run again behind a TLS terminator, and every verdict line must
 come back byte for byte identical:

@@ -23,21 +23,17 @@ red=0
 ran=""
 say() { ran="$ran $1"; printf '%-10s %s\n' "$1" "$2"; }
 
-# A CASE IS A COCOLOG SCRIPT WHERE test/<c>.pl EXISTS: `-s' loads it and
-# proves main, and THE EXIT CODE IS THE VERDICT -- 0 exactly when main
-# proved, which `checks_done' withholds on any red check. The .sh
-# spelling drives whatever has not been converted yet, so the suite is
-# green throughout the conversion rather than at the end of it. This is
-# CivV's line, and it is here for the reason it was there: eighteen
-# copies of one `if sh ... grep SKIP ... else RED' block were eighteen
-# places to get the SKIP handling subtly different.
+# A CASE IS A COCOLOG SCRIPT: `-s' loads test/<c>.pl and proves main,
+# and THE EXIT CODE IS THE VERDICT -- 0 exactly when main proved, which
+# `checks_done' withholds on any red check. Every case is one now; the
+# `.sh' fallback that carried the suite through the conversion is gone
+# with the last shell it drove. This is CivV's line, and it is here for
+# the reason it was there: eighteen copies of one
+# `if sh ... grep SKIP ... else RED' block were eighteen places to get
+# the SKIP handling subtly different.
 case_run() {
   _c=$1
-  if [ -f "$HERE/$_c.pl" ]; then
-    ( cd "$ROOT" && timeout 3600 "$C" -s "test/$_c.pl" ) > "$HERE/$_c.out" 2>&1
-  else
-    sh "$HERE/$_c.sh" > "$HERE/$_c.out" 2>&1
-  fi
+  ( cd "$ROOT" && timeout 3600 "$C" -s "test/$_c.pl" ) > "$HERE/$_c.out" 2>&1
   if [ $? -eq 0 ]; then
     if grep -aq '^SKIP' "$HERE/$_c.out"; then
       say "$_c" "$(grep -a '^SKIP' "$HERE/$_c.out" | head -1)"

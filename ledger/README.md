@@ -5,7 +5,7 @@ daemon — and a criminal node that attacks every law the chain has.
 
 ```sh
 sh ledger/run.sh          # the choreography, narrated
-sh test/ledger.sh         # the same thing, checked: 24 checks
+cocolog -s test/ledger.pl         # the same thing, checked: 25 checks
 ```
 
 ## What a node is
@@ -118,7 +118,7 @@ It is not **refused**. It is **outweighed**. The rewrite is a shorter
 chain, fork choice prefers the longer one, and the head does not move.
 That distinction — between what is valid and what is agreed — is the
 whole of what a consensus rule is for, and it is why the last part of
-`test/ledger.sh` asserts that the block *is* valid before asserting that
+`test/ledger.pl` asserts that the block *is* valid before asserting that
 the head *did not move*.
 
 ## What is not here yet
@@ -134,7 +134,7 @@ exists. Until then the federation is enforced by the rule in
 unauthorized node can still *connect* and be ignored, rather than not
 connect at all.
 
-**A Zeytun audit page.** The read path exists — `test/ledger.sh` ends by
+**A Zeytun audit page.** The read path exists — `test/ledger.pl` ends by
 having a process that consulted nothing re-verify every block it finds,
 which is exactly the auditor's position. Presenting it as a page over
 HTTP is choreography that has not been written.

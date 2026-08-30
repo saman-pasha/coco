@@ -4,7 +4,7 @@ Rung 5. A clock nobody can wind backwards.
 
 ```sh
 sh spine/run.sh          # the choreography, narrated and timed
-sh test/spine.sh         # the same thing, checked: 16 checks
+cocolog -s test/spine.pl         # the same thing, checked: 16 checks
 ```
 
 | file | what |

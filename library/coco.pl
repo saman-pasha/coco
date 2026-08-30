@@ -64,7 +64,7 @@
 %%
 %% AN ACCOUNT IS AN ADDRESS, derived Ethereum's way -- the last twenty
 %% bytes of keccak256 over the public key, `library(eth)', pinned to
-%% published vectors in `test/crypto.sh'. The transaction carries the
+%% published vectors in `test/crypto.pl'. The transaction carries the
 %% PUBLIC KEY rather than the address, so verification needs no recovery
 %% id and the address is a consequence rather than a claim: a signature
 %% that verifies against that key, whose address is the account being

@@ -293,7 +293,7 @@ aave_compound(Rate, Dt, Factor) :-
 %% -- 9000 against 100 WETH at 100, where the ceiling is 7500. What is
 %% checked now is the ceiling itself, at the wei: 7500 is granted, 7501
 %% is refused, and a refusal leaves no debt, no payout and no drift in
-%% the pot. Those are the four things test/lending.sh reads back, and
+%% the pot. Those are the four things test/lending.pl reads back, and
 %% they are worth more than any account of how the write got out --
 %% a refusal that leaves state behind is the bug, whatever let it
 %% through.

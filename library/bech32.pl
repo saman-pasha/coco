@@ -22,7 +22,7 @@
 %% on average. That is why the generator constants below are what they
 %% are, and why one wrong bit in them silently weakens the guarantee
 %% rather than breaking anything visibly -- they are checked against
-%% published addresses in test/crypto.sh, which is the only way to know.
+%% published addresses in test/crypto.pl, which is the only way to know.
 %%
 %% TWO CONSTANTS, AND WHICH ONE IS A CONSENSUS RULE. BIP-173 ends the
 %% checksum by XOR with 1. That turned out to have a flaw: for some

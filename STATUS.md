@@ -277,6 +277,74 @@ entry below.
 
 ## Done here
 
+### The suite is cocolog
+
+Every case in `test/` is a cocolog script now -- `main/0`, a run of
+checks, a GREEN or RED verdict line, run as `cocolog -s test/<case>.pl`
+with **the exit code as the verdict**: 0 exactly when `main` proved,
+which `checks_done` withholds on any red check. Eighteen cases, plus the
+two blocks `run.sh` used to carry inline (`local` and `wire`), against
+one `test/prelude.pl`. `run.sh` only drives them, and prefers the `.pl`
+where one exists, so the suite stayed green through the conversion
+rather than at the end of it. This is CivV's shape, brought here for the
+reason it went there: eighteen copies of a `check()` function, eighteen
+`q()` helpers spawning cocolog and grepping its output, eighteen
+spellings of "did that module build" -- eighteen copies of one idea
+disagree eventually, and the disagreement is silent.
+
+**What replaced what.** `check()` in every file became
+`library(process)`'s `check/3`, one copy. A `q()` that spawned a whole
+cocolog to get a fresh store became `iso/2` -- `run_isolated/2`, a fresh
+machine and a fresh store in this process -- which is what most of the
+spawning was actually buying: `bond.pl` alone funds a genesis and bonds
+against it in twenty-one of its twenty-five checks, and without
+isolation the second check would inherit the first's balances and a
+slash would land on a bond an earlier check had already taken.
+`grep -aoE` on a process's output became the goal's own bindings,
+compared by `want/2`, which prints both values on a mismatch. `uname -s`
+and `command -v` became `library(os)`, one answer on both systems.
+
+**AND WHAT STILL SPAWNS, DELIBERATELY.** Half of this repository's
+claims are about SEPARATE PROCESSES -- one writes the knowledge base and
+a second, which consulted nothing, reads it back -- and `run_isolated/2`
+is a fresh machine in the SAME process, which cannot make that claim.
+So `solo/3`, `wire/4`, `wire_as/5` and `wire_consult/2` still start real
+cocolog processes, and every case that proves something across processes
+uses them: the three authorities gossiping in `ledger`, the settlement
+in `coco`, the unbonding that matures against the CHAIN's height in
+`bond`, the bare auditors everywhere. Converting those to `iso/2` would
+have kept the suite green and deleted the proof. Two more stay shelled
+for their own reasons: `bench`'s language pairs, because one lane is a
+cocolog and the other is a CPython and there is no way to ask CPython a
+question from inside cocolog; and all of `secure`, whose subject IS a
+link between two processes.
+
+**Each conversion was gated on the CHECK COUNT against its shell twin**,
+not on its own verdict, and that gate is the reason to trust the result.
+A `.pl` that is green tells you what it ran, not what it left out.
+`crypto.pl` was green with sixty-nine checks where `crypto.sh` had
+seventy-one: two bech32m vectors had simply gone missing, and a
+retyped Bitcoin genesis coinbase had gained a byte. Both were invisible
+to the case itself.
+
+**One finding came out of the conversion, and it is the interesting
+kind.** `secure` re-runs `ledger`, `spine` and `votes` over a TLS
+terminator and requires the verdict lines to be identical. The first
+such run went RED: `ledger` lost carol's seal -- head at 1 instead of 2,
+five blocks instead of six, and the fork closing on the wrong branch.
+It was not TLS. Every one of the eighteen `.sh` cases had written
+`$ZIGURAT_DIAL --timeout 30`, and the dial `config.sh` exports names no
+timeout at all, so the converted cases had been running at cocolog's
+default of twenty seconds. Twenty is enough in the clear and not enough
+through an encrypted hop, and **the node call that ran out did not
+raise** -- it simply did not seal, which is a block that never arrives.
+The prelude appends the case timeout now when the inherited dial names
+none, and the same run that lost the seal at twenty keeps it at thirty.
+So the case's own claim survives intact: TLS changed no verdict, and the
+thing that looked like it had was ours.
+
+`sh test/run.sh` with a server up: nineteen cases, `red: 0`, no SKIPs.
+
 ### cocolog against CPython, measured -- and yes, it is slow
 
 `bench/languages.md` compared the two languages across every aspect and
@@ -350,7 +418,7 @@ no rule can catch is still which tasks were chosen -- five small
 programs are not a language, and these five were picked to include the
 ones cocolog was expected to lose.
 
-`test/bench.sh` grew six checks so the comparison cannot rot quietly:
+`test/bench.pl` grew six checks so the comparison cannot rot quietly:
 the five task pairs must keep answering the same value, and so must the
 dict and sqlite implementations of the store task. Thirty-one checks.
 
@@ -547,7 +615,7 @@ being *readable* while your money sits there waiting to mature. Tying the
 weight to `coco_at_risk/2` closes it by construction and leaves the
 simpler sentence: **you weigh what you can lose.** The weight goes to
 zero at exactly the moment the money stops being takeable, which is when
-it lands back in a balance. `test/bond.sh` pins the attack itself —
+it lands back in a balance. `test/bond.pl` pins the attack itself —
 equivocate, unbond everything, and the slash still lands.
 
 **RUBBISH IS A REFUSAL, NOT AN EMERGENCY**, and this was a real hole in
@@ -764,7 +832,7 @@ certificate grants, and an uncertificated one is identified with an empty
 permission set and reaches nothing. Turning TLS on is what turns access
 control on.
 
-**IT CHANGES THE LINK AND NOT ONE VERDICT.** `test/secure.sh` runs
+**IT CHANGES THE LINK AND NOT ONE VERDICT.** `test/secure.pl` runs
 `ledger`, `spine` and `votes` again behind a TLS terminator and requires
 the verdict lines to come back byte for byte identical — 25, 16 and 37 of
 them, seventy-eight in all, including the three attacks that are supposed
@@ -1858,7 +1926,7 @@ of The Coco's four materials meeting in one file, resolved at run time.
 `eth_signer/4` recovers and addresses in one step — the whole question
 an EVM chain asks of a transaction.
 
-`test/crypto.sh` holds all of it to fifteen checks: the published
+`test/crypto.pl` holds all of it to fifteen checks: the published
 Keccak vectors including a 200-byte input across the 136-byte rate; the
 generator and 2G, which between them exercise every piece of the field
 and point arithmetic; a good signature verifying and the same signature
@@ -1982,7 +2050,7 @@ server up — ends `red: 0`.
 One more, added the day the link could be encrypted: **an authenticated
 peer is not a trusted one.** Every validity rule here asks who SIGNED the
 block and never who opened the socket, and no path may ever skip
-re-verification because a peer arrived over TLS. `test/secure.sh` holds
+re-verification because a peer arrived over TLS. `test/secure.pl` holds
 that in both directions — mallory over a verified link is refused exactly
 as she was in the clear, and every honest verdict is unchanged — so a
 consensus law that started depending on the transport would show up as a

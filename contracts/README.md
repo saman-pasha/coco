@@ -5,7 +5,7 @@ static check; gas is the engine's own `--steps`.
 
 ```sh
 sh contracts/run.sh       # the choreography, narrated
-sh test/contracts.sh      # the same thing, checked: 27 checks
+cocolog -s test/contracts.pl      # the same thing, checked: 30 checks
 ```
 
 | file | what |

@@ -5,7 +5,7 @@ performs, not for cycles burned.
 
 ```sh
 sh training/run.sh        # the choreography, narrated
-sh test/training.sh       # the same thing, checked: 18 checks
+cocolog -s test/training.pl       # the same thing, checked: 17 checks
 ```
 
 ## The discipline in one sentence

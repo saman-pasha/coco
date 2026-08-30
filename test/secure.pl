@@ -157,16 +157,13 @@ up(Out, N) :-
 %% block "audits clean" while auditing a different block; comparing the
 %% lines makes "TLS changed nothing" mean it.
 
-%% run one case the way test/run.sh runs it: the .pl if there is one, and
-%% whatever it exits with, because a RED case is a reading here rather
-%% than an error
+%% run one case the way test/run.sh runs it, and keep whatever it exited
+%% with -- a RED case is a READING here rather than an error, and the
+%% comparison below is what decides the verdict
 case_out(Case, File) :-
     coco_bin(C), coco_root(R),
-    sh_join([R, '/test/', Case, '.pl'], P),
-    (   exists_file(P)
-    ->  sh_join(['timeout 3600 ', C, ' -s test/', Case, '.pl'], How)
-    ;   sh_join(['sh test/', Case, '.sh'], How) ),
-    sh_any(['cd ', R, ' && ', How, ' > ', File, ' 2>&1'], _).
+    sh_any(['cd ', R, ' && timeout 3600 ', C, ' -s test/', Case, '.pl > ',
+            File, ' 2>&1'], _).
 
 lines_of(File, Pattern, Ls) :-
     (   exists_file(File), read_file_to_codes(File, Cs), re_lines(Pattern, Cs, Ls0)
