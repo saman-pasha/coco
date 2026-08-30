@@ -171,9 +171,58 @@ sh test/run.sh        # every case; the wire cases SKIP without a server
 ```
 
 `coco.yaml` is also where the crypto module list lives, so adding a
-module is a line there and nothing else — `build.sh` and `crypto.sh`
+module is a line there and nothing else — `build.sh` and the crypto case
 both read it rather than carrying their own copy. Four copies of one
 fact drift; one does not.
+
+### The suite is cocolog
+
+**Every case is a cocolog script**, so the suite is written in the
+language the repository is written in. A case is `main/0` — a run of
+checks and a verdict line — and **the exit code is the verdict**: 0
+exactly when `main` proved, which `checks_done` withholds on any red
+check. `test/run.sh` only drives them.
+
+```sh
+../cocolog/cocolog -s test/bond.pl   # one case; 0 or 1 says which
+sh test/run.sh                       # all nineteen, one line each
+```
+
+Nineteen cases, **551 checks**, and every one of them printed:
+
+| case | checks | case | checks |
+|---|---:|---|---:|
+| `local` | 1 | `spine` | 16 |
+| `math` | 29 | `votes` | 37 |
+| `crypto` | 71 | `secure` | 17 |
+| `ledger` | 25 | `hub` | 41 |
+| `contracts` | 30 | `token` | 32 |
+| `coco` | 32 | `uniswap` | 28 |
+| `bond` | 25 | `uniswap-v3` | 61 |
+| `units` | 19 | `lending` | 39 |
+| `training` | 17 | `bench` | 30 |
+| | | `wire` | 1 |
+
+One `test/prelude.pl` carries what every case shares: `iso/2`, which is
+one isolated proof — a fresh machine and a fresh store — with the
+comparison inside it; `want/2`, which prints both values on a mismatch;
+`wire/4` and its relatives, which start a real cocolog against a shared
+knowledge base; and `library(os)` for every question a shell used to
+answer differently on Linux and macOS.
+
+**Most of a case runs in one process, and the cross-process claims still
+spawn.** `iso/2` is what a check wants when it needs a clean slate —
+`bond.pl` funds a genesis and bonds against it in twenty-one of its
+twenty-five checks, and without a fresh store per check a slash would
+land on a bond an earlier check had already taken. But half of this
+repository's claims are about SEPARATE processes: one writes the
+knowledge base and a second, which consulted nothing, reads it back. A
+fresh machine in the same process cannot make that claim, so those
+checks start real cocolog processes and always will — the three
+authorities gossiping in `ledger`, the settlement in `coco`, the
+unbonding that matures against the chain's height in `bond`, every bare
+auditor in the file. Converting them would keep the suite green and
+delete the proof.
 
 ### Over an encrypted link
 
@@ -302,10 +351,12 @@ docs/             diagrams worth keeping: seal-to-settlement.html traces
                   and rung 6 twice over -- stake-to-settlement.html from
                   the stake's side, vote-to-settlement.html from the
                   vote's; rules-to-settlement.html for rung 7
-test/             the arrangements that hold it GREEN; config.sh reads
-                  coco.yaml and is sourced, not run, and builds the one
-                  dial string every node reaches its store through;
-                  secure.sh re-runs rungs 2, 5 and 6 over TLS
+test/             the arrangements that hold it GREEN, as cocolog
+                  scripts over one prelude.pl -- run.sh drives them and
+                  config.sh, sourced rather than run, reads coco.yaml
+                  and builds the one dial string every node reaches its
+                  store through; secure.pl re-runs rungs 2, 5 and 6
+                  over TLS and requires the verdicts to be identical
 art/              the banner -- Coco, the engineer, one of the three
 ```
 
