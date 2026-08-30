@@ -180,7 +180,11 @@ lang_half :-
         answer_of(['timeout 60 python3 ', D, '/lookup.py 200 1 2>/dev/null'], Dict),
         answer_of(['timeout 60 python3 ', D,
                    '/lookup_sqlite.py 200 1 /tmp/coco-benchpair.db 2>/dev/null'], Sq),
-        ( catch(sh('rm -f /tmp/coco-benchpair.db'), _, true) -> true ; true ),
+        %% `rm -f' is delete_file/1 behind its guard: gone is the
+        %% postcondition, so a file that was never there is a success.
+        ( exists_file('/tmp/coco-benchpair.db')
+        ->  ( catch(delete_file('/tmp/coco-benchpair.db'), _, true) -> true ; true )
+        ;   true ),
         iso('lookup: the dict and the sqlite store answer the same',
             ( present(Sq), want(Sq, Dict) ))
     ;   skip('no python3 -- the language pairs are not checked')

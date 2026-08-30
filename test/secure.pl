@@ -122,7 +122,18 @@ certificates(Dir) :-
     shl(['openssl req -x509 -newkey rsa:2048 -nodes -keyout ', Dir, '/s.pem -out ',
          Dir, '/s.crt -days 2 -subj /CN=localhost ',
          '-addext subjectAltName=DNS:localhost >/dev/null 2>&1']),
-    shl(['cat ', Dir, '/s.pem ', Dir, '/s.crt > ', Dir, '/full.pem']),
+    %% THE CHAIN IS BUILT, NOT `cat'-ed. A concatenation of two files into a
+    %% third is two reads and a write, and cocolog answers all three now:
+    %% write_file_from_codes/2 masks its bytes exactly as
+    %% read_file_to_codes/2 does, so a PEM survives whole and no shell has
+    %% to be trusted with three paths in one string.
+    sh_join([Dir, '/s.pem'], Pem),
+    sh_join([Dir, '/s.crt'], Crt),
+    sh_join([Dir, '/full.pem'], Full),
+    read_file_to_codes(Pem, PemCs),
+    read_file_to_codes(Crt, CrtCs),
+    append(PemCs, CrtCs, FullCs),
+    write_file_from_codes(Full, FullCs),
     shl(['openssl req -x509 -newkey rsa:2048 -nodes -keyout ', Dir, '/o.pem -out ',
          Dir, '/other.crt -days 2 -subj /CN=somebody-else >/dev/null 2>&1']).
 
