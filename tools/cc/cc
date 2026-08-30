@@ -1,3 +1,29 @@
 #!/bin/sh
 # The C compiler this repository builds with. See ./README.
-exec "${CICILI_CC:-clang}" "$@"
+#
+# ONE FLAG FOR DARWIN, and only when linking a shared object. A loadable
+# module leaves the interpreter's symbols -- coco_module_register and the
+# rest of the SDK -- UNDEFINED, to be found in the cocolog binary that
+# dlopen's it. Linux's linker allows that by default; macOS's refuses:
+#
+#     ld: symbol(s) not found for architecture x86_64
+#
+# naming a symbol that exists in the program the module is for.
+# `-undefined dynamic_lookup' is the flag that says "defer to load time",
+# which is what every module here means. Here rather than in thirteen
+# build.sh files, because a flag that appears in thirteen places will be
+# missing from the fourteenth.
+extra=
+case "$(uname -s)" in
+  Darwin)
+    # ...and not only for a shared object. A program that links only the
+    # client archive leaves the TLS entry points and the embedded engine's
+    # UNDEFINED on purpose -- `weak' on Linux, `weak_import' here -- and
+    # Mach-O's weak_import still wants a definition at LINK time; only
+    # dynamic lookup lets the reference stay open and bind to null at load,
+    # which is the Linux behaviour every caller of those symbols checks for.
+    # So every link step on Darwin (anything not a `-c' compile) gets it.
+    link=1; for a in "$@"; do [ "$a" = -c ] && link=0; done
+    [ $link = 1 ] && extra="-Wl,-undefined,dynamic_lookup" ;;
+esac
+exec "${CICILI_CC:-clang}" $extra "$@"
