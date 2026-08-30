@@ -18,8 +18,6 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/config.sh"
 C="$COCOLOG_BIN"
-HOST=$ZIGURAT_HOST
-PORT=$ZIGURAT_PORT
 
 red=0
 ran=""
@@ -56,15 +54,10 @@ if [ ! -x "$C" ]; then
 fi
 
 # ---- local ----------------------------------------------------------
-got=$(timeout 60 "$C" run "$ROOT/modules/hello.pl" hello 2>&1)
-want="cicili, the philosopher, writes it
-zigurat, the warrior, keeps it
-coco, the engineer, makes it think"
-if [ "$got" = "$want" ]; then
-  say local GREEN
-else
-  say local "RED: got [$got]"; red=$((red + 1))
-fi
+# The suite's smallest case: the pillars built, the binary runs, a .pl
+# file in this repository loads and proves a goal -- with no store, no
+# key and no chain in the way. Everything after it assumes all four.
+case_run local
 
 # ---- math: the width an exchange needs --------------------------------
 # library(u256): 256-bit integers that REFUSE rather than wrap. The case
@@ -211,20 +204,12 @@ case_run lending
 case_run bench
 
 # ---- wire -----------------------------------------------------------
-W="$ZIGURAT_DIAL --timeout $ZIGURAT_TIMEOUT --kb $ZIGURAT_KB"
-if timeout 20 "$C" $W list >/dev/null 2>&1; then
-  timeout 60 "$C" $W forget >/dev/null 2>&1
-  timeout 60 "$C" $W consult "$ROOT/modules/hello.pl" >/dev/null 2>&1
-  got=$(timeout 60 "$C" $W query "pillar(coco, Role, Deed), format(\"~w ~w~n\", [Role, Deed])" 2>/dev/null | grep -a '^engineer')
-  if [ "$got" = "engineer makes it think" ]; then
-    say wire GREEN
-  else
-    say wire "RED: got [$got]"; red=$((red + 1))
-  fi
-  timeout 60 "$C" $W forget >/dev/null 2>&1
-else
-  say wire "SKIP no Zigurat server at $HOST:$PORT"
-fi
+# The family's cross-process claim in the smallest possible way: one
+# process consults modules/hello.pl into a knowledge base, a second --
+# which consulted nothing -- opens the same base and proves a goal over
+# clauses it never loaded. Every case that says "a bare process reads it
+# back" is this sentence with a chain in it. SKIPs without a server.
+case_run wire
 
 # EVERY DECLARED CASE MUST HAVE RUN. coco.yaml calls itself the one
 # declaration, but this file kept its own copy of the case list -- so a

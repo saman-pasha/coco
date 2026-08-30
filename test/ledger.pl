@@ -72,7 +72,12 @@ mallory_half :-
     attack(attack_wrong_parent,     'a real block re-pointed at a parent', refused),
     attack(attack_orphan,           'a block whose parent is missing',     refused),
     %% The one that works, and the reason it does not matter.
-    attack(attack_malleate,         'the malleated twin verifies',         'ACCEPTED'),
+    %% ...and it says so in the LABEL, not only in the value: test/secure.pl
+    %% counts the deliberate successes across the three consensus rungs by
+    %% that marker, to require that TLS did not turn one of them into a
+    %% refusal. spine and votes already spelled it this way.
+    attack(attack_malleate, 'the malleated twin verifies -- SUCCEEDS, and must',
+           'ACCEPTED'),
     iso('and is the same block, so it gains nothing',
         ( ledger_program,
           honest_block(block(H, Pv, A, P, Sg, Hs)),
