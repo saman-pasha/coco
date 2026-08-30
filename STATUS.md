@@ -277,6 +277,40 @@ entry below.
 
 ## Done here
 
+### The last of the shell: the chain is built, not `cat`-ed
+
+cocolog's `library(files)` had `read_file_to_codes/2` and no counterpart,
+which meant A COCOLOG SCRIPT COULD NOT WRITE A FILE -- no `open/3`, no
+`tell/1`, measured rather than assumed. Every caller that wanted one
+reached for a shell. `write_file_from_codes/2` and
+`append_file_from_codes/2` were added there for exactly this, and this
+suite had two places that wanted them. **18 shell calls to 16, `red: 0`
+in 3m20s, 19 cases.**
+
+* **`secure.pl`'s `cat s.pem s.crt > full.pem` is two reads and a
+  write.** The new predicate masks its bytes exactly as
+  `read_file_to_codes/2` does, so a PEM survives whole and no shell is
+  trusted with three paths in one string. The case proves it end to end
+  -- 17 checks GREEN, chain and all -- which is the test that counts,
+  because a corrupted chain fails a TLS handshake rather than failing
+  quietly.
+* **`bench.pl`'s `rm -f` is `delete_file/1`** behind its guard: gone is
+  the postcondition, so a file that was never there is a success.
+
+WHAT STAYED, and it is not an oversight: three redirections capture a
+SUBPROCESS's stdout -- `secure`'s terminator log and case log,
+`training`'s filtered run -- and the subprocess does that writing, not
+us. `mktemp`, `openssl` and the recursive `rm -rf` of a temp directory
+stay as the external tools they are.
+
+**Sixteen against CivV's fifty-eight, and the gap is the point.** The
+same sweep over there went 99 -> 58, because that suite had been asking
+a shell for questions cocolog could already answer -- globs, `mkdir -p`,
+`rm -f`, `mv`, `sed`. This suite never had much shell in it, so the
+refactor that mattered here was one line. That is the arrangement
+working: the case that reads best is the case that asked its own
+language first.
+
 ### The suite is cocolog
 
 Every case in `test/` is a cocolog script now -- `main/0`, a run of
