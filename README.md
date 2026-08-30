@@ -95,6 +95,16 @@ rows are this repository's load-bearing wall; the rest of the comparison
 — the everyday row included — is there so nobody mistakes the wall for
 the whole house.
 
+And the harness has printed its sentence on two computers now:
+[bench/README.md](bench/README.md) carries the current readings. On the
+latest box cocolog runs the same five programs at 6-19x CPython as a
+language; its server arrangement sits within a few percent of its own
+in-memory one on every task (a turn over a socket, committed, at
+in-memory price); its embedded store answers the one task both systems
+keep durably 6.6x faster than python + sqlite3; and the PoH spine
+produces at 4.1M ticks/s while four verifiers audit it 3.1-3.6x faster
+than one produced it.
+
 ## The ladder
 
 STATUS.md carries the missions in full — what stands under each and the

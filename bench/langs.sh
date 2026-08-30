@@ -131,6 +131,21 @@ run_once() {
   echo "$((_e - _s)) ${_ans:-NONE}"
 }
 
+# THE LABEL IS A FUNCTION, NOT A SUBSTITUTION. A multi-line `case`
+# inside `$(...)` parses on dash and dies on macOS bash-as-sh
+# ("syntax error near unexpected token newline"), which mangled every
+# label column of the first run on a Mac while the numbers printed
+# fine around it. A named function parses everywhere.
+arr_name() {
+  case $1 in
+    python)  echo cpython_process ;;
+    local)   echo cocolog_local_in_memory_no_database ;;
+    embed)   echo cocolog_embedded_mvccs_fresh_store ;;
+    zigurat) echo cocolog_server_one_kb_emptied ;;
+    sqlite)  echo cpython_sqlite3_file_indexed_committed ;;
+  esac
+}
+
 median3() { printf '%s\n%s\n%s\n' "$1" "$2" "$3" | sort -n | sed -n 2p; }
 
 # Double the reps until the run clears the floor. The runs spent here are
@@ -199,9 +214,7 @@ echo "$TASKS" | while IFS=: read -r task n what; do
     if [ "$r" -le 1 ]; then
       printf '   %-8s %8s %7s %12s %9s %7s  %s\n' "$lane" "$r" "$(secs $tR)" \
         'one rep' 'no rate' - \
-        "$(case $lane in python) echo cpython_process;; local) echo cocolog_local_in_memory_no_database;;
-                          embed) echo cocolog_embedded_mvccs_fresh_store;; zigurat) echo cocolog_server_one_kb_emptied;;
-                          sqlite) echo cpython_sqlite3_file_indexed_committed;; esac)"
+        "$(arr_name "$lane")"
       continue
     fi
     per=$(awk -v a="$tR" -v b="$t2R" -v r="$r" 'BEGIN { d = (b - a) / r / 1000000000; printf "%.6f", (d > 0 ? d : 0) }')
@@ -213,9 +226,7 @@ echo "$TASKS" | while IFS=: read -r task n what; do
     fi
     dbl=$(awk -v a="$tR" -v b="$t2R" 'BEGIN { printf "%.2f", (a > 0 ? b / a : 0) }')
     printf '   %-8s %8s %7s %12s %9s %7s  %s\n' "$lane" "$r" "$fix" "$per" "$rel" "$dbl" \
-      "$(case $lane in python) echo cpython_process;; local) echo cocolog_local_in_memory_no_database;;
-                        embed) echo cocolog_embedded_mvccs_fresh_store;; zigurat) echo cocolog_server_one_kb_emptied;;
-                        sqlite) echo cpython_sqlite3_file_indexed_committed;; esac)"
+      "$(arr_name "$lane")"
   done
   echo
 done

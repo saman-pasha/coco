@@ -73,34 +73,41 @@ against 18.38 then -- 10.6x at an identical arrangement.**
 
 ### The language: cocolog against CPython
 
-`bench/langs.sh`, Run C. Per rep, and the fourth column exists because a
-dict is not a database and timing one against a store measures the
-guarantees rather than the engine:
+`bench/langs.sh`, Run H -- a SECOND BOX (macOS, i9-9880H; every earlier
+run was one Linux machine, so nothing here compares to Run C without
+naming both computers). Per rep, two agreeing runs of three medians
+each; the `zigurat` column is printed for the first time because it is
+finally a measurement rather than a confound:
 
-| task (one rep) | cocolog --local | cpython | cocolog --embed | cpython + sqlite3 |
-|---|---|---|---|---|
-| nrev, 400-element list | ~0.0387 s (5.9x) † | 0.006611 s | 0.035925 s (5.4x) | -- |
-| queens, all 92 solutions | 0.025366 s (14.3x) | 0.001772 s | 0.024442 s (13.8x) | -- |
-| loop, 100 000 additions | 0.106376 s (33.9x) | 0.003141 s | 0.124958 s (39.8x) | -- |
-| lookup, 1000 probes / 200 facts | 0.003614 s (47.6x) | 0.000076 s | 0.002291 s (30.1x) | 0.004432 s (58.3x) |
-| sortnums, 5000 integers | 0.012735 s (9.1x) | 0.001392 s | 0.012850 s (9.2x) | -- |
+| task (one rep) | cocolog --local | cpython | cocolog --embed | cocolog zigurat | cpython + sqlite3 |
+|---|---|---|---|---|---|
+| nrev, 400-element list | 0.030445 s (6.4x) | 0.004751 s | 0.034478 s (7.3x) | 0.035045 s (7.4x) | -- |
+| queens, all 92 solutions | 0.021928 s (11.0x) | 0.001989 s | 0.021807 s (11.0x) | 0.022148 s (11.1x) | -- |
+| loop, 100 000 additions | 0.078728 s (18.7x) | 0.004218 s | 0.079328 s (18.8x) | 0.078531 s (18.6x) | -- |
+| lookup, 1000 probes / 200 facts | 0.001815 s (18.7x) | 0.000097 s | 0.001850 s (19.1x) | 0.001896 s (19.5x) | 0.012222 s (126.0x) |
+| sortnums, 5000 integers | 0.010233 s (6.0x) | 0.001700 s | 0.010259 s (6.0x) | 0.010241 s (6.0x) | -- |
 
-And the lookup slope, `--local`, no store in it at all: **7x -> 3x at 200
-facts, 49x -> 3x at 2 000, 411x -> 4x at 20 000.** A ratio that grew with N
-was a linear scan's signature; first-argument indexing landed in cocolog
-and it is flat.
+**As a language, 6-19x CPython on this box**; as a state machine, all
+three cocolog arrangements sit within a few percent of one another on
+every task -- the server over a socket included -- and on the one task
+with a durable Python counterpart, `--embed` answers the same thousand
+probes 6.6x faster than python + sqlite3. The lookup slope stayed flat
+(cocolog 0.20 s at 200 facts, 0.22 s at 20 000), with the caveat below
+about what that table's ratio column may claim on this box.
 
 ### The clock: rung 5's spine
 
-`bench/poh.sh`. Produce once, verify everywhere:
+`bench/poh.sh`, Run H's box. Produce once, verify everywhere:
 
 | ticks | produce | verify | verify x4 | speedup | loop rate |
 |---:|---:|---:|---:|---:|---:|
-| 8 000 000 | 2.52s | 2.54s | 0.66s | **3.9x** | 3.19M/s |
-| 32 000 000 | 10.11s | 10.08s | 2.58s | **3.9x** | 3.17M/s |
+| 8 000 000 | 2.09s | 2.08s | 0.67s | **3.1x** | 4.14M/s |
+| 32 000 000 | 7.83s | 7.85s | 2.21s | **3.6x** | 4.17M/s |
 
-and the same spine in clauses, as `library(poh)`'s oracle: 326 000 ticks/s
-against the module's 3.08M, **9-10x**, flat across three sizes.
+and the same spine in clauses, as `library(poh)`'s oracle: ~0.4M ticks/s
+against the C module's 4.3-4.4M, **11x**, the same hash at both sizes.
+(The Linux box read 3.9x for four verifiers and 9-10x for the oracle;
+the asymmetry is the claim, and both boxes carry it.)
 
 ### The three things these tables do not get to claim
 
@@ -108,18 +115,21 @@ Kept here rather than only in the run sections, because a summary that
 carries the numbers and leaves the caveats behind is the thing this whole
 file is against:
 
-* **† The `nrev --local` row the harness printed is wrong** and its own
-  shape column said so (`2R/R` 3.36 where 2.0 is linear). Re-measured at
-  R=64 three times: 0.039391, 0.039185, 0.038652. Container noise.
+* **The lookup-slope table on Run H's box is start-up-dominated on both
+  sides** -- every wall in it sits within 0.06 s of the lane's own boot --
+  so its `1x` ratios claim boot parity, not engine parity. The engine
+  reading is cocolog's own column: flat, 0.20 s to 0.22 s across a
+  hundredfold more facts.
 * **`verify` and `validate` are 7-8% below run E and it is not
   explained.** They are stable across both runs and historically sat within
   a couple of percent, so this is outside their own band. `langs.sh` shows
   four pure-engine tasks not regressing across the same cocolog change,
   which argues against the new clause index; what DID cause it is not
   established, and nothing is attributed.
-* **The `zigurat` lane of `langs.sh` is confounded** and is in no table
-  here: the server was restarted on a fresh store between the runs it would
-  be compared across.
+* **Runs C and H are two computers**, a Linux box and a Mac, and none
+  of their numbers compare across without naming both. Rule 6 was
+  written for stores ageing between readings; a changed box is the same
+  rule with a bigger hammer.
 
 
 ## Seven rules
@@ -946,3 +956,148 @@ change is cocolog as a LANGUAGE -- 6-34x CPython on the four compute tasks,
 because neither fix touches the per-inference cost of a
 continuation-passing interpreter with no compilation step. That number is
 still the honest one, and it is still the one nobody has attacked.
+
+### Run H: a second box -- macOS, and the first honest zigurat column
+
+**THE BOX CHANGED, SO NOTHING HERE COMPARES ACROSS RUNS WITHOUT SAYING
+SO.** Every run above was one Linux machine; this one is a Mac -- Intel
+i9-9880H (8 cores/16 threads, 2.3 GHz), 16 GB, macOS, Python 3.11.13,
+cocolog at master (mapped embedded store), ZiguratIP server on the same
+box with the mapped store and the (kb, name) composite index. Rule 6
+applies with both hands: same-run columns compare, cross-run columns are
+two claims about two computers.
+
+And one harness finding before any number: **the pyenv shim is not
+Python.** `python3` on this box resolves through a pyenv shim that costs
+1.8-3.7 s per invocation before the interpreter exists; the real binary
+boots in 0.13 s. The shim would have poisoned every python lane's
+calibration (the shim alone clears the one-second floor), so the bench
+ran with the real interpreter first on PATH. A wrapper that spends
+seconds deciding which Python to run is part of nobody's language.
+
+**Two harness findings before the numbers, both fixed in this commit:**
+the arrangement-label column was a multi-line `case` inside `$(...)`,
+which dash parses and macOS bash-as-sh refuses -- the first run printed
+every number correctly and mangled every label beside it, so the label
+is a named function now (`arr_name`); and `library(spine)` would not
+LINK on a Mac at all, because The Coco's `tools/cc` wrappers had
+drifted from cocolog's and lacked the Darwin
+`-Wl,-undefined,dynamic_lookup` rule a loadable module needs -- the
+wrappers are cocolog's own two files again, copied whole.
+
+**What the run found:**
+
+* **The `zigurat` column is a measurement at last.** Run B refused it,
+  Run C confounded it; here it calibrated to real rep counts on all
+  five tasks and landed within a few percent of `local` and `--embed`
+  on every one -- nrev 7.4x, queens 11.1x, loop 18.6x, lookup 19.5x,
+  sortnums 6.0x against python's 1.0x. A turn over a socket, committed
+  against a store the harness empties per run, costs this workload
+  nothing the two-point method can see: the pipelined client, the
+  turn-wide write batch and the mapped store are the difference between
+  this column and Run B's five-to-eleven-second walls.
+* **As a language, 6-19x CPython on this box** -- search and sort at
+  6-11x, the tight loop and the keyed probe at 19x. The Linux box read
+  6-34x; the shape (search best, loop worst) survives the box change,
+  the constants do not, and per rule 6 neither number corrects the
+  other.
+* **Durability costs Python more than it costs cocolog here.** The one
+  task with a durable Python counterpart has python + sqlite3 at
+  0.012222 s per thousand probes against `--embed`'s 0.001850 s --
+  6.6x, same run, same promises (a file, an index, a commit).
+* **The slope stayed flat, but the slope TABLE is boot-dominated on
+  this box** -- every wall in it sits within 0.06 s of the lane's own
+  start-up, so its `1x` ratios claim boot parity, not engine parity.
+  The engine reading is cocolog's own column: 0.20 s at 200 facts,
+  0.22 s at 20 000.
+* **The spine produces at 4.1-4.2M ticks/s and four verifiers audit it
+  3.1-3.6x faster than one** (the Linux box: 3.2M and 3.9x -- more
+  cores in that ratio's denominator, per rule 6 again). The clause
+  oracle agrees with the C module at both sizes and costs 11x.
+
+#### `langs.sh`, the clean transcript
+
+```
+
+cocolog vs CPython -- same task, same answer, four arrangements
+python3 3.11.13, cocolog cocolog at /Users/a1/Projects/GitHub/cocolog/cocolog
+wall clock, median of three timed runs at each of two sizes
+a lane calibrated to ONE rep prints its wall time instead of a rate:
+at one rep the fixed cost and the work cannot be told apart
+
+-- nrev: one naive reverse of a 400-element list
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python        256    0.23     0.004751      1.0x    1.84  cpython_process
+   local          32    0.48     0.030445      6.4x    1.67  cocolog_local_in_memory_no_database
+   embed          32    0.23     0.034478      7.3x    1.83  cocolog_embedded_mvccs_fresh_store
+   zigurat        32    0.22     0.035045      7.4x    1.84  cocolog_server_one_kb_emptied
+
+-- queens: one full 8-queens search, all 92 solutions
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python       1024    0.14     0.001989      1.0x    1.93  cpython_process
+   local          64    0.17     0.021928     11.0x    1.89  cocolog_local_in_memory_no_database
+   embed          64    0.19     0.021807     11.0x    1.88  cocolog_embedded_mvccs_fresh_store
+   zigurat        64    0.20     0.022148     11.1x    1.88  cocolog_server_one_kb_emptied
+
+-- loop: one hundred thousand additions, one at a time
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python        256    0.16     0.004218      1.0x    1.87  cpython_process
+   local          16    0.16     0.078728     18.7x    1.88  cocolog_local_in_memory_no_database
+   embed          16    0.18     0.079328     18.8x    1.88  cocolog_embedded_mvccs_fresh_store
+   zigurat        16    0.23     0.078531     18.6x    1.85  cocolog_server_one_kb_emptied
+
+-- lookup: a thousand key lookups over 200 facts
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python      16384    0.16     0.000097      1.0x    1.91  cpython_process
+   local        1024    0.20     0.001815     18.7x    1.90  cocolog_local_in_memory_no_database
+   embed        1024    0.17     0.001850     19.1x    1.92  cocolog_embedded_mvccs_fresh_store
+   zigurat      1024    0.18     0.001896     19.5x    1.92  cocolog_server_one_kb_emptied
+   sqlite        128    0.11     0.012222    126.0x    1.93  cpython_sqlite3_file_indexed_committed
+
+-- sortnums: one generate-and-sort of 5000 integers
+   lane         reps   fixed    per rep s     vs py    2R/R  arrangement
+   python       1024    0.19     0.001700      1.0x    1.90  cpython_process
+   local         128    0.17     0.010233      6.0x    1.89  cocolog_local_in_memory_no_database
+   embed         128    0.20     0.010259      6.0x    1.87  cocolog_embedded_mvccs_fresh_store
+   zigurat       128    0.21     0.010241      6.0x    1.86  cocolog_server_one_kb_emptied
+
+start-up alone, the same wall clock, nothing but boot and exit:
+   python         0.11 s
+   local          0.10 s
+   embed          0.11 s
+   zigurat        0.16 s
+
+the shape of the lookup gap -- a thousand probes, three sizes:
+      facts     python s    cocolog s      ratio
+        200         0.17         0.20         1x
+       2000         0.16         0.19         1x
+      20000         0.17         0.22         1x
+
+```
+
+The first attempt of the same day -- the one with the mangled labels --
+agreed within noise on every reading (per rep: nrev 6.2/7.2/7.0x, queens
+11.3/11.2/10.9x, loop 19.0/18.6/18.8x, lookup 19.2/19.4/19.6x with
+sqlite 124.7x, sortnums 6.2/6.2/5.9x), so the table above rests on two
+runs of three medians each rather than one.
+
+#### `poh.sh`, as it printed
+
+```
+
+the PoH spine -- produce once, verify everywhere
+cocolog at /Users/a1/Projects/GitHub/cocolog/cocolog, wall clock around the whole process
+
+start-up alone (boot, load library(spine), exit): 0.16 s
+
+the asymmetry: one producer, then one verifier, then four at once
+        ticks    produce     verify  verify x4   speedup  loop rate
+      8000000      2.09s      2.08s      0.67s      3.1x     4.14M/s
+     32000000      7.83s      7.85s      2.21s      3.6x     4.17M/s
+
+the same spine in clauses, as library(poh)'s oracle
+        ticks     C module      clauses      ratio         agree?
+       400000        0.09s        0.98s        11x      same hash
+      1000000        0.23s        2.46s        11x      same hash
+
+```
