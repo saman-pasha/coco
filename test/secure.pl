@@ -331,7 +331,7 @@ audit_half(Dir, Saved) :-
                   (   re_lines('^(all_verified|SOME_INVALID)$', O, [L|_])
                   ->  atom_codes(V, L) ;  V = none ),
                   want(V, all_verified) )),
-            stop(Pid)
+            proc_stop(Pid)
         ;   skip('audit plane: the Zeytun terminator did not come up')
         )
     ).
@@ -344,11 +344,11 @@ secure_run(Dir, Saved, Pid) :-
     mallory_half(Dir),
     audit_half(Dir, Saved),
     restore_env(Saved),
-    stop(Pid).
-
-%% total, and safe on an unbound or already-dead pid -- the cleanup of a
-%% case must never be the thing that fails it
-stop(Pid) :- ( integer(Pid), catch(proc_kill(Pid, 15), _, fail) -> true ; true ).
+    %% proc_stop/1 rather than a kill of our own: 15, a moment to die
+    %% well, then 9 -- and ALWAYS the wait, so the terminator is reaped
+    %% instead of left defunct for whatever runs this next. The hand-
+    %% rolled version here sent one signal and never waited.
+    proc_stop(Pid).
 
 main :-
     coco_bin(C),
@@ -372,10 +372,10 @@ main :-
                 (   \+ tls_reaches(C, Dir)
                 ->  restore_env(Saved),
                     skip('this cocolog cannot reach the store over TLS (built without OpenSSL?)'),
-                    stop(Pid), clean(Dir)
+                    proc_stop(Pid), clean(Dir)
                 ;   restore_env(Saved),
                     ( secure_run(Dir, Saved, Pid) -> true ; true ),
-                    restore_env(Saved), stop(Pid), clean(Dir),
+                    restore_env(Saved), proc_stop(Pid), clean(Dir),
                     nl, checks_done
                 )
             ;   skip('the TLS terminator did not come up'), clean(Dir)
