@@ -79,10 +79,24 @@ zig(kb, K)      :- ( getenv('ZIGURAT_KB', K) -> true ; K = coco_hello ).
 %% --port P' were twelve places to edit, and `--port' is deprecated in
 %% cocolog anyway -- `--tcp PORT' is the same field and names the
 %% transport.
+%% AND THE TIMEOUT IS THE CASE'S, NOT THE ARRANGEMENT'S. Every one of
+%% the eighteen .sh cases wrote `$ZIGURAT_DIAL --timeout 30' -- the dial
+%% config.sh exports names no timeout at all, so a case that did not add
+%% one ran at cocolog's default of 20 seconds. That difference is not
+%% theoretical: the ledger case over the TLS terminator lost carol's seal
+%% at 20 and kept it at 30, and lost it SILENTLY, because a node call
+%% that fails is a block that never arrives. coco.yaml's `timeout: 15' is
+%% the default for a plain client asking a plain question; a case that
+%% consults a file and seals a block through an encrypted link is not
+%% that, which is why all eighteen overrode it.
+case_timeout('30').
+
 dial(D) :-
     (   getenv('ZIGURAT_DIAL', D0)
-    ->  D = D0
-    ;   zig(host, H), zig(port, P), zig(timeout, T),
+    ->  (   sub_atom(D0, _, _, _, '--timeout')
+        ->  D = D0
+        ;   case_timeout(T), sh_join([D0, ' --timeout ', T], D) )
+    ;   zig(host, H), zig(port, P), case_timeout(T),
         sh_join(['--host ', H, ' --tcp ', P, ' --timeout ', T], D)
     ).
 
