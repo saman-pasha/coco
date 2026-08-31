@@ -277,6 +277,27 @@ entry below.
 
 ## Done here
 
+### Green under a rebuilt family, not just under itself
+
+`test/run.sh` `red: 0` over all **19** cases with no SKIP — on pillars pulled
+and rebuilt underneath it the same hour: **cicili `d9a08bf`, ZiguratIP
+`29a06fb`, cocolog `99268ef`**, in that order, ZiguratIP `make MODE=Release`
+first and then cocolog's `make`, `make schema` and `make modules`.
+
+**The rebuild here is the nine Cicili modules**, and they are the reason this
+is a gate rather than a formality: `u256`, `keccak`, `secp256k1`, `sha512`,
+`ed25519`, `sha256`, `ripemd160`, `blake2b` and `spine` are all compiled
+against cocolog's `lib/sdk.cicili`, so a pillar that moved and a module that
+did not are one process with two ideas of the API in it. All nine rebuilt
+clean and the crypto cases hold their published vectors afterwards.
+
+**And the other two suites were green on the same server**, which is what the
+row is for: cocolog `make test` 40 cases `red: 0`, CivV `test/run.sh` 32 cases
+`red: 0`, this one's 19 — no SKIP anywhere in the three, one `ziguratip` under
+all of them. `secure` is in that count, so the three rungs it re-runs behind a
+TLS terminator gave verdict lines identical to the clear-text run on this
+stack too.
+
 ### The last of the shell: the chain is built, not `cat`-ed
 
 cocolog's `library(files)` had `read_file_to_codes/2` and no counterpart,
